@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -109,7 +108,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- RACES -->
-
 <div class="scr on" id="s-races">
   <div class="card">
     <div class="ct">Load Racecard PDF</div>
@@ -134,7 +132,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PREDICT -->
-
 <div class="scr" id="s-predict">
   <div id="nosel" class="al alw">← Go to Races tab and select a race first.</div>
   <div id="rdet" style="display:none">
@@ -165,7 +162,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- SETUP -->
-
 <div class="scr" id="s-setup">
   <div class="card">
     <div class="ct">Trained Model</div>
@@ -282,7 +278,7 @@ function parseATR(txt) {
   txt = txt.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n');
 
   // Race headers: (R1) 17:25 WOLVERHAMPTON (A.W.), 1m 5f 219y
-  var hRx = /\(R(\d+)\)\s+(\d{2}:\d{2})\s+([A-Z][A-Z\s]+?(?:\([A-Z.]+\))?),?\s+((?:\d+m\s*)?\d+f(?:\s*\d+y)?)/g;
+  var hRx = /\(R(\d+)\)\s+(\d{2}:\d{2})\s+([A-Z][A-Z\s]+?(?:\([A-Z.]+\))?),?\s+(\d+m(?:\s*\d+f)?(?:\s*\d+y)?|\d+f(?:\s*\d+y)?)/g;
   var headers = [];
   var hm;
   while ((hm = hRx.exec(txt)) !== null) headers.push(hm);
@@ -673,6 +669,5 @@ pd.addEventListener('drop', function(e){
   if (f) loadPDF(f);
 });
 </script>
-
 </body>
 </html>
