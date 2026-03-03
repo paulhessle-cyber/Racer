@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🏇 Racecourse Predictor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+:root{--g:#00e676;--gold:#ffc107;--bg:#07100a;--sf:#0e1a11;--sf2:#132017;--bd:#1c3024;--tx:#c8ddd0;--mt:#4a6a55;--bl:#40c4ff}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)}
+.hdr{background:#0b1a0e;border-bottom:1px solid var(--bd);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.hdr h1{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--g);letter-spacing:3px}
+.mpill{font-family:'IBM Plex Mono',monospace;font-size:.6rem;padding:3px 8px;border-radius:20px;border:1px solid var(--bd);color:var(--mt)}
+.mpill.ok{border-color:var(--g);color:var(--g);background:rgba(0,230,118,.08)}
+.nav{display:flex;background:var(--sf);border-bottom:1px solid var(--bd);position:sticky;top:49px;z-index:190}
+.tab{flex:1;padding:10px 4px;text-align:center;cursor:pointer;font-size:.68rem;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px;color:var(--mt);border-bottom:2px solid transparent;text-transform:uppercase}
+.tab.on{color:var(--g);border-color:var(--g)}
+.scr{display:none;padding:14px 14px 80px}
+.scr.on{display:block}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
+.ct{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.btn{font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:12px 16px;border:none;border-radius:8px;cursor:pointer;display:block;width:100%;text-align:center;margin-bottom:8px}
+.bg{background:var(--g);color:var(--bg)}.bg:disabled{background:var(--bd);color:var(--mt);cursor:not-allowed}
+.bo{background:transparent;color:var(--g);border:1px solid var(--g)}
+.drop{border:2px dashed var(--bd);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;position:relative}
+.drop.ov{border-color:var(--g);background:rgba(0,230,118,.04)}
+.drop input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.drop .ico{font-size:2rem;display:block;margin-bottom:8px}
+.drop p{font-size:.8rem;color:var(--mt);margin-top:4px}
+.rlist{display:flex;flex-direction:column;gap:8px}
+.ri{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between}
+.ri.sel{border-color:var(--g);background:rgba(0,230,118,.06)}
+.ri .tm{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--g)}
+.ri .nm{font-size:.75rem;color:var(--mt);margin-top:2px}
+.tbadge{font-family:'IBM Plex Mono',monospace;font-size:.58rem;padding:2px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);display:inline-block;margin-top:4px}
+.prog{background:var(--sf2);border-radius:8px;padding:14px;text-align:center}
+.spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.re{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
+.re .sn{position:absolute;top:8px;right:10px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--bd);pointer-events:none}
+.re .hn{font-size:.88rem;font-weight:600;color:var(--tx)}
+.re .orb{font-family:'IBM Plex Mono',monospace;font-size:.63rem;padding:2px 6px;border-radius:4px;background:#0a0f0d;color:var(--mt);border:1px solid var(--bd)}
+.re .hh{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+.re .rm{font-size:.7rem;color:var(--mt);margin-bottom:8px}
+.oi{background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px}
+.oi label{font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);white-space:nowrap}
+.oi input{flex:1;background:transparent;border:none;color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:600;text-align:right;width:80px}
+.oi input:focus{outline:none}
+.mk{font-size:.6rem;padding:2px 6px;border-radius:3px;font-family:'IBM Plex Mono',monospace}
+.mk.tip{background:rgba(0,230,118,.15);color:var(--g)}
+.mk.wch{background:rgba(64,196,255,.1);color:var(--bl)}
+.rwin{background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,230,118,.02));border:2px solid var(--g);border-radius:12px;padding:18px;margin-bottom:12px}
+.rval{background:linear-gradient(135deg,rgba(255,193,7,.07),rgba(255,193,7,.02));border:2px solid var(--gold);border-radius:12px;padding:18px;margin-bottom:12px;position:relative;padding-top:22px}
+.vflag{position:absolute;top:-10px;left:16px;background:var(--gold);color:var(--bg);font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
+.slbl{font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:4px}
+.bn{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;letter-spacing:1px;line-height:1;margin-bottom:10px}
+.bn.gn{color:var(--g)}.bn.gd{color:var(--gold)}
+.rd{display:flex;justify-content:space-between;padding:5px 0;font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.rd:last-of-type{border-bottom:none}
+.rd span:first-child{color:var(--mt)}
+.rd span:last-child{font-family:'IBM Plex Mono',monospace}
+.cb{background:var(--bd);height:5px;border-radius:3px;margin-top:10px;overflow:hidden}
+.cf{height:100%;border-radius:3px}
+.arc{background:var(--sf);border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.art{font-family:'Bebas Neue',sans-serif;font-size:1rem;color:var(--g);letter-spacing:2px;padding:12px 14px;border-bottom:1px solid var(--bd)}
+.rrr{display:flex;align-items:center;padding:10px 14px;gap:10px;border-bottom:1px solid rgba(28,48,36,.6)}
+.rrr:last-child{border-bottom:none}
+.rrr.p1{background:rgba(0,230,118,.06)}.rrr.p2{background:rgba(255,193,7,.04)}.rrr.p3{background:rgba(255,138,101,.03)}
+.rp{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;width:24px;text-align:center;flex-shrink:0}
+.p1 .rp{color:var(--g)}.p2 .rp{color:var(--gold)}.p3 .rp{color:#ff8a65}
+.ri2{flex:1;min-width:0}
+.rn2{font-size:.88rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs2{font-size:.68rem;color:var(--mt);font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr{text-align:right;flex-shrink:0}
+.ro2{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--mt)}
+.rsc{font-family:'IBM Plex Mono',monospace;font-size:.6rem;padding:2px 5px;border-radius:3px;background:var(--sf2);color:var(--mt)}
+.p1 .rsc{background:rgba(0,230,118,.15);color:var(--g)}.p2 .rsc{background:rgba(255,193,7,.12);color:var(--gold)}
+.nva{background:rgba(255,82,82,.06);border:1px solid rgba(255,82,82,.2);border-radius:8px;padding:14px;text-align:center;color:#ff8a80;font-size:.82rem;margin-bottom:12px;line-height:1.5}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.sb{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;text-align:center}
+.sv{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--g)}
+.sl{font-size:.62rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.al{padding:10px 14px;border-radius:8px;font-size:.82rem;margin-bottom:12px;border-left:3px solid;line-height:1.4}
+.als{background:rgba(0,230,118,.08);border-color:var(--g);color:#9ef5c0}
+.alw{background:rgba(255,193,7,.08);border-color:var(--gold);color:#ffe082}
+.ali{background:rgba(64,196,255,.08);border-color:var(--bl);color:#80d8ff}
+.mu{color:var(--mt);font-size:.82rem;line-height:1.5}
+.fwr{margin-bottom:7px}
+.fwl{display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:3px}
+.fwl span:last-child{font-family:'IBM Plex Mono',monospace;color:var(--gold)}
+.fwb{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
+.fwf{height:100%;background:var(--g);border-radius:2px}
+select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:6px;font-size:.8rem;-webkit-appearance:none;font-family:'IBM Plex Sans',sans-serif}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>🏇 Predictor</h1>
+  <div class="mpill" id="mpill">NO MODEL</div>
+</div>
+<div class="nav">
+  <div class="tab on" onclick="go('races')" id="t-races">Races</div>
+  <div class="tab" onclick="go('predict')" id="t-predict">Predict</div>
+  <div class="tab" onclick="go('setup')" id="t-setup">Setup</div>
+</div>
+
+<!-- RACES -->
+
+<div class="scr on" id="s-races">
+  <div class="card">
+    <div class="ct">Load Racecard PDF</div>
+    <p class="mu" style="margin-bottom:12px">Load an At The Races PDF form guide. All runners will be extracted automatically.</p>
+    <div class="drop" id="pdfDrop">
+      <input type="file" id="pdfIn" accept=".pdf">
+      <span class="ico">📄</span>
+      <strong>Tap to load PDF racecard</strong>
+      <p>From attheraces.com</p>
+    </div>
+    <div id="pp" style="display:none;margin-top:12px">
+      <div class="prog"><div class="spin"></div><p id="ps" style="font-size:.8rem;color:var(--mt)">Reading...</p></div>
+    </div>
+  </div>
+  <div id="rls" style="display:none">
+    <div class="card">
+      <div class="ct" id="rcTitle">Races</div>
+      <div class="rlist" id="rl"></div>
+    </div>
+  </div>
+  <div id="hint" class="al ali">Load a PDF racecard above, or tap <strong>Setup</strong> to load your trained model.</div>
+</div>
+
+<!-- PREDICT -->
+
+<div class="scr" id="s-predict">
+  <div id="nosel" class="al alw">← Go to Races tab and select a race first.</div>
+  <div id="rdet" style="display:none">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--g)" id="rtm"></div>
+        <div style="font-size:.82rem;color:var(--tx);margin-top:2px" id="rttl"></div>
+        <div style="font-size:.7rem;color:var(--mt);font-family:'IBM Plex Mono',monospace;margin-top:3px" id="rdst"></div>
+      </div>
+      <div style="flex-shrink:0">
+        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going</div>
+        <select id="gsel">
+          <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
+          <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
+        </select>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds</div>
+        <span class="mu" style="font-size:.68rem">Enter decimal odds</span>
+      </div>
+      <div id="prun"></div>
+    </div>
+    <button class="btn bg" onclick="predict()">🔍 Predict This Race</button>
+    <div id="pres"></div>
+  </div>
+</div>
+
+<!-- SETUP -->
+
+<div class="scr" id="s-setup">
+  <div class="card">
+    <div class="ct">Trained Model</div>
+    <p class="mu" style="margin-bottom:12px">Load <code style="color:var(--g);font-family:'IBM Plex Mono',monospace">racing_model.json</code> from the desktop Trainer app.</p>
+    <div class="drop">
+      <input type="file" id="mIn" accept=".json">
+      <span class="ico">🧠</span>
+      <strong>Tap to load racing_model.json</strong>
+      <p>Transfer via AirDrop, WhatsApp or email</p>
+    </div>
+    <div id="mst" style="margin-top:10px"></div>
+  </div>
+  <div class="card" id="msc" style="display:none">
+    <div class="ct">Model Stats</div>
+    <div class="sg" id="msg"></div>
+    <div id="fw"></div>
+  </div>
+  <div class="card" id="nmc">
+    <div class="ct">No Model? Use Defaults</div>
+    <p class="mu" style="margin-bottom:10px">Uses Official Rating, recent form, weight and market odds.</p>
+    <button class="btn bo" onclick="useDefault()">✓ Activate Default Weights</button>
+    <div id="dms"></div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+const S = { model: null, races: [], sel: null };
+
+// ── Navigation ─────────────────────────────────────────────
+function go(n) {
+  document.querySelectorAll('.scr').forEach(function(s){ s.classList.remove('on'); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('on'); });
+  document.getElementById('s-' + n).classList.add('on');
+  document.getElementById('t-' + n).classList.add('on');
+}
+
+// ── PDF loading ────────────────────────────────────────────
+document.getElementById('pdfIn').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (f) loadPDF(f);
+});
+
+async function loadPDF(file) {
+  document.getElementById('pp').style.display = 'block';
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('rls').style.display = 'none';
+  setPS('Reading PDF…');
+  try {
+    // Safely initialise PDF.js worker
+    if (typeof pdfjsLib === 'undefined') {
+      setPS('❌ PDF.js library not loaded. Check your internet connection and reload.');
+      return;
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    var ab = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var pages = [];
+
+    for (var i = 1; i <= pdf.numPages; i++) {
+      setPS('Page ' + i + ' of ' + pdf.numPages + '…');
+      var pg = await pdf.getPage(i);
+      var ct = await pg.getTextContent();
+
+      // Group text items into lines using Y coordinate
+      var items = ct.items.filter(function(x){ return x.str && x.str.trim(); });
+      items.sort(function(a, b) {
+        var dy = Math.round(b.transform[5]) - Math.round(a.transform[5]);
+        if (Math.abs(dy) > 4) return dy;
+        return a.transform[4] - b.transform[4];
+      });
+
+      var lines = [];
+      var curY = null;
+      var curLine = [];
+      for (var j = 0; j < items.length; j++) {
+        var item = items[j];
+        var y = Math.round(item.transform[5]);
+        if (curY === null || Math.abs(y - curY) > 4) {
+          if (curLine.length) lines.push(curLine.join(' '));
+          curLine = [item.str];
+          curY = y;
+        } else {
+          curLine.push(item.str);
+        }
+      }
+      if (curLine.length) lines.push(curLine.join(' '));
+      pages.push(lines.join('\n'));
+    }
+
+    var fullText = pages.join('\n');
+    setPS('Parsing races…');
+    var races = parseATR(fullText);
+    if (!races.length) {
+      setPS('⚠ No races found. Make sure this is an ATR form guide PDF.');
+      return;
+    }
+    S.races = races;
+    document.getElementById('pp').style.display = 'none';
+    renderRaceList(races);
+  } catch (err) {
+    setPS('❌ Error: ' + err.message);
+    console.error(err);
+  }
+}
+
+function setPS(m) { document.getElementById('ps').textContent = m; }
+
+// ── ATR PDF Parser ─────────────────────────────────────────
+function parseATR(txt) {
+  // Preserve newlines, normalise spaces only
+  txt = txt.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n');
+
+  // Race headers: (R1) 17:25 WOLVERHAMPTON (A.W.), 1m 5f 219y
+  var hRx = /\(R(\d+)\)\s+(\d{2}:\d{2})\s+([A-Z][A-Z\s]+?(?:\([A-Z.]+\))?),?\s+((?:\d+m\s*)?\d+f(?:\s*\d+y)?)/g;
+  var headers = [];
+  var hm;
+  while ((hm = hRx.exec(txt)) !== null) headers.push(hm);
+  if (!headers.length) return [];
+
+  var races = [];
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i];
+    var hn = headers[i + 1];
+    var block = txt.slice(h.index, hn ? hn.index : txt.length);
+    var rnum = h[1], time = h[2], course = h[3].trim(), dist = h[4].trim();
+
+    var clsM = block.match(/Class\s*(\d+)/);
+    var titleRx = /\d+[mfy\s\d]+\s+([A-Z][^(]+?)\s*(?:\(Class|No Silk)/;
+    var titleM = block.match(titleRx);
+    var title = titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '';
+
+    var runners = extractRunners(block);
+
+    var tipM   = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
+    var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
+
+    races.push({
+      rnum: parseInt(rnum), time: time, course: course, dist: dist,
+      title: title, cls: clsM ? parseInt(clsM[1]) : 0,
+      runners: runners,
+      topTip:   tipM   ? tipM[1].trim()   : '',
+      watchFor: watchM ? watchM[1].trim() : ''
+    });
+  }
+  return races;
+}
+
+// ── Runner extraction ──────────────────────────────────────
+// Handles both formats:
+//   Newcastle:      1 form NAME days age st-lbs jockey OR
+//   Wolverhampton:  1 (draw) [form] NAME [days][flags] age st-lbs jockey OR
+// Also: debutants (no form), jockey claims (5), penalty flags (30J)(EX5)
+function extractRunners(block) {
+  var runners = [];
+  var lines = block.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    var r = parseRunnerLine(lines[i].trim());
+    if (r) runners.push(r);
+  }
+  var seen = {};
+  return runners.filter(function(r) {
+    if (seen[r.stall]) return false;
+    seen[r.stall] = true;
+    return true;
+  });
+}
+
+function parseRunnerLine(line) {
+  // Must start with stall 1-12, optionally (draw)
+  var headM = line.match(/^(\d{1,2})\s+(?:\((\d+)\)\s+)?/);
+  if (!headM) return null;
+  var stall = parseInt(headM[1]);
+  var draw  = headM[2] ? parseInt(headM[2]) : stall;
+  var rest  = line.slice(headM[0].length);
+
+  // Anchor from right: age  st-lbs  jockey  OR
+  var tailM = rest.match(/(\d+)\s+(\d{1,2})\s*-\s*(\d{1,2}\w*)\s+([A-Z][a-zA-Z\s.&]+?(?:\s*\(\d+\))?)\s+(\d{2,3}|-)\s*$/);
+  if (!tailM) return null;
+
+  var age    = parseInt(tailM[1]);
+  var wst    = parseInt(tailM[2]);
+  var wlbs   = parseInt(tailM[3].replace(/\D/g, ''));
+  var jockey = tailM[4].trim();
+  var OR     = tailM[5] === '-' ? 0 : parseInt(tailM[5]);
+
+  var pre  = rest.slice(0, tailM.index).trim();
+  var form = '';
+
+  // Form field: leading digits/slashes/dashes — not a capital name start
+  var formM = pre.match(/^([\d/\-PFpUuRr]+(?:\s*\d+)?)\s+/);
+  if (formM && !/^[A-Z]{2}/.test(pre)) {
+    form = formM[1].trim();
+    pre  = pre.slice(formM[0].length);
+  }
+
+  // Clean trailing noise from name
+  var name = pre;
+  name = name.replace(/\s+\([^)]{3,}\)\s*$/, '');       // (30J), (EX5)
+  name = name.replace(/\s+\d+\s*(?:[A-Z]{1,2}\s*)*$/, ''); // "60 C D", "25 BF"
+  name = name.replace(/\s+(?:BF|CD|D|C)\s*$/, '').trim();
+
+  if (!name || !/[A-Z]{2}/.test(name)) return null;
+
+  var daysM    = form.match(/(\d+)\s*$/);
+  var daysSince = daysM ? parseInt(daysM[1]) : 21;
+  var fClean   = form.replace(/\d+$/, '').replace(/[^0-9PFpUuRr/\-]/g, '');
+  var rf       = parseForm(fClean);
+
+  return { stall: stall, draw: draw, form: form, name: name,
+           age: age, wst: wst, wlbs: wlbs, jockey: jockey,
+           or: OR, daysSince: daysSince, rf: rf, odds: 0 };
+}
+
+function parseForm(f) {
+  var chars = f.replace(/[-/]/g, '').split('').slice(-6);
+  var w = 0, p = 0, r = 0;
+  chars.forEach(function(c) {
+    var n = parseInt(c);
+    if (isNaN(n)) return;
+    r++;
+    if (n === 1) w++;
+    if (n <= 3 && n > 0) p++;
+  });
+  return { w: w, p: p, r: Math.max(r, 1) };
+}
+
+// ── Race list ──────────────────────────────────────────────
+function renderRaceList(races) {
+  document.getElementById('rls').style.display = 'block';
+  var course = races[0] ? races[0].course : 'Races';
+  document.getElementById('rcTitle').textContent = course + ' — ' + races.length + ' Races';
+  var list = document.getElementById('rl');
+  list.innerHTML = '';
+  races.forEach(function(r, i) {
+    var d = document.createElement('div');
+    d.className = 'ri';
+    d.id = 'ri_' + i;
+    var tip = r.topTip ? '<div class="tbadge">Tip: ' + r.topTip.substring(0, 22) + '</div>' : '';
+    d.innerHTML = '<div><div class="tm">' + r.time + '</div>'
+      + '<div class="nm">' + (r.title || 'Race ' + r.rnum).substring(0, 46) + '</div>' + tip + '</div>'
+      + '<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">' + r.dist + '</div>'
+      + '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--mt)">' + r.runners.length + ' runners</div></div>';
+    d.onclick = function(){ selRace(i); };
+    list.appendChild(d);
+  });
+}
+
+// ── Race selection ─────────────────────────────────────────
+function selRace(i) {
+  document.querySelectorAll('.ri').forEach(function(e){ e.classList.remove('sel'); });
+  var el = document.getElementById('ri_' + i);
+  if (el) el.classList.add('sel');
+  S.sel = S.races[i];
+  renderPredict(S.sel);
+  go('predict');
+}
+
+function renderPredict(race) {
+  document.getElementById('nosel').style.display = 'none';
+  document.getElementById('rdet').style.display = 'block';
+  document.getElementById('pres').innerHTML = '';
+  document.getElementById('rtm').textContent = race.time + ' ' + race.course;
+  document.getElementById('rttl').textContent = race.title || '';
+  document.getElementById('rdst').textContent = race.dist
+    + (race.cls ? ' · Class ' + race.cls : '')
+    + ' · ' + race.runners.length + ' runners';
+
+  var c = document.getElementById('prun');
+  c.innerHTML = '';
+
+  if (!race.runners.length) {
+    c.innerHTML = '<div class="al alw">No runners extracted. Check the PDF format.</div>';
+    return;
+  }
+
+  race.runners.forEach(function(r) {
+    var isTip   = race.topTip   && race.topTip.toUpperCase().indexOf(r.name.substring(0, 6).toUpperCase()) === 0;
+    var isWatch = race.watchFor && race.watchFor.toUpperCase().indexOf(r.name.substring(0, 6).toUpperCase()) === 0;
+    var mk = isTip ? '<span class="mk tip">ATR TIP</span>' : isWatch ? '<span class="mk wch">WATCH</span>' : '';
+    var jClm = r.jockey.match(/(\d+)\)/);
+    var jn   = r.jockey.replace(/\s*\(\d+\)/, '');
+    var claim = jClm ? ' (' + jClm[1] + 'lb)' : '';
+    var d = document.createElement('div');
+    d.className = 're';
+    d.innerHTML = '<div class="sn">' + r.stall + '</div>'
+      + '<div class="hh"><div class="hn">' + r.name + '</div>'
+      + (r.or > 0 ? '<div class="orb">OR ' + r.or + '</div>' : '') + mk + '</div>'
+      + '<div class="rm">Age ' + r.age + ' · ' + r.wst + '-' + r.wlbs + ' · ' + jn + claim
+      + (r.form ? ' · ' + r.form.substring(0, 14) : '') + '</div>'
+      + '<div class="oi"><label>Decimal Odds</label>'
+      + '<input type="number" id="od_' + r.stall + '" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"></div>';
+    c.appendChild(d);
+  });
+}
+
+// ── Prediction ─────────────────────────────────────────────
+function predict() {
+  var race = S.sel;
+  if (!race) { alert('Select a race first'); return; }
+  if (!race.runners || !race.runners.length) { alert('No runners found'); return; }
+
+  var going = document.getElementById('gsel').value;
+
+  var scored = race.runners.map(function(r) {
+    var el   = document.getElementById('od_' + r.stall);
+    var odds = (el && el.value) ? parseFloat(el.value) : 0;
+    var score = S.model ? scoreMdl(Object.assign({}, r, {odds: odds, going: going}), race)
+                        : scoreDef(Object.assign({}, r, {odds: odds, going: going}), race);
+    return Object.assign({}, r, {odds: odds, score: score});
+  });
+  scored.sort(function(a, b){ return b.score - a.score; });
+
+  if (!scored.length) { alert('Could not score runners'); return; }
+
+  var tot = scored.reduce(function(s, r){ return s + r.score; }, 0) || 1;
+  var valueBet = null;
+  for (var i = 0; i < Math.min(3, scored.length); i++) {
+    if (scored[i].odds >= 9) { valueBet = scored[i]; break; }
+  }
+  showResults(scored, tot, valueBet, race);
+}
+
+// ── Scoring: trained model ─────────────────────────────────
+function scoreMdl(r, race) {
+  var m  = S.model;
+  var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1};
+  var hs = m.horseStats || {}, js = m.jockeyStats || {};
+  var ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
+  var h  = r.name.toLowerCase();
+  var j  = r.jockey.toLowerCase().replace(/\s*\(\d+\)/, '');
+  var t  = (r.trainer || '').toLowerCase();
+  var c  = race.course.toLowerCase();
+  var dist = parseFloat(race.dist) || 10;
+  var g  = (r.going || 'good').toLowerCase();
+  var gs = gm[g] || 4;
+  var H  = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
+  var J  = js[j] || {r:1,w:0};
+  var T  = ts[t] || {r:1,w:0};
+  var wr = H.w / Math.max(H.r, 1);
+  var pr = H.p / Math.max(H.r, 1);
+  var jwr = J.w / Math.max(J.r, 1) || 0.12;
+  var twr = T.w / Math.max(T.r, 1) || 0.12;
+  var dd = (cd[c] || {})[r.stall] || {r:1,w:0};
+  var db = dd.r > 2 ? dd.w / dd.r : 0.1;
+  var gMch = Math.min(((H.gw || {})[gs] || 0) / Math.max(H.w || 1, 1), 1);
+  var dMch = Math.min(((H.dw || {})[dist] || 0) / Math.max(H.w || 1, 1), 1);
+  var cMch = Math.min(((H.cw || {})[c] || 0) / Math.max(H.w || 1, 1), 1);
+  var days = r.daysSince || 21;
+  var fr   = days < 14 ? 1 : days < 28 ? 0.8 : days < 60 ? 0.5 : 0.2;
+  var os   = r.odds > 0 ? Math.max(0, 1 - (r.odds - 1) / 30) : 0.1;
+  var w    = m.weights;
+  return [wr,pr,jwr,twr,db,gMch,dMch,cMch,fr,os].reduce(function(s,f,i){ return s + (w[i]||0)*f; }, 0);
+}
+
+// ── Scoring: default weights ───────────────────────────────
+function scoreDef(r, race) {
+  var orS  = r.or > 0 ? Math.min(r.or / 130, 1) : 0.45;
+  var rf   = r.rf || {w:0,p:0,r:1};
+  var wr   = rf.w / rf.r;
+  var pr   = rf.p / rf.r;
+  var tlbs = (r.wst || 10) * 14 + (r.wlbs || 0);
+  var wtS  = Math.max(0, 1 - (tlbs - 126) / 56);
+  var os   = r.odds > 0 ? Math.max(0, 1 - (r.odds - 1) / 35) : 0.1;
+  var days = r.daysSince || 21;
+  var fr   = days < 14 ? 0.85 : days < 28 ? 1 : days < 60 ? 0.75 : 0.4;
+  var clm  = r.jockey ? r.jockey.match(/(\d+)\)/) : null;
+  var cb   = clm ? Math.min(parseInt(clm[1]) * 0.025, 0.08) : 0;
+  var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
+  var tb   = isTip ? 0.09 : 0;
+  return orS*0.32 + wr*0.10 + pr*0.08 + os*0.22 + wtS*0.09 + fr*0.09 + cb + tb;
+}
+
+// ── Results ────────────────────────────────────────────────
+function row(label, val) {
+  return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
+}
+
+function showResults(scored, tot, val, race) {
+  var w    = scored[0];
+  var conf = Math.round((w.score / tot) * 100);
+  var h    = '';
+
+  if (!S.model) h += '<div class="al ali">Using default weights — load a trained model in Setup for better accuracy.</div>';
+
+  h += '<div class="rwin">'
+    + '<div class="slbl">🏆 Predicted Winner</div>'
+    + '<div class="bn gn">' + w.name + '</div>'
+    + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
+    + row('Jockey', w.jockey.replace(/\s*\(\d+\)/, '') || '—')
+    + row('Draw / stall', w.stall)
+    + (w.or > 0 ? row('Official Rating', w.or) : '')
+    + row('Form', w.form || '—')
+    + row('Model confidence', '<span style="color:var(--g)">' + conf + '%</span>')
+    + '<div class="cb"><div class="cf" style="width:' + conf + '%;background:var(--g)"></div></div>'
+    + '</div>';
+
+  if (val) {
+    var vp = scored.indexOf(val) + 1;
+    var vc = Math.round((val.score / tot) * 100);
+    var pl = vp === 1 ? '1st' : vp === 2 ? '2nd' : '3rd';
+    h += '<div class="rval">'
+      + '<div class="vflag">💰 VALUE PLACE BET</div>'
+      + '<div class="bn gd">' + val.name + '</div>'
+      + row('Decimal odds', '<span style="color:var(--gold);font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem">' + val.odds.toFixed(1) + '</span>')
+      + row('Predicted finish', pl)
+      + row('Jockey', val.jockey.replace(/\s*\(\d+\)/, '') || '—')
+      + (val.or > 0 ? row('Official Rating', val.or) : '')
+      + row('Confidence', '<span style="color:var(--gold)">' + vc + '%</span>')
+      + '<div class="cb"><div class="cf" style="width:' + vc + '%;background:var(--gold)"></div></div>'
+      + '</div>';
+  } else {
+    h += '<div class="nva">⚠ No horse in the predicted top 3 has odds ≥ 9.0.<br>No qualifying value place bet for this race.</div>';
+  }
+
+  h += '<div class="arc"><div class="art">Full Predicted Order</div>';
+  scored.forEach(function(r, i) {
+    var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
+    h += '<div class="rrr ' + pc + '">'
+      + '<div class="rp">' + (i + 1) + '</div>'
+      + '<div class="ri2">'
+      + '<div class="rn2">' + r.name + '</div>'
+      + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/, '') || '—')
+      + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
+      + '</div>'
+      + '<div class="rr">'
+      + '<div class="ro2">' + (r.odds > 0 ? r.odds.toFixed(1) : '—') + '</div>'
+      + '<div class="rsc">' + (r.score * 100).toFixed(1) + '</div>'
+      + '</div></div>';
+  });
+  h += '</div>';
+
+  var el = document.getElementById('pres');
+  el.innerHTML = h;
+  el.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Model loading ──────────────────────────────────────────
+document.getElementById('mIn').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var m = JSON.parse(ev.target.result);
+      S.model = m;
+      onModelLoaded(m);
+    } catch (err) {
+      document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: ' + err.message + '</div>';
+    }
+  };
+  reader.readAsText(f);
+});
+
+function onModelLoaded(m) {
+  document.getElementById('mpill').textContent = 'MODEL ✓ ' + Math.round(m.winAccuracy * 100) + '%';
+  document.getElementById('mpill').className = 'mpill ok';
+  document.getElementById('mst').innerHTML = '<div class="al als">✓ Loaded: '
+    + (m.trainingRecords || '?').toLocaleString()
+    + ' records · Win ' + (m.winAccuracy * 100).toFixed(1)
+    + '% · Place ' + (m.placeAccuracy * 100).toFixed(1) + '%</div>';
+  document.getElementById('nmc').style.display = 'none';
+  document.getElementById('msc').style.display = 'block';
+
+  document.getElementById('msg').innerHTML =
+    sb((m.trainingRecords || 0).toLocaleString(), 'Records') +
+    sb(Math.round(m.winAccuracy * 100) + '%', 'Win Acc') +
+    sb(Math.round(m.placeAccuracy * 100) + '%', 'Place Acc') +
+    sb(new Date(m.created).toLocaleDateString('en-GB', {day:'numeric',month:'short'}), 'Trained');
+
+  if (m.featureNames && m.weights) {
+    var pairs = m.featureNames.map(function(n,i){ return [n, m.weights[i]]; });
+    pairs.sort(function(a,b){ return b[1]-a[1]; });
+    var mx = pairs[0][1];
+    var fw = '<div style="height:1px;background:var(--bd);margin:12px 0"></div>'
+      + '<div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">Feature Weights</div>';
+    pairs.forEach(function(p) {
+      fw += '<div class="fwr"><div class="fwl"><span>' + p[0] + '</span><span>' + (p[1]*100).toFixed(1) + '%</span></div>'
+        + '<div class="fwb"><div class="fwf" style="width:' + Math.round(p[1]/mx*100) + '%"></div></div></div>';
+    });
+    document.getElementById('fw').innerHTML = fw;
+  }
+}
+
+function sb(v, l) {
+  return '<div class="sb"><div class="sv">' + v + '</div><div class="sl">' + l + '</div></div>';
+}
+
+function useDefault() {
+  S.model = null;
+  document.getElementById('mpill').textContent = 'DEFAULT MODE';
+  document.getElementById('mpill').className = 'mpill ok';
+  document.getElementById('dms').innerHTML = '<div class="al als" style="margin-top:8px">✓ Default weights active.</div>';
+}
+
+// ── Drag and drop ──────────────────────────────────────────
+var pd = document.getElementById('pdfDrop');
+pd.addEventListener('dragover', function(e){ e.preventDefault(); pd.classList.add('ov'); });
+pd.addEventListener('dragleave', function(){ pd.classList.remove('ov'); });
+pd.addEventListener('drop', function(e){
+  e.preventDefault(); pd.classList.remove('ov');
+  var f = e.dataTransfer.files[0];
+  if (f) loadPDF(f);
+});
+</script>
+
+</body>
+</html>
