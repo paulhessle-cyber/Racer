@@ -505,7 +505,7 @@ function parseRunnerLine(line) {
   rest = rest.replace(/\s*\(\d+\)\s*$/, '');
 
   // Anchor from right: age  st-lbs  jockey  OR
-  var tailM = rest.match(/(\d+)\s+(\d{1,2})\s*-\s*(\d{1,2}\w*)\s+([A-Z][a-zA-Z\s.&\-]+?(?:\s*\(\d+\))?)\s+(\d{2,3}|-)\s*$/);
+  var tailM = rest.match(/(\d+)\s+(\d{1,2})\s*-\s*(\d{1,2}\w*)\s+([A-Z][a-zA-Z\s.&\-']+?(?:\s*\(\d+\))?)\s+(\d{2,3}|-)\s*$/);
   if (!tailM) return null;
 
   var age    = parseInt(tailM[1]);
