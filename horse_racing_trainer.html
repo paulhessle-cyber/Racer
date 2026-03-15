@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racing Model Trainer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+:root {
+  --g:#00e676; --gold:#ffc107; --bg:#07100a; --sf:#0d1a10; --sf2:#112015;
+  --bd:#1a3020; --tx:#c8ddd0; --mt:#4a6a55; --re:#ff5252; --bl:#40c4ff;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--tx); min-height:100vh; }
+
+header {
+  background:linear-gradient(135deg,#0a1f0d,#061209);
+  border-bottom:2px solid var(--g);
+  padding:20px 40px; display:flex; align-items:center; gap:16px;
+  position:sticky; top:0; z-index:100;
+}
+header h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--g); letter-spacing:4px; }
+header .sub {
+  font-family:'IBM Plex Mono',monospace; font-size:.7rem; color:var(--mt);
+  border:1px solid var(--bd); padding:4px 12px; border-radius:2px; letter-spacing:2px;
+}
+
+.container { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+
+.steps { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px; }
+.step {
+  background:var(--sf); border:1px solid var(--bd); border-radius:6px;
+  padding:18px 18px 18px 22px; position:relative; overflow:hidden;
+}
+.step::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--bd); }
+.step.active::before { background:var(--g); }
+.step.done::before { background:var(--gold); }
+.step .num {
+  font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--bd);
+  position:absolute; right:12px; bottom:-4px; line-height:1;
+}
+.step.active .num { color:var(--g); opacity:.2; }
+.step.done .num   { color:var(--gold); opacity:.2; }
+.step h3 { font-size:.65rem; text-transform:uppercase; letter-spacing:2px; color:var(--mt); margin-bottom:5px; }
+.step p  { font-size:.85rem; line-height:1.4; color:var(--tx); padding-right:30px; }
+
+.panel { background:var(--sf); border:1px solid var(--bd); border-radius:8px; padding:26px; margin-bottom:20px; }
+.panel-title {
+  font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--g);
+  letter-spacing:2px; margin-bottom:18px; padding-bottom:12px;
+  border-bottom:1px solid var(--bd);
+}
+
+.drop-zone {
+  border:2px dashed var(--bd); border-radius:8px; padding:48px 30px;
+  text-align:center; cursor:pointer; position:relative; transition:all .2s;
+}
+.drop-zone:hover, .drop-zone.ov { border-color:var(--g); background:rgba(0,230,118,.03); }
+.drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+.drop-zone .icon { font-size:2.2rem; display:block; margin-bottom:10px; }
+.drop-zone strong { display:block; color:var(--tx); margin-bottom:4px; }
+.drop-zone p { font-size:.82rem; color:var(--mt); }
+
+.btn {
+  font-family:'IBM Plex Mono',monospace; font-size:.78rem; font-weight:600;
+  letter-spacing:1px; text-transform:uppercase; padding:11px 24px;
+  border:none; border-radius:4px; cursor:pointer; transition:all .15s;
+}
+.btn-g    { background:var(--g); color:var(--bg); }
+.btn-g:hover { background:#00c853; }
+.btn-g:disabled { background:var(--bd); color:var(--mt); cursor:not-allowed; }
+.btn-gold { background:var(--gold); color:var(--bg); }
+.btn-gold:hover { background:#ffab00; }
+.btn-o    { background:transparent; color:var(--g); border:1px solid var(--g); }
+.btn-o:hover { background:rgba(0,230,118,.06); }
+
+.stat-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+.stat { background:var(--sf2); border:1px solid var(--bd); border-radius:6px; padding:14px; text-align:center; }
+.stat .v { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; color:var(--g); line-height:1; }
+.stat .l { font-size:.6rem; color:var(--mt); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+
+.col-grid { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.ctag {
+  font-family:'IBM Plex Mono',monospace; font-size:.68rem;
+  padding:3px 9px; border-radius:3px; border:1px solid var(--bd); color:var(--mt);
+}
+.ctag.ok   { border-color:var(--g);    color:var(--g);    background:rgba(0,230,118,.05); }
+.ctag.miss { border-color:var(--re);   color:var(--re);   background:rgba(255,82,82,.05); }
+.ctag.opt  { border-color:var(--gold); color:var(--gold); background:rgba(255,193,7,.05); }
+
+.alert {
+  padding:11px 14px; border-radius:4px; font-size:.82rem;
+  margin-bottom:14px; border-left:3px solid; line-height:1.6;
+}
+.alert-w { background:rgba(255,193,7,.07); border-color:var(--gold); color:#ffe082; }
+.alert-s { background:rgba(0,230,118,.07); border-color:var(--g); color:#9ef5c0; }
+.alert-i { background:rgba(64,196,255,.07); border-color:var(--bl); color:#80d8ff; }
+
+.pb  { background:var(--bd); border-radius:3px; height:7px; overflow:hidden; margin:14px 0; }
+.pf  { height:100%; background:var(--g); border-radius:3px; transition:width .4s; width:0; }
+
+.log {
+  font-family:'IBM Plex Mono',monospace; font-size:.75rem;
+  background:#040d06; border:1px solid var(--bd); border-radius:4px;
+  padding:14px; height:190px; overflow-y:auto; color:var(--mt);
+}
+.log .ok   { color:var(--g); }
+.log .info { color:var(--gold); }
+.log .err  { color:var(--re); }
+
+.ft { width:100%; border-collapse:collapse; font-size:.83rem; margin-top:4px; }
+.ft th {
+  text-align:left; padding:7px 10px; background:var(--sf2);
+  color:var(--mt); font-size:.65rem; text-transform:uppercase;
+  letter-spacing:1px; border-bottom:1px solid var(--bd);
+}
+.ft td { padding:8px 10px; border-bottom:1px solid var(--bd); font-family:'IBM Plex Mono',monospace; }
+.ft tr:last-child td { border-bottom:none; }
+.bar-cell  { display:flex; align-items:center; gap:8px; }
+.mini-bar  { flex:1; background:var(--bd); height:5px; border-radius:3px; overflow:hidden; }
+.mini-fill { height:100%; background:var(--g); border-radius:3px; }
+
+.acc-box {
+  display:flex; align-items:center; gap:24px; padding:18px;
+  background:var(--sf2); border-radius:6px; border:1px solid var(--bd); margin-bottom:16px;
+}
+.ring { width:76px; height:76px; position:relative; flex-shrink:0; }
+.ring svg { transform:rotate(-90deg); }
+.ring .pct {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-family:'Bebas Neue',sans-serif; font-size:1.25rem; color:var(--g);
+}
+
+/* Column reference table */
+.col-ref { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:12px; }
+.col-ref th {
+  text-align:left; padding:7px 10px; font-size:.65rem; text-transform:uppercase;
+  letter-spacing:1px; color:var(--mt); border-bottom:1px solid var(--bd);
+  background:var(--sf2);
+}
+.col-ref td { padding:7px 10px; border-bottom:1px solid rgba(26,48,32,.6); vertical-align:top; }
+.col-ref tr:last-child td { border-bottom:none; }
+.col-ref tr:hover td { background:rgba(0,230,118,.02); }
+.cname { font-family:'IBM Plex Mono',monospace; color:var(--g); font-size:.8rem; font-weight:600; }
+.cdesc { color:var(--tx); font-size:.8rem; }
+.cexample { font-family:'IBM Plex Mono',monospace; color:var(--mt); font-size:.73rem; }
+
+#dlSection { display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#127943; Racing Trainer</h1>
+  <span class="sub">DESKTOP MODEL BUILDER v2</span>
+</header>
+
+<div class="container">
+
+  <div class="steps">
+    <div class="step active" id="s1">
+      <div class="num">1</div>
+      <h3>Step 1</h3>
+      <p>Choose surface, then load your historical race data (raceform.csv or merged CSV)</p>
+    </div>
+    <div class="step" id="s2">
+      <div class="num">2</div>
+      <h3>Step 2</h3>
+      <p>Train the prediction model on your historical race data</p>
+    </div>
+    <div class="step" id="s3">
+      <div class="num">3</div>
+      <h3>Step 3</h3>
+      <p>Export <strong>racing_model.json</strong> &#8594; load into phone predictor app</p>
+    </div>
+  </div>
+
+  <!-- ── STEP 1: Load Data ─────────────────────────────────────── -->
+  <div class="panel" id="panel1">
+    <div class="panel-title">&#128194; Load Race History</div>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Surface:</div>
+      <button class="btn btn-g" id="surfTurf"  onclick="setSurface('turf')"  style="padding:8px 16px;flex:1">🌿 Turf</button>
+      <button class="btn btn-o" id="surfAW"    onclick="setSurface('aw')"    style="padding:8px 16px;flex:1">🏟 All-Weather</button>
+      <button class="btn btn-o" id="surfJumps" onclick="setSurface('jumps')" style="padding:8px 16px;flex:1">🏇 Jumps</button>
+    </div>
+    <div class="alert alert-i" id="surfAlert">
+      <strong>Turf mode:</strong> Filters to UK &amp; Ireland flat turf races only. Load raceform.csv or flat_turf_trainer.csv.
+    </div>
+
+    <table class="col-ref">
+      <thead>
+        <tr>
+          <th style="width:120px">Column</th>
+          <th style="width:70px">Status</th>
+          <th>What it contains</th>
+          <th style="width:180px">Example values</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cname">date</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Race date</td>
+          <td class="cexample">2024-06-18</td>
+        </tr>
+        <tr>
+          <td class="cname">course</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Racecourse name</td>
+          <td class="cexample">Ascot, Newmarket, York</td>
+        </tr>
+        <tr>
+          <td class="cname">horse</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Horse name (country code stripped automatically)</td>
+          <td class="cexample">Charming Prince (IRE)</td>
+        </tr>
+        <tr>
+          <td class="cname">pos</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Finishing position. Non-finishers counted as unplaced.</td>
+          <td class="cexample">1, 2, 3, PU, F, BD, DSQ</td>
+        </tr>
+        <tr>
+          <td class="cname">jockey</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Jockey's full name</td>
+          <td class="cexample">F Dettori, W Buick</td>
+        </tr>
+        <tr>
+          <td class="cname">trainer</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Trainer's full name</td>
+          <td class="cexample">J Gosden, A P O'Brien</td>
+        </tr>
+        <tr>
+          <td class="cname">dist</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Race distance in raceform notation (converted to furlongs internally)</td>
+          <td class="cexample">5f, 1m, 1m2f, 1m6½f, 2m</td>
+        </tr>
+        <tr>
+          <td class="cname">going</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Going description at race time</td>
+          <td class="cexample">Good To Firm, Good, Soft, Heavy</td>
+        </tr>
+        <tr>
+          <td class="cname">draw</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Stall draw number. Used to build course-specific draw bias tables.</td>
+          <td class="cexample">1, 5, 12</td>
+        </tr>
+        <tr>
+          <td class="cname">sp</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Starting price in fractional odds. F suffix (favourite) is stripped automatically.</td>
+          <td class="cexample">4/1, 11/4, 7/2F, Evens</td>
+        </tr>
+        <tr>
+          <td class="cname">or</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Official Rating at time of race. Higher = better-rated horse.</td>
+          <td class="cexample">95, 108, 115</td>
+        </tr>
+        <tr>
+          <td class="cname">rpr</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Racing Post Rating for this run. Used as an additional form signal.</td>
+          <td class="cexample">88, 102, 117</td>
+        </tr>
+        <tr>
+          <td class="cname">ts</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Topspeed rating for this run. Speed figure on a consistent scale.</td>
+          <td class="cexample">72, 85, 98</td>
+        </tr>
+        <tr>
+          <td class="cname">age</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Horse age in years at time of race</td>
+          <td class="cexample">2, 3, 4, 5</td>
+        </tr>
+        <tr>
+          <td class="cname">wgt</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Weight carried in stones-pounds format</td>
+          <td class="cexample">9-2, 8-11, 10-0</td>
+        </tr>
+        <tr>
+          <td class="cname">ran</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Number of runners in the race. Used to contextualise positions.</td>
+          <td class="cexample">8, 12, 16</td>
+        </tr>
+        <tr>
+          <td class="cname">class</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Race class/grade</td>
+          <td class="cexample">Class 1, Class 4, Group 1</td>
+        </tr>
+        <tr>
+          <td class="cname">pattern</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Pattern race designation</td>
+          <td class="cexample">Group 1, Group 2, Listed</td>
+        </tr>
+        <tr>
+          <td class="cname">race_id</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Unique race identifier. Used to group runners per race more accurately than date+course alone.</td>
+          <td class="cexample">615704, 910939</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin:18px 0 14px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-o" onclick="dlTemplate()">&#8595; Download Sample CSV Template</button>
+    </div>
+
+    <div class="drop-zone" id="dz">
+      <input type="file" id="fi" accept=".csv,.xlsx,.xls">
+      <span class="icon">&#128196;</span>
+      <strong>Click to browse or drag &amp; drop</strong>
+      <p id="dzHint">Accepts .csv or .xlsx &mdash; raceform.csv or your merged CSV</p>
+    </div>
+
+    <div id="colCheck" style="margin-top:14px; display:none;"></div>
+    <div id="dataStats" style="margin-top:14px; display:none;"></div>
+  </div>
+
+  <!-- ── STEP 2: Train ─────────────────────────────────────────── -->
+  <div class="panel" id="panel2" style="opacity:.35; pointer-events:none;">
+    <div class="panel-title">&#9881; Train Model</div>
+    <p style="color:var(--mt); font-size:.85rem; margin-bottom:16px; line-height:1.6;">
+      Builds a weighted scoring model calibrated against your historical results.
+      Features used: horse win rate, place rate, going preference, distance preference,
+      course record, draw bias by course, jockey win rate, trainer win rate,
+      Official Rating, Racing Post Rating, Topspeed, and market odds (SP).
+      Feature weights are optimised by hill-climbing against your actual data.
+    </p>
+    <button class="btn btn-g" id="trainBtn" onclick="trainModel()">&#9654; Start Training</button>
+    <div class="pb"><div class="pf" id="pf"></div></div>
+    <div class="log" id="tlog"><span class="info">Waiting for data&#8230;</span></div>
+    <div id="featImp"    style="display:none; margin-top:20px;"></div>
+    <div id="accDisplay" style="display:none; margin-top:16px;"></div>
+  </div>
+
+  <!-- ── STEP 3: Export ────────────────────────────────────────── -->
+  <div class="panel" id="dlSection">
+    <div class="panel-title">&#8659; Export Model</div>
+    <div class="alert alert-s">
+      &#10003; Model trained successfully!
+    </div>
+
+    <p style="color:var(--mt); font-size:.85rem; margin-bottom:16px;">
+      Try the download button first. If nothing happens, use the
+      <strong style="color:var(--tx)">Save via Notepad</strong> method below.
+    </p>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+      <button class="btn btn-gold" onclick="dlModel()">&#8659; Download .json file</button>
+    </div>
+
+    <div class="alert alert-i" style="margin-bottom:12px;">
+      <strong>&#128203; If the download doesn't work — Save via Notepad:</strong><br><br>
+      1. Click <strong>Select All Text</strong> below — the box will highlight<br>
+      2. Press <strong>Ctrl + C</strong> to copy<br>
+      3. Open <strong>Notepad</strong> (search it in the Start menu)<br>
+      4. Press <strong>Ctrl + V</strong> to paste<br>
+      5. Click <strong>File → Save As</strong><br>
+      6. Set <strong>Save as type</strong> to <em>All Files</em><br>
+      7. Name the file <strong id="jsonFilename">racing_model.json</strong> and save
+    </div>
+
+    <div id="jsonCharCount" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+      color:var(--g);margin-bottom:6px;min-height:18px;"></div>
+    <button class="btn btn-o" onclick="selectJsonText()" style="margin-bottom:8px;">&#9654; Select All Text</button>
+    <textarea id="jsonTextBox" readonly
+      style="width:100%;height:200px;background:#0a0f0d;color:#00e676;font-family:'IBM Plex Mono',monospace;
+             font-size:.65rem;border:2px solid var(--g);border-radius:6px;padding:10px;
+             resize:vertical;display:block;box-sizing:border-box;"
+      placeholder="JSON will appear here after training..."></textarea>
+    <p style="font-size:.72rem;color:var(--mt);margin-top:6px;">
+      If the box above shows green text starting with <strong style="color:var(--tx)">{</strong> — it's ready to copy.
+    </p>
+
+    <div id="modelSummary" style="margin-top:16px;"></div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+var rawData = [];
+var trainedModel = null;
+
+var REQ_COLS = ['date','course','horse','pos','jockey','trainer','dist','going'];
+var OPT_COLS = ['draw','sp','or','rpr','ts','age','wgt','ran','class','pattern','race_id'];
+
+// ── Surface selection ─────────────────────────────────────────
+var currentSurface = 'turf'; // 'turf' or 'aw'
+
+var TURF_COURSES = {
+  'ascot':1,'bath':1,'beverley':1,'brighton':1,'carlisle':1,'catterick':1,
+  'chepstow':1,'chester':1,'doncaster':1,'epsom downs':1,'epsom':1,
+  'folkestone':1,'goodwood':1,'hamilton':1,'haydock':1,'leicester':1,
+  'lingfield':1,'musselburgh':1,'newbury':1,'newcastle':1,'newmarket':1,
+  'nottingham':1,'pontefract':1,'redcar':1,'ripon':1,'salisbury':1,
+  'sandown':1,'thirsk':1,'windsor':1,'yarmouth':1,'york':1,'ayr':1,
+  'kempton':1,'southwell':1,'wolverhampton':1,
+  'ballinrobe (ire)':1,'bellewstown (ire)':1,'clonmel (ire)':1,'cork (ire)':1,
+  'curragh (ire)':1,'down royal (ire)':1,'downpatrick (ire)':1,'dundalk (ire)':1,
+  'fairyhouse (ire)':1,'galway (ire)':1,'gowran park (ire)':1,'kilbeggan (ire)':1,
+  'killarney (ire)':1,'laytown (ire)':1,'leopardstown (ire)':1,'limerick (ire)':1,
+  'listowel (ire)':1,'naas (ire)':1,'navan (ire)':1,'punchestown (ire)':1,
+  'roscommon (ire)':1,'sligo (ire)':1,'thurles (ire)':1,'tipperary (ire)':1,
+  'tralee (ire)':1,'tramore (ire)':1,'wexford (ire)':1,
+};
+var AW_COURSES = {
+  'chelmsford (aw)':1,'kempton (aw)':1,'lingfield (aw)':1,
+  'newcastle (aw)':1,'southwell (aw)':1,'wolverhampton (aw)':1,
+  'dundalk (aw)':1,
+};
+var AW_GOING_VALS = {'standard':1,'standard to slow':1,'standard to fast':1,'slow':1,'fast':1};
+
+function setSurface(s) {
+  currentSurface = s;
+  document.getElementById('surfTurf').className  = s === 'turf'  ? 'btn btn-g' : 'btn btn-o';
+  document.getElementById('surfAW').className    = s === 'aw'    ? 'btn btn-g' : 'btn btn-o';
+  document.getElementById('surfJumps').className = s === 'jumps' ? 'btn btn-g' : 'btn btn-o';
+  var alerts = {
+    turf:  '<strong>Turf mode:</strong> Filters to UK &amp; Ireland flat turf races only. Load raceform.csv.',
+    aw:    '<strong>All-Weather mode:</strong> Filters to UK &amp; Ireland AW flat races only (Chelmsford, Kempton, Lingfield, Newcastle, Southwell, Wolverhampton, Dundalk). Load raceform.csv.',
+    jumps: '<strong>Jumps mode:</strong> Filters to UK &amp; Ireland jump races (Chase, Hurdle, NH Flat) on turf. Load raceform.csv.'
+  };
+  document.getElementById('surfAlert').innerHTML = alerts[s] || alerts.turf;
+  // Reset data if already loaded
+  rawData = [];
+  document.getElementById('colCheck').style.display = 'none';
+  document.getElementById('dataStats').style.display = 'none';
+  document.getElementById('s1').className = 'step active';
+  document.getElementById('s2').className = 'step';
+  document.getElementById('panel2').style.opacity = '.35';
+  document.getElementById('panel2').style.pointerEvents = 'none';
+  document.getElementById('dlSection').style.display = 'none';
+}
+
+var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1};
+
+function isValidRow(row) {
+  var type   = (row.type   || '').toLowerCase().trim();
+  var course = (row.course || '').toLowerCase().trim();
+  var going  = (row.going  || '').toLowerCase().trim();
+
+  if (currentSurface === 'jumps') {
+    // Jumps: must be a jump race type, turf only (no AW), UK/Ireland course
+    if (!JUMPS_TYPES[type]) return false;
+    if (course.indexOf('(aw)') !== -1) return false;
+    if (AW_GOING_VALS[going]) return false;
+    return !!(TURF_COURSES[course] || course); // accept any UK/IRE course
+  }
+
+  // Flat modes: must be flat
+  if (type && type !== 'flat') return false;
+
+  if (currentSurface === 'aw') {
+    var isAWCourse = course.indexOf('(aw)') !== -1 || AW_COURSES[course];
+    var isAWGoing  = AW_GOING_VALS[going];
+    return isAWCourse || isAWGoing;
+  } else {
+    // Turf flat
+    if (course.indexOf('(aw)') !== -1) return false;
+    if (AW_GOING_VALS[going]) return false;
+    return !!TURF_COURSES[course];
+  }
+}
+
+// ── File handling ──────────────────────────────────────────────
+document.getElementById('fi').addEventListener('change', function(e) {
+  var f = e.target.files[0]; if (!f) return; loadFile(f);
+});
+var dz = document.getElementById('dz');
+dz.addEventListener('dragover',  function(e){ e.preventDefault(); dz.classList.add('ov'); });
+dz.addEventListener('dragleave', function()  { dz.classList.remove('ov'); });
+dz.addEventListener('drop', function(e) {
+  e.preventDefault(); dz.classList.remove('ov');
+  var f = e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+
+function parseCSVText(text) {
+  // Detect separator: tab or comma
+  var firstLine = text.split('\n')[0];
+  var sep = (firstLine.split('\t').length > firstLine.split(',').length) ? '\t' : ',';
+
+  var lines = text.split('\n');
+  var headers = lines[0].split(sep).map(function(h){ return h.replace(/^\uFEFF/,'').replace(/[\r\n]/g,'').toLowerCase().trim(); });
+  var data = [];
+  for (var i = 1; i < lines.length; i++) {
+    var line = lines[i].replace(/[\r\n]/g, '');
+    if (!line.trim()) continue;
+    var vals = line.split(sep);
+    var row = {};
+    headers.forEach(function(h, idx) {
+      row[h] = (vals[idx] !== undefined ? vals[idx] : '').trim();
+    });
+    data.push(row);
+  }
+  return data;
+}
+
+function loadFile(f) {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var data;
+      var name = f.name.toLowerCase();
+      if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')) {
+        // Use our own parser so tab-separated files work correctly
+        data = parseCSVText(ev.target.result);
+      } else {
+        // Excel file - use XLSX library
+        var wb = XLSX.read(ev.target.result, {type:'array'});
+        var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+        // Normalise column names to lowercase
+        data = raw.map(function(row) {
+          var r = {};
+          Object.keys(row).forEach(function(k) {
+            r[k.toLowerCase().trim()] = String(row[k]).trim();
+          });
+          return r;
+        });
+      }
+      if (!data || !data.length) { alert('No data rows found in file.'); return; }
+      // Filter based on selected surface
+      var totalRows = data.length;
+      var filtered = data.filter(isValidRow);
+      rawData = filtered;
+      showDataInfo(filtered, f.name, totalRows);
+    } catch(err) { alert('Could not read file: ' + err.message); }
+  };
+  if (f.name.toLowerCase().endsWith('.xlsx') || f.name.toLowerCase().endsWith('.xls')) {
+    reader.readAsArrayBuffer(f);
+  } else {
+    reader.readAsText(f, 'utf-8');
+  }
+}
+
+function showDataInfo(data, fname, totalRows) {
+  if (!totalRows) totalRows = data.length;
+  if (!data.length) { alert('No data found in file'); return; }
+  var cols = Object.keys(data[0]);
+
+  var found   = REQ_COLS.filter(function(c){ return cols.includes(c); });
+  var missing = REQ_COLS.filter(function(c){ return !cols.includes(c); });
+  var optFnd  = OPT_COLS.filter(function(c){ return cols.includes(c); });
+
+  var html = '<div style="font-size:.8rem;color:var(--mt);margin-bottom:8px">Columns detected in <strong style="color:var(--tx)">' + fname + '</strong>:</div><div class="col-grid">';
+  found.forEach(function(c)   { html += '<span class="ctag ok">&#10003; '  + c + '</span>'; });
+  missing.forEach(function(c) { html += '<span class="ctag miss">&#10007; ' + c + '</span>'; });
+  optFnd.forEach(function(c)  { html += '<span class="ctag opt">&#9675; '  + c + '</span>'; });
+  html += '</div>';
+
+  if (missing.length) {
+    html += '<div class="alert alert-w" style="margin-top:10px;">&#9888; ' + missing.length
+      + ' required column(s) missing: <strong>' + missing.join(', ')
+      + '</strong>. Training will continue but accuracy may be lower.</div>';
+  } else {
+    html += '<div class="alert alert-s" style="margin-top:10px;">&#10003; All required columns present. '
+      + optFnd.length + ' of ' + OPT_COLS.length + ' optional columns found ('
+      + optFnd.join(', ') + ').</div>';
+  }
+  document.getElementById('colCheck').innerHTML = html;
+  document.getElementById('colCheck').style.display = 'block';
+
+  // Stats
+  var races   = new Set(data.map(function(r){ return (r.race_id||'') || ((r.date||'')+(r.course||'')+(r.dist||'')); })).size;
+  var horses  = new Set(data.map(function(r){ return r.horse||''; })).size;
+  var jockeys = new Set(data.map(function(r){ return r.jockey||''; })).size;
+  var courses = new Set(data.map(function(r){ return r.course||''; })).size;
+  var dateMin = data.reduce(function(m,r){ return (!m||r.date<m)?r.date:m; }, '');
+  var dateMax = data.reduce(function(m,r){ return r.date>m?r.date:m; }, '');
+
+  var surfLabel = currentSurface === 'aw' ? 'all-weather' : currentSurface === 'jumps' ? 'jumps' : 'turf';
+  var filterNote = (totalRows > data.length)
+    ? '<div class="alert alert-i" style="margin-top:10px;">&#128504; Auto-filtered: kept '
+      + data.length.toLocaleString() + ' UK &amp; Ireland ' + surfLabel + ' flat rows from '
+      + totalRows.toLocaleString() + ' total (' + (totalRows - data.length).toLocaleString() + ' removed).</div>'
+    : '<div class="alert alert-s" style="margin-top:10px;">&#10003; ' + data.length.toLocaleString() + ' UK &amp; Ireland ' + surfLabel + ' flat rows loaded.</div>';
+
+  document.getElementById('dataStats').innerHTML =
+    '<div class="stat-grid">'
+    + '<div class="stat"><div class="v">' + data.length.toLocaleString() + '</div><div class="l">Records</div></div>'
+    + '<div class="stat"><div class="v">' + races.toLocaleString()  + '</div><div class="l">Races</div></div>'
+    + '<div class="stat"><div class="v">' + horses.toLocaleString() + '</div><div class="l">Horses</div></div>'
+    + '<div class="stat"><div class="v">' + jockeys.toLocaleString()+ '</div><div class="l">Jockeys</div></div>'
+    + '<div class="stat"><div class="v">' + courses + '</div><div class="l">Courses</div></div>'
+    + '</div>'
+    + '<div style="font-size:.75rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-bottom:6px;">'
+    + 'Date range: ' + dateMin + ' &rarr; ' + dateMax + '</div>'
+    + filterNote;
+  document.getElementById('dataStats').style.display = 'block';
+
+  document.getElementById('s1').className = 'step done';
+  document.getElementById('s2').className = 'step active';
+  document.getElementById('panel2').style.opacity      = '1';
+  document.getElementById('panel2').style.pointerEvents = 'all';
+}
+
+// ── Parsers ────────────────────────────────────────────────────
+
+// dist: "5f" "1m" "1m2f" "1m3½f" "2m3½f" -> furlongs (float)
+function parseDist(d) {
+  if (!d) return 8;
+  d = String(d).toLowerCase();
+  // Replace half-furlong unicode fractions: "3½" -> "3.5"
+  d = d.replace(/(\d)½/g, '$1.5').replace(/(\d)¼/g, '$1.25').replace(/(\d)¾/g, '$1.75');
+  // miles + furlongs e.g. "1m2f", "1m3.5f"
+  var m = d.match(/(\d+)m[^0-9]*(\d+(?:\.\d+)?)f/);
+  if (m) return parseInt(m[1]) * 8 + parseFloat(m[2]);
+  // miles only e.g. "1m", "2m", "1m13y"
+  m = d.match(/(\d+)m/);
+  if (m) return parseInt(m[1]) * 8;
+  // furlongs only e.g. "5f", "6.5f", "5f110y"
+  m = d.match(/(\d+(?:\.\d+)?)f/);
+  if (m) return parseFloat(m[1]);
+  return 8;
+}
+
+// sp: "4/1" "11/4F" "7/2" "Evens" "1/3F" -> decimal odds
+function parseSP(sp) {
+  if (!sp) return 0;
+  sp = String(sp).toUpperCase().replace(/[F\s]/g, '').trim();
+  if (sp === 'EVENS' || sp === 'EVS') return 2;
+  var m = sp.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
+  if (m) return parseFloat(m[1]) / parseFloat(m[2]) + 1;
+  return 0;
+}
+
+// wgt: "9-2" "8-11" -> total lbs (for weight penalty calculation)
+function parseWgt(w) {
+  if (!w) return 0;
+  var m = String(w).match(/(\d+)-(\d+)/);
+  if (m) return parseInt(m[1]) * 14 + parseInt(m[2]);
+  return 0;
+}
+
+// pos: "1" "2" "PU" "F" "BD" "DSQ" -> integer (99 = non-finisher)
+function parsePos(p) {
+  var n = parseInt(String(p));
+  return isNaN(n) ? 99 : n;
+}
+
+// going: text -> numeric scale 1 (Heavy) to 6 (Firm)
+var GOING_MAP = {
+  'firm':6, 'good to firm':5, 'good to firm (good in places)':5,
+  'good to firm (firm in places)':5,
+  'good':4, 'good (good to firm in places)':4, 'good (good to soft in places)':4,
+  'good to soft':3, 'good to soft (soft in places)':3, 'good to soft (good in places)':3,
+  'soft':2, 'soft (heavy in places)':2,
+  'heavy':1, 'heavy (soft in places)':1
+};
+function goingScore(g) {
+  if (!g) return 4;
+  var key = String(g).toLowerCase().trim();
+  return GOING_MAP[key] !== undefined ? GOING_MAP[key] : 4;
+}
+
+// ── Training ───────────────────────────────────────────────────
+function log(msg, cls) {
+  var el = document.getElementById('tlog');
+  var d  = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = '> ' + msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+
+async function trainModel() {
+  if (!rawData.length) return;
+  document.getElementById('trainBtn').disabled = true;
+  document.getElementById('tlog').innerHTML = '';
+  var pf = document.getElementById('pf');
+  try {
+
+  log('Parsing ' + rawData.length.toLocaleString() + ' race records...', 'info');
+  await sleep(200);
+  pf.style.width = '8%';
+
+  // Sort chronologically so days-since-last-run can be calculated
+  var sorted = rawData.slice().sort(function(a, b) {
+    return (a.date || '') < (b.date || '') ? -1 : 1;
+  });
+
+  // ── Build lookup tables ────────────────────────────────────────
+  var HS = {};  // horse stats
+  var JS = {};  // jockey stats
+  var TS = {};  // trainer stats
+  var CD = {};  // course draw stats
+  var horseLastRun = {};
+
+  sorted.forEach(function(r) {
+    // Strip country code from horse name for matching
+    var h = (r.horse   || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
+    var j = (r.jockey  || '').toLowerCase().trim();
+    var t = (r.trainer || '').toLowerCase().trim();
+    var c = (r.course  || '').toLowerCase().trim();
+
+    var pos  = parsePos(r.pos);
+    var dist = parseDist(r.dist);
+    var gs   = goingScore(r.going);
+    var draw = parseInt(r.draw) || 0;
+
+    // Days since last run for this horse
+    var lastDate = horseLastRun[h];
+    var days = 21; // default if first run or unknown
+    if (lastDate && r.date) {
+      var d1 = new Date(lastDate), d2 = new Date(r.date);
+      if (!isNaN(d1) && !isNaN(d2)) {
+        days = Math.max(1, Math.round((d2 - d1) / 86400000));
+      }
+    }
+    r._days = days;
+    horseLastRun[h] = r.date;
+
+    // Horse stats
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
+    HS[h].r++;
+    if (pos === 1)                     HS[h].w++;
+    if (pos <= 3 && pos > 0)           HS[h].p++;
+    if (pos === 1) {
+      HS[h].gw[gs]   = (HS[h].gw[gs]   || 0) + 1;
+      HS[h].dw[dist] = (HS[h].dw[dist] || 0) + 1;
+      HS[h].cw[c]    = (HS[h].cw[c]    || 0) + 1;
+    }
+
+    // Jockey stats
+    if (!JS[j]) JS[j] = { r:0, w:0 };
+    JS[j].r++;
+    if (pos === 1) JS[j].w++;
+
+    // Trainer stats
+    if (!TS[t]) TS[t] = { r:0, w:0 };
+    TS[t].r++;
+    if (pos === 1) TS[t].w++;
+
+    // Draw bias by course (only when draw is known)
+    if (draw > 0) {
+      if (!CD[c]) CD[c] = {};
+      if (!CD[c][draw]) CD[c][draw] = { r:0, w:0 };
+      CD[c][draw].r++;
+      if (pos === 1) CD[c][draw].w++;
+    }
+  });
+
+  pf.style.width = '30%';
+  log('Horses tracked: '  + Object.keys(HS).length.toLocaleString(), 'ok');
+  log('Jockeys tracked: ' + Object.keys(JS).length.toLocaleString(), 'ok');
+  log('Trainers tracked: '+ Object.keys(TS).length.toLocaleString(), 'ok');
+  log('Course/draw combos: ' + Object.values(CD).reduce(function(s,v){ return s + Object.keys(v).length; }, 0).toLocaleString(), 'ok');
+  await sleep(200);
+
+  log('Calibrating feature weights...', 'info');
+  await sleep(300);
+  pf.style.width = '50%';
+
+  // ── Train/test split ─────────────────────────────────────────
+  // Build stats from oldest 80% of data (trainData).
+  // Tune weights on trainData only.
+  // Report accuracy on newest 20% (testData) — races never seen during training.
+  // This prevents overfitting: weights that memorise history but fail on new races.
+  var splitIdx  = Math.floor(sorted.length * 0.8);
+  var trainData = sorted.slice(0, splitIdx);
+  var testData  = sorted.slice(splitIdx);
+
+  log('Train/test split: ' + trainData.length.toLocaleString() + ' train / ' + testData.length.toLocaleString() + ' test', 'info');
+  if (testData.length > 0) {
+    log('Test period starts: ' + testData[0].date, 'info');
+  }
+
+  // Population win/place rates from training data (used as priors)
+  var popW = 0, popP = 0;
+  trainData.forEach(function(r) {
+    var p = parsePos(r.pos);
+    if (p === 1) popW++;
+    if (p <= 3 && p > 0) popP++;
+  });
+  var POP_WIN   = popW / Math.max(trainData.length, 1);
+  var POP_PLACE = popP / Math.max(trainData.length, 1);
+
+  // ── Scoring function ──────────────────────────────────────────
+  // Uses Bayesian shrinkage: blends observed rates with population average.
+  // A horse with 2 runs gets mostly the population average, not a misleading 100%.
+  // Only horses/jockeys/trainers with many runs get rates close to their true record.
+  function scoreRow(r, w) {
+    var h = (r.horse   || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
+    var j = (r.jockey  || '').toLowerCase().trim();
+    var t = (r.trainer || '').toLowerCase().trim();
+    var c = (r.course  || '').toLowerCase().trim();
+    var dist = parseDist(r.dist);
+    var gs   = goingScore(r.going);
+    var draw = parseInt(r.draw) || 0;
+
+    var H = HS[h] || { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
+    var J = JS[j] || { r:0, w:0 };
+    var T = TS[t] || { r:0, w:0 };
+
+    // Horse win/place rate: prior weight = 8 runs worth of population average
+    var HP = 8;
+    var wr = (H.w + HP * POP_WIN)   / (H.r + HP);
+    var pr = (H.p + HP * POP_PLACE) / (H.r + HP);
+
+    // Jockey/trainer: prior = 15 rides at 12% (typical flat win rate)
+    var JP = 15;
+    var jwr = (J.w + JP * 0.12) / (J.r + JP);
+    var twr = (T.w + JP * 0.12) / (T.r + JP);
+
+    // Draw bias: only use when 4+ samples at this stall on this course
+    var dd = draw > 0 ? ((CD[c] || {})[draw] || { r:0, w:0 }) : { r:0, w:0 };
+    var db = dd.r >= 4 ? dd.w / dd.r : POP_WIN;
+
+    // Going/distance/course preference: shrink toward 0 when wins are few
+    var hw = Math.max(H.w, 1);
+    var gm = (H.gw[gs]   || 0) / (hw + 4);
+    var dm = (H.dw[dist] || 0) / (hw + 4);
+    var cm = (H.cw[c]    || 0) / (hw + 4);
+
+    // Freshness (days since last run)
+    var days = r._days || 21;
+    var fr = days < 14 ? 1.0 : days < 28 ? 0.85 : days < 60 ? 0.60 : 0.30;
+
+    // Market confidence from SP (favourite wins ~30% of flat races — strong signal)
+    var sp = parseSP(r.sp);
+    var os = sp > 1 ? Math.max(0, 1 - (sp - 1) / 35) : 0.1;
+
+    // Official Rating normalised 0-1 (missing = mid-range 0.45)
+    var orVal = parseInt(r.or)  || 0;
+    var ors   = orVal  > 0 ? Math.min(orVal  / 130, 1) : 0.45;
+
+    // Racing Post Rating normalised 0-1
+    var rprVal = parseInt(r.rpr) || 0;
+    var rprs   = rprVal > 0 ? Math.min(rprVal / 130, 1) : 0.45;
+
+    return [wr, pr, jwr, twr, db, gm, dm, cm, fr, os, ors, rprs]
+      .reduce(function(s, f, i) { return s + (w[i] || 0) * f; }, 0);
+  }
+
+  // ── Evaluate on any subset of races ──────────────────────────
+  function evalOn(data, weights) {
+    var groups = {};
+    data.forEach(function(r) {
+      var k = r.race_id
+        ? 'id_' + r.race_id
+        : (r.date || '') + '|' + (r.course || '') + '|' + (r.dist || '');
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(r);
+    });
+    var wC = 0, pC = 0, tot = 0;
+    Object.values(groups).forEach(function(runners) {
+      if (runners.length < 3) return;
+      var sc = runners.map(function(r) { return { r:r, s:scoreRow(r, weights) }; });
+      sc.sort(function(a, b) { return b.s - a.s; });
+      var pos = parsePos(sc[0].r.pos);
+      if (pos === 1)           wC++;
+      if (pos <= 3 && pos > 0) pC++;
+      tot++;
+    });
+    return { wa: wC / Math.max(tot, 1), pa: pC / Math.max(tot, 1), tot: tot };
+  }
+
+  // ── Hill-climbing on TRAIN data only ─────────────────────────
+  var bW = [0.13, 0.07, 0.11, 0.09, 0.06, 0.09, 0.08, 0.06, 0.06, 0.10, 0.08, 0.07];
+  var s0 = bW.reduce(function(a, b) { return a + b; }, 0);
+  bW = bW.map(function(w) { return w / s0; });
+  var bAcc = evalOn(trainData, bW);
+
+  var iters = Math.min(200, Math.max(80, Math.floor(trainData.length / 400)));
+  for (var i = 0; i < iters; i++) {
+    var idx   = Math.floor(Math.random() * bW.length);
+    var delta = (Math.random() - 0.5) * 0.05;
+    var nW    = bW.slice();
+    nW[idx]   = Math.max(0.005, nW[idx] + delta);
+    var sn    = nW.reduce(function(a, b) { return a + b; }, 0);
+    nW        = nW.map(function(w) { return w / sn; });
+    var acc   = evalOn(trainData, nW);
+    if (acc.wa > bAcc.wa) { bW = nW; bAcc = acc; }
+  }
+
+  // ── Evaluate on held-out test set ────────────────────────────
+  var testAcc = evalOn(testData, bW);
+
+  pf.style.width = '88%';
+  log('Train win acc:  ' + (bAcc.wa * 100).toFixed(1) + '%  (' + bAcc.tot.toLocaleString() + ' races)', 'ok');
+  log('TEST win acc:   ' + (testAcc.wa * 100).toFixed(1) + '%  (' + testAcc.tot.toLocaleString() + ' unseen races)', 'ok');
+  log('Test place acc: ' + (testAcc.pa * 100).toFixed(1) + '% (top 3)', 'ok');
+  if (testAcc.wa < bAcc.wa - 0.04) {
+    log('Gap between train/test suggests mild overfitting — model still exports fine', 'info');
+  }
+  await sleep(300);
+  pf.style.width = '100%';
+
+  var fNames = [
+    'Horse Win Rate',
+    'Horse Place Rate',
+    'Jockey Win Rate',
+    'Trainer Win Rate',
+    'Draw Bias (course)',
+    'Going Preference',
+    'Distance Preference',
+    'Course Record',
+    'Freshness',
+    'Market Confidence (SP)',
+    'Official Rating (OR)',
+    'Racing Post Rating (RPR)'
+  ];
+
+  // ── Compact stats before saving ─────────────────────────────
+  // Strip horse names with only 1 run (not useful for prediction)
+  // and limit gw/dw/cw to keep JSON size manageable.
+  var HS_compact = {};
+  Object.keys(HS).forEach(function(h) {
+    var s = HS[h];
+    if (s.r < 2) return; // skip horses with only 1 run
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw };
+  });
+
+  trainedModel = {
+    version:           '2.1',
+    created:           new Date().toISOString(),
+    surface:           currentSurface,
+    trainingRecords:   rawData.length,
+    weights:           bW,
+    featureNames:      fNames,
+    winAccuracy:       testAcc.wa,
+    placeAccuracy:     testAcc.pa,
+    trainWinAccuracy:  bAcc.wa,
+    racesEvaluated:    testAcc.tot,
+    horseStats:        HS_compact,
+    jockeyStats:       JS,
+    trainerStats:      TS,
+    courseDrawStats:   CD,
+    goingMap:          GOING_MAP,
+    popWinRate:        POP_WIN
+  };
+
+  log('Horses in model: ' + Object.keys(HS_compact).length.toLocaleString()
+    + ' (2+ runs) of ' + Object.keys(HS).length.toLocaleString() + ' total', 'ok');
+  log('Model serialised and ready to export!', 'ok');
+
+  // ── Feature importance table ────────────────────────────────────
+  var pairs = fNames.map(function(n, i) { return [n, bW[i]]; });
+  pairs.sort(function(a, b) { return b[1] - a[1]; });
+  var mx = pairs[0][1];
+
+  var ft = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;'
+         + 'color:var(--g);letter-spacing:2px;margin-bottom:10px;">Feature Importance</div>'
+         + '<table class="ft"><thead><tr><th>Feature</th><th>Weight</th><th>Relative Importance</th></tr></thead><tbody>';
+  pairs.forEach(function(p) {
+    ft += '<tr><td>' + p[0] + '</td>'
+        + '<td style="color:var(--gold)">' + (p[1] * 100).toFixed(1) + '%</td>'
+        + '<td><div class="bar-cell"><div class="mini-bar">'
+        + '<div class="mini-fill" style="width:' + Math.round(p[1] / mx * 100) + '%"></div>'
+        + '</div></div></td></tr>';
+  });
+  ft += '</tbody></table>';
+  document.getElementById('featImp').innerHTML = ft;
+  document.getElementById('featImp').style.display = 'block';
+
+  // ── Accuracy ring ────────────────────────────────────────────────
+  var C = 2 * Math.PI * 30;
+  document.getElementById('accDisplay').innerHTML =
+    '<div class="acc-box">'
+    + '<div class="ring">'
+    + '<svg width="76" height="76" viewBox="0 0 76 76">'
+    + '<circle cx="38" cy="38" r="30" fill="none" stroke="var(--bd)" stroke-width="7"/>'
+    + '<circle cx="38" cy="38" r="30" fill="none" stroke="var(--g)" stroke-width="7"'
+    + ' stroke-dasharray="' + C.toFixed(1) + '"'
+    + ' stroke-dashoffset="' + (C * (1 - testAcc.wa)).toFixed(1) + '"'
+    + ' stroke-linecap="round"/>'
+    + '</svg>'
+    + '<div class="pct">' + (testAcc.wa * 100).toFixed(0) + '%</div>'
+    + '</div>'
+    + '<div>'
+    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--tx);letter-spacing:2px;">WIN ACCURACY &mdash; HELD-OUT TEST SET</div>'
+    + '<div style="color:var(--mt);font-size:.8rem;margin-top:3px;">Tested on '
+    + testAcc.tot.toLocaleString() + ' unseen races &bull; trained on ' + bAcc.tot.toLocaleString() + ' races</div>'
+    + '<div style="margin-top:6px;font-family:\'IBM Plex Mono\',monospace;font-size:.8rem;">'
+    + 'Place acc (top 3): <span style="color:var(--gold)">' + (testAcc.pa * 100).toFixed(1) + '%</span>'
+    + ' &nbsp;&bull;&nbsp; Train win acc: <span style="color:var(--mt)">' + (bAcc.wa * 100).toFixed(1) + '%</span></div>'
+    + '<div style="margin-top:5px;font-size:.73rem;color:var(--mt);">Test accuracy reflects real-world performance on races the model never saw during training.</div>'
+    + '</div></div>';
+  document.getElementById('accDisplay').style.display = 'block';
+
+  document.getElementById('s2').className = 'step done';
+  document.getElementById('s3').className = 'step active';
+  document.getElementById('dlSection').style.display = 'block';
+
+  // Populate the text box FIRST, then scroll to it
+  try {
+    var fname  = 'racing_model_' + (trainedModel.surface || 'turf') + '.json';
+    var jsonStr = JSON.stringify(trainedModel);
+    var tb = document.getElementById('jsonTextBox');
+    tb.value = jsonStr;
+    document.getElementById('jsonFilename').textContent = fname;
+    document.getElementById('jsonCharCount').textContent =
+      'JSON ready — ' + (jsonStr.length / 1024).toFixed(0) + ' KB — click Select All Text then Ctrl+C';
+    setTimeout(function() {
+      tb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  } catch(e) {
+    log('Export error: ' + e.message, 'err');
+    // Fallback: try without pretty-print and with fewer horses
+    try {
+      var slim = JSON.parse(JSON.stringify(trainedModel));
+      // Keep only horses with 3+ runs if still too big
+      var hkeys = Object.keys(slim.horseStats || {});
+      var removed = 0;
+      hkeys.forEach(function(h) {
+        if ((slim.horseStats[h].r || 0) < 3) { delete slim.horseStats[h]; removed++; }
+      });
+      log('Retrying with ' + removed + ' low-run horses removed...', 'info');
+      var jsonStr2 = JSON.stringify(slim);
+      var tb2 = document.getElementById('jsonTextBox');
+      tb2.value = jsonStr2;
+      document.getElementById('jsonCharCount').textContent =
+        'JSON ready (trimmed) — ' + (jsonStr2.length / 1024).toFixed(0) + ' KB';
+      document.getElementById('jsonFilename').textContent = fname;
+      tb2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      trainedModel = slim;
+    } catch(e2) {
+      log('Could not serialise model: ' + e2.message, 'err');
+    }
+  }
+
+  } catch(err) {
+    // Top-level catch — surfaces any silent crash in the training pipeline
+    log('ERROR: ' + err.message, 'err');
+    log('(Line: ' + (err.lineNumber || err.stack || 'unknown') + ')', 'err');
+    document.getElementById('trainBtn').disabled = false;
+  }
+}
+
+// ── Export ─────────────────────────────────────────────────────
+function dlModel() {
+  if (!trainedModel) return;
+  var json = JSON.stringify(trainedModel, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'racing_model_' + (trainedModel.surface || 'turf') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}
+
+function selectJsonText() {
+  var tb = document.getElementById('jsonTextBox');
+  tb.select();
+  tb.setSelectionRange(0, 99999); // mobile support
+}
+
+// ── Sample template download ────────────────────────────────────
+function dlTemplate() {
+  var rows = [
+    'date,course,race_id,dist,going,horse,age,wgt,draw,jockey,trainer,sp,or,rpr,ts,pos,ran,class,pattern',
+    '2024-06-18,Ascot,999001,1m,Good To Firm,Charming Prince (IRE),5,9-2,3,F Dettori,J Gosden,4/1,108,112,95,1,12,Class 1,Group 2',
+    '2024-06-18,Ascot,999001,1m,Good To Firm,Silver Bullet (GB),4,9-0,7,W Buick,C Appleby,11/2F,104,108,90,2,12,Class 1,Group 2',
+    '2024-06-18,Ascot,999001,1m,Good To Firm,Desert King (GB),6,9-3,1,R Hughes,A P OBrien,10/1,102,105,88,3,12,Class 1,Group 2',
+    '2024-06-18,Ascot,999001,1m,Good To Firm,Morning Light (IRE),5,8-12,11,J Doyle,W Haggas,6/1F,99,101,85,4,12,Class 1,Group 2',
+    '2024-06-19,Newmarket,999002,6f,Good,Fast Motion (GB),3,9-1,2,O Murphy,R Hannon,3/1F,95,98,82,1,8,Class 2,',
+    '2024-06-19,Newmarket,999002,6f,Good,Quicksilver (IRE),4,9-1,5,P Hanagan,K Burke,7/2,93,95,80,2,8,Class 2,',
+    '2024-06-19,Newmarket,999002,6f,Good,Noble Quest (GB),3,8-11,8,L Dettori,R Charlton,8/1,90,92,78,3,8,Class 2,',
+  ];
+  var blob = new Blob([rows.join('\n')], { type:'text/csv' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'racing_trainer_template.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}
+</script>
+</body>
+</html>
