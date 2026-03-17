@@ -204,6 +204,24 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <span class="mu" style="font-size:.68rem">Enter decimal odds</span>
       </div>
       <div id="prun"></div>
+      <div id="addRunnerForm" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--bd);border-radius:8px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--g);letter-spacing:1px;margin-bottom:10px;">ADD MISSING RUNNER</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Horse Name</label>
+            <input id="ar_name" type="text" placeholder="e.g. SANS OF GOLD" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
+          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Jockey</label>
+            <input id="ar_jockey" type="text" placeholder="e.g. Rex Dingle" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
+          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">OR (0 if unknown)</label>
+            <input id="ar_or" type="number" placeholder="e.g. 74" min="0" max="200" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
+          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Draw (stall)</label>
+            <input id="ar_draw" type="number" placeholder="auto" min="1" max="30" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-g" style="flex:1;padding:8px" onclick="addManualRunner()">+ Add Runner</button>
+          <button class="btn btn-o" style="padding:8px 14px" onclick="document.getElementById('addRunnerForm').style.display='none'">Cancel</button>
+        </div>
+      </div>
+      <button class="btn btn-o" style="width:100%;margin-top:8px;font-size:.78rem;padding:7px" onclick="document.getElementById('addRunnerForm').style.display=document.getElementById('addRunnerForm').style.display==='none'?'block':'none'">+ Add Missing Runner</button>
     </div>
     <button class="btn bg" onclick="predict()">🔍 Predict This Race</button>
     <div id="pres"></div>
@@ -481,6 +499,7 @@ function extractRunners(block) {
   var joined = block.replace(/\n\(\d+\)(?=\n)/g, function(m) {
     return ' ' + m.trim();
   });
+
   var lines = joined.split('\n');
   for (var i = 0; i < lines.length; i++) {
     var r = parseRunnerLine(lines[i].trim());
@@ -639,6 +658,36 @@ function renderPredict(race) {
       + '</div></div>';
     c.appendChild(d);
   });
+}
+
+// ── Add manual runner ─────────────────────────────────────
+function addManualRunner() {
+  if (!S.sel) return;
+  var name   = document.getElementById('ar_name').value.trim().toUpperCase();
+  var jockey = document.getElementById('ar_jockey').value.trim();
+  var or_    = parseInt(document.getElementById('ar_or').value) || 0;
+  var draw   = parseInt(document.getElementById('ar_draw').value) || 0;
+  if (!name) { alert('Please enter a horse name'); return; }
+
+  // Auto-assign stall — use next available number
+  var usedStalls = S.sel.runners.map(function(r) { return r.stall; });
+  var stall = draw || (Math.max.apply(null, usedStalls.concat([0])) + 1);
+
+  var r = { stall: stall, draw: draw || stall, name: name, jockey: jockey,
+            or: or_, age: 0, wst: 0, wlbs: 0, form: '', daysSince: 21,
+            rf: { runs:0, wins:0, places:0 }, odds: 0 };
+
+  S.sel.runners.push(r);
+
+  // Re-render the runner list
+  renderPredict(S.sel);
+
+  // Clear the form and hide it
+  document.getElementById('ar_name').value   = '';
+  document.getElementById('ar_jockey').value = '';
+  document.getElementById('ar_or').value     = '';
+  document.getElementById('ar_draw').value   = '';
+  document.getElementById('addRunnerForm').style.display = 'none';
 }
 
 // ── Non-runner toggle ──────────────────────────────────────
