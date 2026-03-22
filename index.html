@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -101,6 +100,31 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .fwb{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
 .fwf{height:100%;background:var(--g);border-radius:2px}
 select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:6px;font-size:.8rem;-webkit-appearance:none;font-family:'IBM Plex Sans',sans-serif}
+/* ── Autocomplete ───────────────────────────────────────── */
+.ac-wrap{position:relative;flex:1}
+.ac-input{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;transition:border-color .15s}
+.ac-input:focus{border-color:var(--g)}
+.ac-input.ac-match{border-color:var(--g);color:var(--g)}
+.ac-input.ac-nomatch{border-color:#ff5252;color:#ff8a80}
+.ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#0d1a10;border:1px solid var(--g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
+.ac-drop.open{display:block}
+.ac-item{padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--tx);cursor:pointer;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.hi{background:rgba(0,230,118,.1);color:var(--g)}
+.ac-item .ac-main{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-item .ac-sub{font-size:.65rem;color:var(--mt);white-space:nowrap;flex-shrink:0}
+.ac-none{padding:10px 12px;font-size:.75rem;color:var(--mt);text-align:center;font-family:'IBM Plex Mono',monospace}
+/* Add runner form */
+.ar-form{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-top:12px;display:none}
+.ar-form.open{display:block}
+.ar-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.ar-row.full{grid-template-columns:1fr}
+.ar-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px}
+.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none}
+.ar-inp:focus{border-color:var(--g);outline:none}
+.ar-status{font-size:.68rem;font-family:'IBM Plex Mono',monospace;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
+.ar-known{background:rgba(0,230,118,.12);color:var(--g);border:1px solid rgba(0,230,118,.3)}
+.ar-unknown{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.3)}
 /* ── Help tab styles ─────────────────────────────────────── */
 .h-sec{margin-bottom:24px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .h-sec-hdr{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid #e8f5ee;margin-bottom:12px}
@@ -152,7 +176,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- RACES -->
-
 <div class="scr on" id="s-races">
   <div class="card">
     <div class="ct">Load Racecard PDF</div>
@@ -177,7 +200,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PREDICT -->
-
 <div class="scr" id="s-predict">
   <div id="nosel" class="al alw">← Go to Races tab and select a race first.</div>
   <div id="rdet" style="display:none">
@@ -200,36 +222,64 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds <span id="runnerCount" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--g);font-weight:normal;letter-spacing:0"></span></div>
+        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds</div>
         <span class="mu" style="font-size:.68rem">Enter decimal odds</span>
       </div>
       <div id="prun"></div>
-      <div id="addRunnerForm" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--bd);border-radius:8px;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--g);letter-spacing:1px;margin-bottom:10px;">ADD MISSING RUNNER</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Horse Name</label>
-            <input id="ar_name" type="text" placeholder="e.g. SANS OF GOLD" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
-          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Jockey</label>
-            <input id="ar_jockey" type="text" placeholder="e.g. Rex Dingle" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
-          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">OR (0 if unknown)</label>
-            <input id="ar_or" type="number" placeholder="e.g. 74" min="0" max="200" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
-          <div><label style="font-size:.7rem;color:var(--mt);display:block;margin-bottom:3px;">Draw (stall)</label>
-            <input id="ar_draw" type="number" placeholder="auto" min="1" max="30" style="width:100%;background:var(--c2);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:6px 8px;font-size:.8rem;box-sizing:border-box;"></div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-g" style="flex:1;padding:8px" onclick="addManualRunner()">+ Add Runner</button>
-          <button class="btn btn-o" style="padding:8px 14px" onclick="document.getElementById('addRunnerForm').style.display='none'">Cancel</button>
-        </div>
-      </div>
-      <button class="btn btn-o" style="width:100%;margin-top:8px;font-size:.78rem;padding:7px" onclick="document.getElementById('addRunnerForm').style.display=document.getElementById('addRunnerForm').style.display==='none'?'block':'none'">+ Add Missing Runner</button>
     </div>
-    <button class="btn bg" onclick="predict()">🔍 Predict This Race</button>
+    <!-- Add Runner -->
+    <div class="card" id="arCard" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Add Runner</div>
+        <button class="btn bo" style="width:auto;padding:6px 14px;margin-bottom:0;font-size:.68rem" onclick="toggleARForm()">+ Add</button>
+      </div>
+      <div class="ar-form" id="arForm">
+        <div class="ar-row full" style="margin-bottom:8px">
+          <div class="ar-lbl">Horse Name</div>
+          <div class="ac-wrap" id="horseWrap">
+            <input class="ac-input" id="arHorse" type="text" placeholder="Start typing horse name…" autocomplete="off" spellcheck="false">
+            <div class="ac-drop" id="horseDrop"></div>
+          </div>
+          <div id="horseStatus" style="margin-top:4px;min-height:18px"></div>
+        </div>
+        <div class="ar-row full" style="margin-bottom:8px">
+          <div class="ar-lbl">Jockey</div>
+          <div class="ac-wrap" id="jockeyWrap">
+            <input class="ac-input" id="arJockey" type="text" placeholder="Start typing jockey name…" autocomplete="off" spellcheck="false">
+            <div class="ac-drop" id="jockeyDrop"></div>
+          </div>
+          <div id="jockeyStatus" style="margin-top:4px;min-height:18px"></div>
+        </div>
+        <div class="ar-row">
+          <div>
+            <div class="ar-lbl">Stall / Draw</div>
+            <input class="ar-inp" id="arStall" type="number" min="1" max="30" placeholder="e.g. 8">
+          </div>
+          <div>
+            <div class="ar-lbl">Official Rating</div>
+            <input class="ar-inp" id="arOR" type="number" min="0" max="160" placeholder="e.g. 95">
+          </div>
+        </div>
+        <div class="ar-row">
+          <div>
+            <div class="ar-lbl">Age</div>
+            <input class="ar-inp" id="arAge" type="number" min="2" max="12" placeholder="e.g. 4">
+          </div>
+          <div>
+            <div class="ar-lbl">Days Since Last Run</div>
+            <input class="ar-inp" id="arDays" type="number" min="0" placeholder="e.g. 14">
+          </div>
+        </div>
+        <button class="btn bg" style="margin-top:8px;margin-bottom:0" onclick="addRunner()">Add to Race</button>
+      </div>
+    </div>
+
+    <button class="btn bg" onclick="predict()">Predict This Race</button>
     <div id="pres"></div>
   </div>
 </div>
 
 <!-- SETUP -->
-
 <div class="scr" id="s-setup">
   <div class="card">
     <div class="ct">Trained Model</div>
@@ -256,109 +306,105 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- HELP -->
-
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
   <div style="padding-bottom:4px">
 
-```
-<!-- What it does -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">1</div><div class="h-sec-ttl">What does it do?</div></div>
-  <p class="h-p">The Predictor scores every horse in a race and ranks them in order of predicted finishing position, drawing on a model trained on years of UK and Irish flat turf results.</p>
-  <div class="h-card-row">
-    <div class="h-card"><div class="h-card-ttl">🐎 The horse</div><p>Win rate, going and distance preference, course record.</p></div>
-    <div class="h-card"><div class="h-card-ttl">🧑 Jockey &amp; trainer</div><p>Individual win rates from thousands of rides.</p></div>
-    <div class="h-card"><div class="h-card-ttl">📊 Market odds</div><p>SP is a strong signal — bookmakers have enormous data.</p></div>
-    <div class="h-card"><div class="h-card-ttl">📅 Freshness</div><p>How recently the horse last ran. Long breaks often need the run.</p></div>
-  </div>
-  <div class="h-callout h-warn"><span class="ci">⚠️</span><div><strong>This is a tool, not a guarantee.</strong> Racing is unpredictable. Use it to inform your thinking, not replace it. Gamble responsibly.</div></div>
-</div>
+    <!-- What it does -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">1</div><div class="h-sec-ttl">What does it do?</div></div>
+      <p class="h-p">The Predictor scores every horse in a race and ranks them in order of predicted finishing position, drawing on a model trained on years of UK and Irish flat turf results.</p>
+      <div class="h-card-row">
+        <div class="h-card"><div class="h-card-ttl">🐎 The horse</div><p>Win rate, going and distance preference, course record.</p></div>
+        <div class="h-card"><div class="h-card-ttl">🧑 Jockey &amp; trainer</div><p>Individual win rates from thousands of rides.</p></div>
+        <div class="h-card"><div class="h-card-ttl">📊 Market odds</div><p>SP is a strong signal — bookmakers have enormous data.</p></div>
+        <div class="h-card"><div class="h-card-ttl">📅 Freshness</div><p>How recently the horse last ran. Long breaks often need the run.</p></div>
+      </div>
+      <div class="h-callout h-warn"><span class="ci">⚠️</span><div><strong>This is a tool, not a guarantee.</strong> Racing is unpredictable. Use it to inform your thinking, not replace it. Gamble responsibly.</div></div>
+    </div>
 
-<!-- First-time setup -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">2</div><div class="h-sec-ttl">First-time setup</div></div>
-  <p class="h-p">The app needs a <strong style="color:#1a6b3a">racing_model.json</strong> file to work at full power — your host will have sent this to you.</p>
-  <ol class="h-steps">
-    <li>Save the <strong>racing_model.json</strong> file to your phone (Downloads or Files app).</li>
-    <li>Tap the <strong>Setup</strong> tab, then <strong>Tap to load racing_model.json</strong> and select the file.</li>
-    <li>A green confirmation appears when loaded. Done — it stays active for this session.</li>
-  </ol>
-  <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>No model?</strong> Tap <em>Activate Default Weights</em> in Setup. Results are less personalised but still useful.</div></div>
-</div>
+    <!-- First-time setup -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">2</div><div class="h-sec-ttl">First-time setup</div></div>
+      <p class="h-p">The app needs a <strong style="color:#1a6b3a">racing_model.json</strong> file to work at full power — your host will have sent this to you.</p>
+      <ol class="h-steps">
+        <li>Save the <strong>racing_model.json</strong> file to your phone (Downloads or Files app).</li>
+        <li>Tap the <strong>Setup</strong> tab, then <strong>Tap to load racing_model.json</strong> and select the file.</li>
+        <li>A green confirmation appears when loaded. Done — it stays active for this session.</li>
+      </ol>
+      <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>No model?</strong> Tap <em>Activate Default Weights</em> in Setup. Results are less personalised but still useful.</div></div>
+    </div>
 
-<!-- Making a prediction -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Making a prediction</div></div>
-  <p class="h-p">The app reads race data from a PDF form guide downloaded free from <strong style="color:#222">attheraces.com</strong>.</p>
-  <ol class="h-steps">
-    <li>Go to attheraces.com, find your race, and download the form guide PDF.</li>
-    <li>Tap the <strong>Races</strong> tab, then load the PDF. All runners are extracted automatically.</li>
-    <li>Tap the race you want to predict, then tap <strong>Predict</strong>.</li>
-    <li>Enter <strong>decimal odds</strong> for each runner (see tip below), set the going, then tap <strong>Predict This Race</strong>.</li>
-  </ol>
-  <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> Convert fractional to decimal by dividing top by bottom and adding 1. So 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Most bookmaker apps have a decimal display option.</div></div>
-  <div class="h-callout h-tip"><span class="ci">💡</span><div>Enter odds as close to race time as possible — the final market is far more informative than early prices. Aim for within 30 minutes of the off.</div></div>
-</div>
+    <!-- Making a prediction -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Making a prediction</div></div>
+      <p class="h-p">The app reads race data from a PDF form guide downloaded free from <strong style="color:#222">attheraces.com</strong>.</p>
+      <ol class="h-steps">
+        <li>Go to attheraces.com, find your race, and download the form guide PDF.</li>
+        <li>Tap the <strong>Races</strong> tab, then load the PDF. All runners are extracted automatically.</li>
+        <li>Tap the race you want to predict, then tap <strong>Predict</strong>.</li>
+        <li>Enter <strong>decimal odds</strong> for each runner (see tip below), set the going, then tap <strong>Predict This Race</strong>.</li>
+      </ol>
+      <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> Convert fractional to decimal by dividing top by bottom and adding 1. So 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Most bookmaker apps have a decimal display option.</div></div>
+      <div class="h-callout h-tip"><span class="ci">💡</span><div>Enter odds as close to race time as possible — the final market is far more informative than early prices. Aim for within 30 minutes of the off.</div></div>
+    </div>
 
-<!-- Going -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">4</div><div class="h-sec-ttl">Setting the going</div></div>
-  <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website usually has it. Going can change between morning and race time.</p>
-  <table class="h-going">
-    <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
-    <tbody>
-      <tr><td colspan="2" style="background:#1a6b3a;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
-      <tr><td>Firm</td><td>Very fast, hard ground. Rare on British turf.</td></tr>
-      <tr><td>Good To Firm</td><td>Fast with a little give. Common in summer. Suits fast horses.</td></tr>
-      <tr><td>Good</td><td>Standard balanced ground. Most horses handle it.</td></tr>
-      <tr><td>Good To Soft</td><td>Some give underfoot. After light rain. Favours stayers.</td></tr>
-      <tr><td>Soft</td><td>Wet and testing. Stamina horses thrive.</td></tr>
-      <tr><td>Heavy</td><td>Very wet, energy-sapping. Only certain horses handle it.</td></tr>
-      <tr><td colspan="2" style="background:#3b6fd4;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
-      <tr><td>Standard</td><td>Normal AW conditions. The equivalent of Good on turf.</td></tr>
-      <tr><td>Standard To Fast</td><td>Quicker AW surface. Suits faster, speedier horses.</td></tr>
-      <tr><td>Standard To Slow</td><td>Slightly slower surface. Suits horses that stay well.</td></tr>
-      <tr><td>Slow</td><td>Tiring AW conditions after water or heavy use.</td></tr>
-    </tbody>
-  </table>
-</div>
+    <!-- Going -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">4</div><div class="h-sec-ttl">Setting the going</div></div>
+      <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website usually has it. Going can change between morning and race time.</p>
+      <table class="h-going">
+        <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
+        <tbody>
+          <tr><td colspan="2" style="background:#1a6b3a;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
+          <tr><td>Firm</td><td>Very fast, hard ground. Rare on British turf.</td></tr>
+          <tr><td>Good To Firm</td><td>Fast with a little give. Common in summer. Suits fast horses.</td></tr>
+          <tr><td>Good</td><td>Standard balanced ground. Most horses handle it.</td></tr>
+          <tr><td>Good To Soft</td><td>Some give underfoot. After light rain. Favours stayers.</td></tr>
+          <tr><td>Soft</td><td>Wet and testing. Stamina horses thrive.</td></tr>
+          <tr><td>Heavy</td><td>Very wet, energy-sapping. Only certain horses handle it.</td></tr>
+          <tr><td colspan="2" style="background:#3b6fd4;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
+          <tr><td>Standard</td><td>Normal AW conditions. The equivalent of Good on turf.</td></tr>
+          <tr><td>Standard To Fast</td><td>Quicker AW surface. Suits faster, speedier horses.</td></tr>
+          <tr><td>Standard To Slow</td><td>Slightly slower surface. Suits horses that stay well.</td></tr>
+          <tr><td>Slow</td><td>Tiring AW conditions after water or heavy use.</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-<!-- Non-runners -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">5</div><div class="h-sec-ttl">Non-runners</div></div>
-  <p class="h-p">If a horse is withdrawn, tap the <strong style="color:#555">NR</strong> button on their card. The card dims and they&#39;re excluded from the prediction. Tap NR again to reinstate.</p>
-  <div class="h-nr-eg">
-    <div class="h-nr-row"><span><strong>CHARMING PRINCE (IRE)</strong></span><button class="h-btn-eg">NR</button></div>
-    <div class="h-nr-row h-struck"><span><strong>SILVER BULLET (GB)</strong></span><span class="h-nr-tag">NON RUNNER</span></div>
-    <div class="h-nr-row"><span><strong>DESERT KING (GB)</strong></span><button class="h-btn-eg">NR</button></div>
-  </div>
-  <p class="h-p">Find non-runner info on racingpost.com, oddschecker.com, or your bookmaker app.</p>
-</div>
+    <!-- Non-runners -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">5</div><div class="h-sec-ttl">Non-runners</div></div>
+      <p class="h-p">If a horse is withdrawn, tap the <strong style="color:#555">NR</strong> button on their card. The card dims and they&#39;re excluded from the prediction. Tap NR again to reinstate.</p>
+      <div class="h-nr-eg">
+        <div class="h-nr-row"><span><strong>CHARMING PRINCE (IRE)</strong></span><button class="h-btn-eg">NR</button></div>
+        <div class="h-nr-row h-struck"><span><strong>SILVER BULLET (GB)</strong></span><span class="h-nr-tag">NON RUNNER</span></div>
+        <div class="h-nr-row"><span><strong>DESERT KING (GB)</strong></span><button class="h-btn-eg">NR</button></div>
+      </div>
+      <p class="h-p">Find non-runner info on racingpost.com, oddschecker.com, or your bookmaker app.</p>
+    </div>
 
-<!-- Reading results -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">6</div><div class="h-sec-ttl">Reading the results</div></div>
-  <div class="h-card-row">
-    <div class="h-card"><div class="h-card-ttl">🏆 Predicted Winner</div><p>Highest-scoring horse, shown with confidence percentage relative to the field.</p></div>
-    <div class="h-card"><div class="h-card-ttl">💰 Value Bet</div><p>A top-3 pick with odds of 9.0 or higher (8/1+) — worth a closer look.</p></div>
-  </div>
-  <p class="h-p" style="margin-top:10px">Below these, the <strong>full predicted order</strong> ranks every horse. The percentages show relative confidence — not absolute win probability.</p>
-  <div class="h-callout h-gold"><span class="ci">🎯</span><div>The value bet flag is a prompt to look closer, not an instruction to back it. Check the form, conditions, and market movement before deciding.</div></div>
-</div>
+    <!-- Reading results -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">6</div><div class="h-sec-ttl">Reading the results</div></div>
+      <div class="h-card-row">
+        <div class="h-card"><div class="h-card-ttl">🏆 Predicted Winner</div><p>Highest-scoring horse, shown with confidence percentage relative to the field.</p></div>
+        <div class="h-card"><div class="h-card-ttl">💰 Value Bet</div><p>A top-3 pick with odds of 9.0 or higher (8/1+) — worth a closer look.</p></div>
+      </div>
+      <p class="h-p" style="margin-top:10px">Below these, the <strong>full predicted order</strong> ranks every horse. The percentages show relative confidence — not absolute win probability.</p>
+      <div class="h-callout h-gold"><span class="ci">🎯</span><div>The value bet flag is a prompt to look closer, not an instruction to back it. Check the form, conditions, and market movement before deciding.</div></div>
+    </div>
 
-<!-- FAQ -->
-<div class="h-sec">
-  <div class="h-sec-hdr"><div class="h-sec-num">7</div><div class="h-sec-ttl">Common questions</div></div>
-  <div class="h-faq"><div class="h-faq-q">❓ PDF loaded but no runners appeared</div><div class="h-faq-a">The app reads At The Races form guide PDFs only. PDFs from Racing Post, racecourses or bookmakers use different formats and may not parse correctly.</div></div>
-  <div class="h-faq"><div class="h-faq-q">❓ All horses show the same score</div><div class="h-faq-a">Odds haven&#39;t been entered yet — they&#39;re a big part of the scoring. Enter decimal odds for each runner and the scores will spread out.</div></div>
-  <div class="h-faq"><div class="h-faq-q">❓ Does it work for jump racing?</div><div class="h-faq-a">The model was trained on UK and Irish flat turf only. It can still rank jump race runners but accuracy will be lower — jump racing has very different dynamics.</div></div>
-  <div class="h-faq"><div class="h-faq-q">❓ Should I always back the predicted winner?</div><div class="h-faq-a">No. Use it to identify horses worth looking at more closely, then apply your own judgement. Blindly following any system is a reliable way to lose money over time.</div></div>
-  <div class="h-faq"><div class="h-faq-q">❓ What&#39;s the model&#39;s win rate?</div><div class="h-faq-a">You can see the test accuracy in the Setup tab once the model is loaded. As a reference, picking the winner by chance from a field of 12 would be right about 8% of the time — a well-calibrated model does meaningfully better, though no model wins consistently.</div></div>
-</div>
+    <!-- FAQ -->
+    <div class="h-sec">
+      <div class="h-sec-hdr"><div class="h-sec-num">7</div><div class="h-sec-ttl">Common questions</div></div>
+      <div class="h-faq"><div class="h-faq-q">❓ PDF loaded but no runners appeared</div><div class="h-faq-a">The app reads At The Races form guide PDFs only. PDFs from Racing Post, racecourses or bookmakers use different formats and may not parse correctly.</div></div>
+      <div class="h-faq"><div class="h-faq-q">❓ All horses show the same score</div><div class="h-faq-a">Odds haven&#39;t been entered yet — they&#39;re a big part of the scoring. Enter decimal odds for each runner and the scores will spread out.</div></div>
+      <div class="h-faq"><div class="h-faq-q">❓ Does it work for jump racing?</div><div class="h-faq-a">The model was trained on UK and Irish flat turf only. It can still rank jump race runners but accuracy will be lower — jump racing has very different dynamics.</div></div>
+      <div class="h-faq"><div class="h-faq-q">❓ Should I always back the predicted winner?</div><div class="h-faq-a">No. Use it to identify horses worth looking at more closely, then apply your own judgement. Blindly following any system is a reliable way to lose money over time.</div></div>
+      <div class="h-faq"><div class="h-faq-q">❓ What&#39;s the model&#39;s win rate?</div><div class="h-faq-a">You can see the test accuracy in the Setup tab once the model is loaded. As a reference, picking the winner by chance from a field of 12 would be right about 8% of the time — a well-calibrated model does meaningfully better, though no model wins consistently.</div></div>
+    </div>
 
-<div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:#888">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
-```
-
+    <div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:#888">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
   </div>
 </div>
 
@@ -499,7 +545,6 @@ function extractRunners(block) {
   var joined = block.replace(/\n\(\d+\)(?=\n)/g, function(m) {
     return ' ' + m.trim();
   });
-
   var lines = joined.split('\n');
   for (var i = 0; i < lines.length; i++) {
     var r = parseRunnerLine(lines[i].trim());
@@ -602,6 +647,8 @@ function selRace(i) {
   if (el) el.classList.add('sel');
   S.sel = S.races[i];
   renderPredict(S.sel);
+  // Re-bind autocomplete inputs after re-render
+  if (S.model) { setTimeout(initAC, 0); }
   // Keep going in sync with loaded model's surface
   if (S.model) {
     var gsel = document.getElementById('gsel');
@@ -619,13 +666,13 @@ function selRace(i) {
 function renderPredict(race) {
   document.getElementById('nosel').style.display = 'none';
   document.getElementById('rdet').style.display = 'block';
+  document.getElementById('arCard').style.display = 'block';
   document.getElementById('pres').innerHTML = '';
   document.getElementById('rtm').textContent = race.time + ' ' + race.course;
   document.getElementById('rttl').textContent = race.title || '';
   document.getElementById('rdst').textContent = race.dist
     + (race.cls ? ' · Class ' + race.cls : '')
     + ' · ' + race.runners.length + ' runners (tap NR to mark non-runners)';
-  document.getElementById('runnerCount').textContent = '(' + race.runners.length + ' loaded)';
 
   var c = document.getElementById('prun');
   c.innerHTML = '';
@@ -658,36 +705,6 @@ function renderPredict(race) {
       + '</div></div>';
     c.appendChild(d);
   });
-}
-
-// ── Add manual runner ─────────────────────────────────────
-function addManualRunner() {
-  if (!S.sel) return;
-  var name   = document.getElementById('ar_name').value.trim().toUpperCase();
-  var jockey = document.getElementById('ar_jockey').value.trim();
-  var or_    = parseInt(document.getElementById('ar_or').value) || 0;
-  var draw   = parseInt(document.getElementById('ar_draw').value) || 0;
-  if (!name) { alert('Please enter a horse name'); return; }
-
-  // Auto-assign stall — use next available number
-  var usedStalls = S.sel.runners.map(function(r) { return r.stall; });
-  var stall = draw || (Math.max.apply(null, usedStalls.concat([0])) + 1);
-
-  var r = { stall: stall, draw: draw || stall, name: name, jockey: jockey,
-            or: or_, age: 0, wst: 0, wlbs: 0, form: '', daysSince: 21,
-            rf: { runs:0, wins:0, places:0 }, odds: 0 };
-
-  S.sel.runners.push(r);
-
-  // Re-render the runner list
-  renderPredict(S.sel);
-
-  // Clear the form and hide it
-  document.getElementById('ar_name').value   = '';
-  document.getElementById('ar_jockey').value = '';
-  document.getElementById('ar_or').value     = '';
-  document.getElementById('ar_draw').value   = '';
-  document.getElementById('addRunnerForm').style.display = 'none';
 }
 
 // ── Non-runner toggle ──────────────────────────────────────
@@ -902,6 +919,8 @@ function onModelLoaded(m) {
     });
     document.getElementById('fw').innerHTML = fw;
   }
+  // Build autocomplete lists from model data
+  initAC();
 }
 
 function sb(v, l) {
@@ -915,6 +934,216 @@ function useDefault() {
   document.getElementById('dms').innerHTML = '<div class="al als" style="margin-top:8px">✓ Default weights active.</div>';
 }
 
+// ── Autocomplete engine ───────────────────────────────────
+var AC = {
+  // Build sorted arrays from model data when model loads
+  horses: [],   // [{key, label, stats}]  key = lowercase, label = display
+  jockeys: [],  // [{key, label, wr}]
+
+  build: function(m) {
+    // Horses — from horseStats keys, format as Title Case
+    var hs = m.horseStats || {};
+    this.horses = Object.keys(hs).sort().map(function(k) {
+      var s = hs[k];
+      var label = k.replace(/\w/g, function(c){ return c.toUpperCase(); });
+      return { key: k, label: label, r: s.r || 0, w: s.w || 0 };
+    });
+
+    // Jockeys — from jockeyStats
+    var js = m.jockeyStats || {};
+    this.jockeys = Object.keys(js).sort().map(function(k) {
+      var s = js[k];
+      var label = k.replace(/\w/g, function(c){ return c.toUpperCase(); });
+      return { key: k, label: label, r: s.r || 0, w: s.w || 0 };
+    });
+  },
+
+  search: function(list, query, max) {
+    if (!query || query.length < 2) return [];
+    var q = query.toLowerCase().trim();
+    var results = [];
+    // Prefix matches first
+    for (var i = 0; i < list.length && results.length < max; i++) {
+      if (list[i].key.indexOf(q) === 0) results.push(list[i]);
+    }
+    // Then substring matches
+    for (var i = 0; i < list.length && results.length < max; i++) {
+      if (list[i].key.indexOf(q) > 0) results.push(list[i]);
+    }
+    return results;
+  }
+};
+
+function setupAC(inputId, dropId, list, onSelect, statusId) {
+  var inp  = document.getElementById(inputId);
+  var drop = document.getElementById(dropId);
+  var hi   = -1;
+
+  function getItems() { return drop.querySelectorAll('.ac-item'); }
+
+  function render(results) {
+    hi = -1;
+    if (!results.length) {
+      drop.innerHTML = '<div class="ac-none">No matches in model</div>';
+      drop.classList.add('open');
+      return;
+    }
+    drop.innerHTML = results.map(function(r, i) {
+      var wr = r.r > 0 ? Math.round(r.w / r.r * 100) + '% (' + r.r + ' runs)' : '';
+      return '<div class="ac-item" data-val="' + r.label + '" data-idx="' + i + '">'
+        + '<span class="ac-main">' + r.label + '</span>'
+        + '<span class="ac-sub">' + wr + '</span>'
+        + '</div>';
+    }).join('');
+    drop.classList.add('open');
+
+    drop.querySelectorAll('.ac-item').forEach(function(el) {
+      el.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        select(el.dataset.val);
+      });
+    });
+  }
+
+  function close() {
+    drop.classList.remove('open');
+    hi = -1;
+  }
+
+  function select(val) {
+    inp.value = val;
+    close();
+    onSelect(val);
+    updateStatus(val);
+  }
+
+  function updateStatus(val) {
+    if (!statusId) return;
+    var st = document.getElementById(statusId);
+    if (!st) return;
+    var q = val.toLowerCase().trim();
+    var found = list.some(function(x){ return x.key === q; });
+    if (val.length < 2) { st.innerHTML = ''; return; }
+    st.innerHTML = found
+      ? '<span class="ar-status ar-known">✓ Known to model</span>'
+      : '<span class="ar-status ar-unknown">⚠ Not in model — will use average</span>';
+    inp.className = 'ac-input ' + (found ? 'ac-match' : 'ac-nomatch');
+  }
+
+  inp.addEventListener('input', function() {
+    var q = inp.value.trim();
+    inp.className = 'ac-input'; // reset colour while typing
+    if (document.getElementById(statusId)) document.getElementById(statusId).innerHTML = '';
+    if (q.length < 2) { close(); return; }
+    var results = AC.search(list, q, 8);
+    render(results);
+  });
+
+  inp.addEventListener('blur', function() {
+    // slight delay so mousedown fires first
+    setTimeout(function() {
+      close();
+      updateStatus(inp.value.trim());
+    }, 150);
+  });
+
+  inp.addEventListener('keydown', function(e) {
+    var items = getItems();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      hi = Math.min(hi + 1, items.length - 1);
+      items.forEach(function(el, i){ el.classList.toggle('hi', i === hi); });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      hi = Math.max(hi - 1, -1);
+      items.forEach(function(el, i){ el.classList.toggle('hi', i === hi); });
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (hi >= 0 && items[hi]) {
+        e.preventDefault();
+        select(items[hi].dataset.val);
+      } else {
+        close();
+        updateStatus(inp.value.trim());
+      }
+    } else if (e.key === 'Escape') {
+      close();
+    }
+  });
+}
+
+// Initialise ACs after model loads (called from onModelLoaded)
+function initAC() {
+  if (!S.model) return;
+  AC.build(S.model);
+  setupAC('arHorse',  'horseDrop',  AC.horses,  function(){}, 'horseStatus');
+  setupAC('arJockey', 'jockeyDrop', AC.jockeys, function(){}, 'jockeyStatus');
+}
+
+// ── Add Runner ─────────────────────────────────────────────
+function toggleARForm() {
+  var f = document.getElementById('arForm');
+  f.classList.toggle('open');
+  if (f.classList.contains('open')) {
+    setTimeout(function(){ document.getElementById('arHorse').focus(); }, 100);
+  }
+}
+
+function addRunner() {
+  var race = S.sel;
+  if (!race) return;
+
+  var name  = document.getElementById('arHorse').value.trim().toUpperCase();
+  var jock  = document.getElementById('arJockey').value.trim();
+  var stall = parseInt(document.getElementById('arStall').value) || (race.runners.length + 1);
+  var OR    = parseInt(document.getElementById('arOR').value)    || 0;
+  var age   = parseInt(document.getElementById('arAge').value)   || 4;
+  var days  = parseInt(document.getElementById('arDays').value);
+  if (isNaN(days)) days = 21;
+
+  if (!name) { alert('Please enter a horse name'); return; }
+  if (!jock) { alert('Please enter a jockey name'); return; }
+
+  // Avoid duplicate stalls
+  var usedStalls = race.runners.map(function(r){ return r.stall; });
+  while (usedStalls.indexOf(stall) !== -1) stall++;
+
+  var runner = {
+    stall: stall, draw: stall,
+    name: name,
+    jockey: jock,
+    or: OR, age: age,
+    wst: 9, wlbs: 0,
+    daysSince: days,
+    form: '',
+    rf: { w: 0, p: 0, r: 1 },
+    odds: 0,
+    isAdded: true
+  };
+
+  race.runners.push(runner);
+
+  // Re-render the runners list
+  renderPredict(race);
+  // Scroll to the new card
+  setTimeout(function() {
+    var el = document.getElementById('od_' + stall);
+    if (el) el.closest('.re').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+
+  // Clear form
+  document.getElementById('arHorse').value  = '';
+  document.getElementById('arJockey').value = '';
+  document.getElementById('arStall').value  = '';
+  document.getElementById('arOR').value     = '';
+  document.getElementById('arAge').value    = '';
+  document.getElementById('arDays').value   = '';
+  document.getElementById('horseStatus').innerHTML  = '';
+  document.getElementById('jockeyStatus').innerHTML = '';
+  document.getElementById('arHorse').className  = 'ac-input';
+  document.getElementById('arJockey').className = 'ac-input';
+  document.getElementById('arForm').classList.remove('open');
+}
+
 // ── Drag and drop ──────────────────────────────────────────
 var pd = document.getElementById('pdfDrop');
 pd.addEventListener('dragover', function(e){ e.preventDefault(); pd.classList.add('ov'); });
@@ -925,6 +1154,5 @@ pd.addEventListener('drop', function(e){
   if (f) loadPDF(f);
 });
 </script>
-
 </body>
 </html>
