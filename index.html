@@ -131,10 +131,10 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 /* ── Autocomplete ───────────────────────────────────────── */
 .ac-wrap{position:relative;flex:1}
-.ac-input{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;transition:border-color .15s}
+.ac-input{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx) !important;-webkit-text-fill-color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;transition:border-color .15s;-webkit-appearance:none}
 .ac-input:focus{border-color:var(–g)}
-.ac-input.ac-match{border-color:var(–g);color:var(–g)}
-.ac-input.ac-nomatch{border-color:#ff5252;color:#ff8a80}
+.ac-input.ac-match{border-color:var(–g);color:var(–g) !important;-webkit-text-fill-color:var(–g)}
+.ac-input.ac-nomatch{border-color:#ff5252;color:#ff8a80 !important;-webkit-text-fill-color:#ff8a80}
 .ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#0d1a10;border:1px solid var(–g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
 .ac-drop.open{display:block}
 .ac-item{padding:9px 12px;font-family:‘IBM Plex Mono’,monospace;font-size:.78rem;color:var(–tx);cursor:pointer;border-bottom:1px solid var(–bd);display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -149,7 +149,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ar-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .ar-row.full{grid-template-columns:1fr}
 .ar-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);margin-bottom:4px}
-.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none}
+.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx) !important;-webkit-text-fill-color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
 .ar-inp:focus{border-color:var(–g);outline:none}
 .ar-status{font-size:.68rem;font-family:‘IBM Plex Mono’,monospace;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
 .ar-known{background:rgba(0,230,118,.12);color:var(–g);border:1px solid rgba(0,230,118,.3)}
@@ -325,27 +325,39 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   <div id="pp-norace" class="al alw">← Load a PDF racecard first, then come back here.</div>
 
   <div id="pp-main" style="display:none">
-    <div class="card" style="padding:14px 16px 10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--g);letter-spacing:2px">🎯 Placepot Picks</div>
-        <div class="mpill ok" id="pp-course">—</div>
-      </div>
-      <p style="font-size:.75rem;color:var(--mt);line-height:1.5;margin-bottom:10px">
-        Scores every runner on form &amp; model data (no odds needed). Shows the top 3 selections per race — use these to build your placepot lines.
-      </p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-        <select id="pp-going" style="flex:1;min-width:120px">
-          <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
-          <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
-          <option disabled>── All-Weather ──</option>
-          <option>Standard</option><option>Standard To Slow</option>
-          <option>Standard To Fast</option><option>Slow</option>
-        </select>
-        <button class="btn bg" style="flex:1;min-width:120px;margin-bottom:0;padding:8px 12px" onclick="runPlacepot()">⚡ Generate Picks</button>
-      </div>
+    <!-- NAP of the Day -->
+    <div id="pp-nap" style="display:none;margin-bottom:12px;background:linear-gradient(135deg,rgba(255,193,7,.10),rgba(255,193,7,.03));border:2px solid var(--gold);border-radius:12px;padding:16px;position:relative;overflow:hidden">
+      <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:var(--gold);margin-bottom:4px">⭐ NAP OF THE DAY</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--gold);letter-spacing:1px;line-height:1;margin-bottom:8px" id="nap-name">—</div>
+      <div style="font-size:.75rem;color:var(--tx);margin-bottom:4px" id="nap-detail">—</div>
+      <div style="font-size:.7rem;color:var(--mt);font-family:'IBM Plex Mono',monospace" id="nap-meta">—</div>
+      <div style="position:absolute;right:12px;top:10px;font-family:'Bebas Neue',sans-serif;font-size:4rem;color:rgba(255,193,7,.08);line-height:1;pointer-events:none">NAP</div>
     </div>
 
 ```
+<div class="card" style="padding:14px 16px 10px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--g);letter-spacing:2px">🎯 Placepot Picks</div>
+    <div class="mpill ok" id="pp-course">—</div>
+  </div>
+  <div id="pp-odds-notice" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(64,196,255,.06);border-left:3px solid var(--bl);border-radius:0 4px 4px 0;display:none">
+    💡 Odds entered in Predict tab are being used to improve accuracy.
+  </div>
+  <div id="pp-odds-notice-none" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(255,193,7,.06);border-left:3px solid var(--gold);border-radius:0 4px 4px 0">
+    💡 Enter decimal odds in the Predict tab for each race to improve placepot accuracy.
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+    <select id="pp-going" style="flex:1;min-width:120px">
+      <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
+      <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
+      <option disabled>── All-Weather ──</option>
+      <option>Standard</option><option>Standard To Slow</option>
+      <option>Standard To Fast</option><option>Slow</option>
+    </select>
+    <button class="btn bg" style="flex:1;min-width:120px;margin-bottom:0;padding:8px 12px" onclick="runPlacepot()">⚡ Generate Picks</button>
+  </div>
+</div>
+
 <div id="pp-results"></div>
 
 <div id="pp-summary" style="display:none">
@@ -579,6 +591,7 @@ async function loadPDF(file) {
       return;
     }
     S.races = races;
+    lsRestore(races); // restore any odds saved earlier today
     document.getElementById('pp').style.display = 'none';
     renderRaceList(races);
   } catch (err) {
@@ -715,6 +728,59 @@ function parseForm(f) {
   return { w: w, p: p, r: Math.max(r, 1) };
 }
 
+
+// ── localStorage odds persistence (today only) ────────────
+function lsKey(races) {
+  var today  = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  var course = (races && races[0] && races[0].course) ? races[0].course.replace(/[^a-z0-9]/gi, '_') : 'unknown';
+  return 'rp_odds_' + today + '_' + course;
+}
+
+function lsSave() {
+  if (!S.races || !S.races.length) return;
+  try {
+    var data = {};
+    S.races.forEach(function(race, ri) {
+      race.runners.forEach(function(r) {
+        var key = ri + '_' + r.stall;
+        data[key] = { odds: r.odds || 0, nr: r._nr || false };
+      });
+    });
+    localStorage.setItem(lsKey(S.races), JSON.stringify(data));
+  } catch(e) {}
+}
+
+function lsRestore(races) {
+  try {
+    var raw = localStorage.getItem(lsKey(races));
+    if (!raw) return;
+    var data = JSON.parse(raw);
+    races.forEach(function(race, ri) {
+      race.runners.forEach(function(r) {
+        var key = ri + '_' + r.stall;
+        if (data[key]) {
+          if (data[key].odds) r.odds = data[key].odds;
+          if (data[key].nr)   r._nr  = true;
+        }
+      });
+    });
+  } catch(e) {}
+}
+
+function lsPurgeOld() {
+  try {
+    var today = new Date().toISOString().slice(0, 10);
+    Object.keys(localStorage).forEach(function(k) {
+      if (k.indexOf('rp_odds_') === 0 && k.indexOf(today) === -1) {
+        localStorage.removeItem(k);
+      }
+    });
+  } catch(e) {}
+}
+
+// Purge old entries on startup
+lsPurgeOld();
+
 // ── Race list ──────────────────────────────────────────────
 function renderRaceList(races) {
   document.getElementById('rls').style.display = 'block';
@@ -787,6 +853,8 @@ function renderPredict(race) {
     var claim = jClm ? ' (' + jClm[1] + 'lb)' : '';
     var d = document.createElement('div');
     d.className = 're';
+    // Restore NR state
+    if (r._nr) d.classList.add('nr');
     d.innerHTML = '<div class="sn">' + r.stall + '</div>'
       + '<div class="hh"><div class="hn">' + r.name + '</div>'
       + (r.or > 0 ? '<div class="orb">OR ' + r.or + '</div>' : '') + mk + '</div>'
@@ -794,11 +862,14 @@ function renderPredict(race) {
       + (r.form ? ' · ' + r.form.substring(0, 14) : '') + '</div>'
       + '<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
       + '<div style="flex:1"><label>Decimal Odds</label>'
-      + '<input type="number" id="od_' + r.stall + '" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"></div>'
+      + '<input type="number" id="od_' + r.stall + '" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"'
+      + (r.odds > 0 ? ' value="' + r.odds + '"' : '') + (r._nr ? ' disabled' : '') + '></div>'
       + '<div style="padding-bottom:2px;">'
       + '<button class="nr-btn" id="nr_' + r.stall + '" onclick="toggleNR(\'' + r.stall + '\')">NR</button>'
       + '<span class="nr-badge">NON RUNNER</span>'
       + '</div></div>';
+    // Save odds back to runner object on change
+    d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds = parseFloat(e.target.value) || 0; lsSave(); }; })(r));
     c.appendChild(d);
   });
 }
@@ -807,9 +878,16 @@ function renderPredict(race) {
 function toggleNR(stall) {
   var card = document.getElementById('nr_' + stall).closest('.re');
   card.classList.toggle('nr');
+  var isNR = card.classList.contains('nr');
+  // Persist NR state to runner object
+  if (S.sel) {
+    var r = S.sel.runners.find(function(x){ return String(x.stall) === String(stall); });
+    if (r) r._nr = isNR;
+  }
   // Disable/enable odds input
   var inp = document.getElementById('od_' + stall);
-  if (inp) inp.disabled = card.classList.contains('nr');
+  if (inp) inp.disabled = isNR;
+  lsSave();
 }
 
 // ── Prediction ─────────────────────────────────────────────
@@ -1275,8 +1353,8 @@ function showPlacepotTab() {
 }
 
 function scoreRunnerForPP(r, race, going) {
-  // Score without odds (os defaults to neutral 0.1)
-  var rr = Object.assign({}, r, { odds: 0, going: going });
+  // Use stored odds if available, otherwise neutral
+  var rr = Object.assign({}, r, { going: going });
   return S.model ? scoreMdl(rr, race) : scoreDef(rr, race);
 }
 
@@ -1292,27 +1370,69 @@ function runPlacepot() {
   resEl.innerHTML = '';
   sumEl.style.display = 'none';
 
+  // Check whether any odds have been entered across all races
+  var totalOddsEntered = 0;
+  races.forEach(function(race) {
+    race.runners.forEach(function(r) { if (r.odds > 0) totalOddsEntered++; });
+  });
+  var oddsNotice     = document.getElementById('pp-odds-notice');
+  var oddsNoticeNone = document.getElementById('pp-odds-notice-none');
+  if (oddsNotice)     oddsNotice.style.display     = totalOddsEntered > 0 ? 'block' : 'none';
+  if (oddsNoticeNone) oddsNoticeNone.style.display  = totalOddsEntered > 0 ? 'none'  : 'block';
+
   // Filter to first 6 races (standard placepot)
   var ppRaces = races.slice(0, 6);
-  var allPicks = []; // top pick per race for the lines summary
+  var allPicks = [];
+
+  // ── NAP: best single pick across ALL races (with odds) ──
+  var napCandidate = null;
+  var napScore = -1;
 
   ppRaces.forEach(function(race, ri) {
-    // Score all runners (no odds)
-    var scored = race.runners.map(function(r) {
-      return Object.assign({}, r, { score: scoreRunnerForPP(r, race, going) });
+    // Exclude NR runners
+    var active = race.runners.filter(function(r){ return !r._nr; });
+    var scored = active.map(function(r) {
+      return Object.assign({}, r, { score: scoreRunnerForPP(r, race, going), _race: race, _raceIdx: ri });
     });
     scored.sort(function(a, b) { return b.score - a.score; });
 
+    // NAP: horse with the biggest confidence gap over the 2nd pick
+    if (scored.length >= 2) {
+      var tot  = scored.reduce(function(s, r){ return s + r.score; }, 0) || 1;
+      var top  = scored[0];
+      var sec  = scored[1];
+      var conf1 = Math.round(top.score / tot * 100);
+      var conf2 = Math.round(sec.score / tot * 100);
+      var gap   = conf1 - conf2; // bigger gap = clearer selection
+      if (gap > napScore) {
+        napScore = gap;
+        napCandidate = { runner: top, race: race, raceIdx: ri, tot: tot, conf1: conf1, conf2: conf2, gap: gap };
+      }
+    } else if (scored.length === 1) {
+      // Only one runner — treat as 100% gap
+      var tot = scored[0].score || 1;
+      var conf1 = 100, conf2 = 0, gap = 100;
+      if (gap > napScore) {
+        napScore = gap;
+        napCandidate = { runner: scored[0], race: race, raceIdx: ri, tot: tot, conf1: conf1, conf2: conf2, gap: gap };
+      }
+    }
+
     var top3  = scored.slice(0, 3);
     var maxSc = top3[0] ? top3[0].score : 1;
-
     allPicks.push({ race: race, picks: top3 });
 
     // Build card HTML
+    var oddsStr = '';
+    var oddsCount = active.filter(function(r){ return r.odds > 0; }).length;
+    var oddsTag = oddsCount > 0
+      ? '<span style="font-size:.6rem;color:var(--g);font-family:\'IBM Plex Mono\',monospace;margin-left:6px">✓ ' + oddsCount + ' odds entered</span>'
+      : '<span style="font-size:.6rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-left:6px">no odds</span>';
+
     var hdr = '<div class="pp-race-hdr">'
       + '<div>'
-        + '<div class="pp-race-tm">' + race.time + ' — R' + (ri + 1) + '</div>'
-        + '<div class="pp-race-info">' + race.dist + (race.cls ? ' · Cls ' + race.cls : '') + ' · ' + race.runners.length + ' rnrs</div>'
+        + '<div class="pp-race-tm">' + race.time + ' — R' + (ri + 1) + oddsTag + '</div>'
+        + '<div class="pp-race-info">' + race.dist + (race.cls ? ' · Cls ' + race.cls : '') + ' · ' + active.length + ' runners</div>'
       + '</div>'
       + '<div style="text-align:right;font-size:.7rem;color:var(--mt)">' + (race.title || '').substring(0, 28) + '</div>'
       + '</div>';
@@ -1323,10 +1443,11 @@ function runPlacepot() {
       var rankCl = ['rank1','rank2','rank3'][i] || '';
       var badge  = i === 0 ? '<span class="pp-banker">BANKER</span>' : '<span class="pp-alt">ALT</span>';
       var jn     = r.jockey ? r.jockey.replace(/\s*\(\d+\)/, '') : '—';
+      var oddsDisp = r.odds > 0 ? '<span style="color:var(--gold);font-family:\'IBM Plex Mono\',monospace;font-size:.7rem;margin-left:4px">' + r.odds.toFixed(1) + '</span>' : '';
       rows += '<div class="pp-pick ' + rankCl + '">'
         + '<div class="pp-rank">' + (i + 1) + '</div>'
         + '<div class="pp-info">'
-          + '<div class="pp-name">' + r.name + badge + '</div>'
+          + '<div class="pp-name">' + r.name + badge + oddsDisp + '</div>'
           + '<div class="pp-meta">Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + ' · ' + jn + '</div>'
         + '</div>'
         + '<div class="pp-bar-wrap">'
@@ -1339,29 +1460,34 @@ function runPlacepot() {
     resEl.innerHTML += '<div class="pp-race">' + hdr + rows + '</div>';
   });
 
-  // ── Summary lines ──────────────────────────────────────
-  // Line 1: all bankers (top pick every race)
-  // Line 2: banker in first 3, alt in second 3
-  // Line 3: alt in first 3, banker in second 3
-  // Line 4: all alts (2nd pick)
-
-  function horseLine(picks, useAlt) {
-    return picks.map(function(p, i) {
-      var idx = useAlt[i] ? 1 : 0;
-      var h = p.picks[idx] || p.picks[0];
-      return h ? h.name : '—';
-    }).join(' / ');
+  // ── Show NAP ──
+  var napEl = document.getElementById('pp-nap');
+  if (napCandidate && napEl) {
+    var nr = napCandidate.runner;
+    var nrace = napCandidate.race;
+    var nconf = Math.round((nr.score / napCandidate.tot) * 100);
+    var jn = nr.jockey ? nr.jockey.replace(/\s*\(\d+\)/, '') : '—';
+    document.getElementById('nap-name').textContent = nr.name;
+    document.getElementById('nap-detail').textContent =
+      nrace.time + ' ' + nrace.course + (nr.odds > 0 ? ' — ' + nr.odds.toFixed(1) + ' decimal' : ' — odds not entered');
+    var gap  = napCandidate.gap;
+    var c1   = napCandidate.conf1;
+    var c2   = napCandidate.conf2;
+    document.getElementById('nap-meta').textContent =
+      'Draw ' + nr.stall + (nr.or > 0 ? ' · OR ' + nr.or : '') + ' · ' + jn
+      + ' · ' + c1 + '% vs ' + c2 + '% (' + (gap > 0 ? '+' : '') + gap + '% gap)';
+    napEl.style.display = 'block';
+  } else if (napEl) {
+    napEl.style.display = 'none';
   }
 
+  // ── Summary lines ──
   var lines = [];
 
-  // Banker line
   var bankerLine = allPicks.map(function(p){ return (p.picks[0] || {}).name || '—'; });
   lines.push({ label: 'Banker line (all #1 picks)', horses: bankerLine });
 
-  // Alt coverage lines — swap in 2nd pick for races with a close second
   var altLine1 = allPicks.map(function(p, i){
-    // Use alt for first half of races
     return i < 3 ? ((p.picks[1] || p.picks[0]) || {}).name || '—'
                  : (p.picks[0] || {}).name || '—';
   });
@@ -1373,7 +1499,6 @@ function runPlacepot() {
   });
   lines.push({ label: 'Alt line B (alt picks races 4-6)', horses: altLine2 });
 
-  // Full alt line
   var fullAlt = allPicks.map(function(p){ return ((p.picks[1] || p.picks[0]) || {}).name || '—'; });
   lines.push({ label: 'Full alt line (all #2 picks)', horses: fullAlt });
 
@@ -1390,7 +1515,7 @@ function runPlacepot() {
       + '</div>';
   }).join('');
 
-  // Cost guide (£1 unit)
+  // Cost guide
   var nRaces = ppRaces.length;
   costEl.innerHTML = [
     '1 line (banker): £' + nRaces + ' for 1 line',
