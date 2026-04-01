@@ -154,6 +154,13 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ar-status{font-size:.68rem;font-family:‘IBM Plex Mono’,monospace;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
 .ar-known{background:rgba(0,230,118,.12);color:var(–g);border:1px solid rgba(0,230,118,.3)}
 .ar-unknown{background:rgba(255,193,7,.1);color:var(–gold);border:1px solid rgba(255,193,7,.3)}
+
+/* ── Market movement toggle ─────────────────────────────── */
+.mv-btn{font-family:‘IBM Plex Mono’,monospace;font-size:.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:4px 9px;border-radius:3px;cursor:pointer;border:1px solid var(–bd);background:transparent;color:var(–mt);transition:all .15s;white-space:nowrap}
+.mv-btn.steam{border-color:#00b0ff;color:#00b0ff;background:rgba(0,176,255,.10)}
+.mv-btn.drift{border-color:#ff6d00;color:#ff6d00;background:rgba(255,109,0,.10)}
+.mk.steam{background:rgba(0,176,255,.15);color:#00b0ff}
+.mk.drift{background:rgba(255,109,0,.15);color:#ff6d00}
 /* ── Help tab styles ─────────────────────────────────────── */
 .h-sec{margin-bottom:24px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .h-sec-hdr{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid #e8f5ee;margin-bottom:12px}
@@ -513,7 +520,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 ```
 
   </div>
-</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────
@@ -529,10 +535,7 @@ function go(n) {
 }
 
 // ── PDF loading ────────────────────────────────────────────
-document.getElementById('pdfIn').addEventListener('change', function(e) {
-  var f = e.target.files[0];
-  if (f) loadPDF(f);
-});
+
 
 async function loadPDF(file) {
   document.getElementById('pp').style.display = 'block';
@@ -743,7 +746,7 @@ function lsSave() {
     S.races.forEach(function(race, ri) {
       race.runners.forEach(function(r) {
         var key = ri + '_' + r.stall;
-        data[key] = { odds: r.odds || 0, nr: r._nr || false };
+        data[key] = { odds: r.odds || 0, nr: r._nr || false, mv: r._mv || 'steady' };
       });
     });
     localStorage.setItem(lsKey(S.races), JSON.stringify(data));
@@ -761,6 +764,7 @@ function lsRestore(races) {
         if (data[key]) {
           if (data[key].odds) r.odds = data[key].odds;
           if (data[key].nr)   r._nr  = true;
+          if (data[key].mv && data[key].mv !== 'steady') r._mv = data[key].mv;
         }
       });
     });
@@ -867,6 +871,11 @@ function renderPredict(race) {
       + '<div style="padding-bottom:2px;">'
       + '<button class="nr-btn" id="nr_' + r.stall + '" onclick="toggleNR(\'' + r.stall + '\')">NR</button>'
       + '<span class="nr-badge">NON RUNNER</span>'
+      + '</div>'
+      + '<div style="padding-bottom:2px;">'
+      + '<button class="mv-btn' + (r._mv === 'steam' ? ' steam' : r._mv === 'drift' ? ' drift' : '') + '" id="mv_' + r.stall + '" onclick="toggleMV(\'' + r.stall + '\')">'
+      + (r._mv === 'steam' ? '▲ Steam' : r._mv === 'drift' ? '▽ Drift' : '~ Steady')
+      + '</button>'
       + '</div></div>';
     // Save odds back to runner object on change
     d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds = parseFloat(e.target.value) || 0; lsSave(); }; })(r));
@@ -887,6 +896,21 @@ function toggleNR(stall) {
   // Disable/enable odds input
   var inp = document.getElementById('od_' + stall);
   if (inp) inp.disabled = isNR;
+  lsSave();
+}
+
+
+// ── Market movement toggle ─────────────────────────────────
+function toggleMV(stall) {
+  var btn = document.getElementById('mv_' + stall);
+  if (!btn) return;
+  // Cycle: steady -> steam -> drift -> steady
+  var r = S.sel ? S.sel.runners.find(function(x){ return String(x.stall) === String(stall); }) : null;
+  var cur = r ? (r._mv || 'steady') : 'steady';
+  var next = cur === 'steady' ? 'steam' : cur === 'steam' ? 'drift' : 'steady';
+  if (r) r._mv = next;
+  btn.className = 'mv-btn' + (next === 'steam' ? ' steam' : next === 'drift' ? ' drift' : '');
+  btn.textContent = next === 'steam' ? '▲ Steam' : next === 'drift' ? '▽ Drift' : '~ Steady';
   lsSave();
 }
 
@@ -954,7 +978,9 @@ function scoreMdl(r, race) {
   var fr   = days < 14 ? 1 : days < 28 ? 0.8 : days < 60 ? 0.5 : 0.2;
   var os   = r.odds > 0 ? Math.max(0, 1 - (r.odds - 1) / 30) : 0.1;
   var w    = m.weights;
-  return [wr,pr,jwr,twr,db,gMch,dMch,cMch,fr,os].reduce(function(s,f,i){ return s + (w[i]||0)*f; }, 0);
+  var base = [wr,pr,jwr,twr,db,gMch,dMch,cMch,fr,os].reduce(function(s,f,i){ return s + (w[i]||0)*f; }, 0);
+  var mvMult = r._mv === 'steam' ? 1.12 : r._mv === 'drift' ? 0.88 : 1.0;
+  return base * mvMult;
 }
 
 // ── Scoring: default weights ───────────────────────────────
@@ -972,7 +998,9 @@ function scoreDef(r, race) {
   var cb   = clm ? Math.min(parseInt(clm[1]) * 0.025, 0.08) : 0;
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
   var tb   = isTip ? 0.09 : 0;
-  return orS*0.32 + wr*0.10 + pr*0.08 + os*0.22 + wtS*0.09 + fr*0.09 + cb + tb;
+  var base = orS*0.32 + wr*0.10 + pr*0.08 + os*0.22 + wtS*0.09 + fr*0.09 + cb + tb;
+  var mvMult = r._mv === 'steam' ? 1.12 : r._mv === 'drift' ? 0.88 : 1.0;
+  return base * mvMult;
 }
 
 // ── Results ────────────────────────────────────────────────
@@ -1023,7 +1051,9 @@ function showResults(scored, tot, val, race) {
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i + 1) + '</div>'
       + '<div class="ri2">'
-      + '<div class="rn2">' + r.name + '</div>'
+      + '<div class="rn2">' + r.name
+      + (r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '')
+      + '</div>'
       + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/, '') || '—')
       + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
       + '</div>'
@@ -1040,20 +1070,28 @@ function showResults(scored, tot, val, race) {
 }
 
 // ── Model loading ──────────────────────────────────────────
-document.getElementById('mIn').addEventListener('change', function(e) {
-  var f = e.target.files[0];
-  if (!f) return;
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      var m = JSON.parse(ev.target.result);
-      S.model = m;
-      onModelLoaded(m);
-    } catch (err) {
-      document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: ' + err.message + '</div>';
-    }
-  };
-  reader.readAsText(f);
+document.addEventListener('DOMContentLoaded', function() {
+  var mInEl = document.getElementById('mIn');
+  if (mInEl) mInEl.addEventListener('change', function(e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var m = JSON.parse(ev.target.result);
+        S.model = m;
+        onModelLoaded(m);
+      } catch (err) {
+        document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: ' + err.message + '</div>';
+      }
+    };
+    reader.readAsText(f);
+  });
+  var pdfInEl = document.getElementById('pdfIn');
+  if (pdfInEl) pdfInEl.addEventListener('change', function(e) {
+    var f = e.target.files[0];
+    if (f) loadPDF(f);
+  });
 });
 
 function onModelLoaded(m) {
@@ -1528,13 +1566,17 @@ function runPlacepot() {
 }
 
 // ── Drag and drop ──────────────────────────────────────────
-var pd = document.getElementById('pdfDrop');
-pd.addEventListener('dragover', function(e){ e.preventDefault(); pd.classList.add('ov'); });
-pd.addEventListener('dragleave', function(){ pd.classList.remove('ov'); });
-pd.addEventListener('drop', function(e){
-  e.preventDefault(); pd.classList.remove('ov');
-  var f = e.dataTransfer.files[0];
-  if (f) loadPDF(f);
+document.addEventListener('DOMContentLoaded', function() {
+  var pd = document.getElementById('pdfDrop');
+  if (pd) {
+    pd.addEventListener('dragover', function(e){ e.preventDefault(); pd.classList.add('ov'); });
+    pd.addEventListener('dragleave', function(){ pd.classList.remove('ov'); });
+    pd.addEventListener('drop', function(e){
+      e.preventDefault(); pd.classList.remove('ov');
+      var f = e.dataTransfer.files[0];
+      if (f) loadPDF(f);
+    });
+  }
 });
 </script>
 
