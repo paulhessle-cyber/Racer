@@ -655,6 +655,75 @@ function parseATR(txt) {
   }
   return races;
 }
+  function parseOddsPaste(text, race) {
+  if (!text) return;
+
+  // Split everything into lines
+  var lines = text
+    .replace(/\t/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  var map = {};
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    // Detect decimal odds (1.2 – 200 range)
+    if (/^\d+(\.\d+)?$/.test(line)) {
+      var odds = parseFloat(line);
+
+      // Look backwards for horse name
+      for (var j = i - 1; j >= 0; j--) {
+        var name = lines[j];
+
+        // Skip junk
+        if (!name || /^\d+$/.test(name)) continue;
+        if (name.length < 3) continue;
+
+        // Clean name
+        name = name
+          .replace(/\(.*?\)/g, '')
+          .replace(/[^a-zA-Z\s']/g, '')
+          .trim()
+          .toUpperCase();
+
+        if (name.length > 2) {
+          map[name] = odds;
+          break;
+        }
+      }
+    }
+  }
+
+  // Apply to runners
+  race.runners.forEach(r => {
+    var key = r.name.toUpperCase();
+
+    // Fuzzy match
+    var match = Object.keys(map).find(k =>
+      k.includes(key.substring(0, 6)) ||
+      key.includes(k.substring(0, 6))
+    );
+
+    if (match) {
+      r.odds = map[match];
+
+      var input = document.getElementById('od_' + r.stall);
+      if (input) input.value = map[match];
+    }
+  });
+
+  lsSave();
+}
+  function applyPaste() {
+  var txt = document.getElementById('oddsPaste').value;
+  if (!txt || !S.sel) return;
+
+  parseOddsPaste(txt, S.sel);
+}
 // Clean horse names
 function cleanName(n){
   return n.toLowerCase()
