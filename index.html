@@ -918,35 +918,64 @@ function toggleMV(stall) {
 function predict() {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
-  if (!race.runners || !race.runners.length) { alert('No runners found'); return; }
 
   var going = document.getElementById('gsel').value;
 
-  // Filter out non-runners before scoring
-  var activeRunners = race.runners.filter(function(r) {
-    var card = document.getElementById('nr_' + r.stall);
-    return !card || !card.closest('.re').classList.contains('nr');
-  });
-
-  if (activeRunners.length < 2) { alert('Need at least 2 active runners'); return; }
-
-  var scored = activeRunners.map(function(r) {
-    var el   = document.getElementById('od_' + r.stall);
-    var odds = (el && el.value) ? parseFloat(el.value) : 0;
-    var score = S.model ? scoreMdl(Object.assign({}, r, {odds: odds, going: going}), race)
-                        : scoreDef(Object.assign({}, r, {odds: odds, going: going}), race);
-    return Object.assign({}, r, {odds: odds, score: score});
-  });
-  scored.sort(function(a, b){ return b.score - a.score; });
-
-  if (!scored.length) { alert('Could not score runners'); return; }
-
-  var tot = scored.reduce(function(s, r){ return s + r.score; }, 0) || 1;
-  var valueBet = null;
-  for (var i = 0; i < Math.min(3, scored.length); i++) {
-    if (scored[i].odds >= 9) { valueBet = scored[i]; break; }
+  // Filter runners
+  var runners = race.runners.filter(r => !r._nr);
+  if (runners.length < 2) {
+    alert('Need at least 2 runners');
+    return;
   }
-  showResults(scored, tot, valueBet, race);
+
+  // STEP 1: Score runners
+  var scored = runners.map(r => {
+    var el = document.getElementById('od_' + r.stall);
+    var odds = (el && el.value) ? parseFloat(el.value) : 0;
+
+    var input = Object.assign({}, r, { odds, going });
+
+    var score = S.model
+      ? scoreMdl(input, race)
+      : scoreDef(input, race);
+
+    return Object.assign({}, r, {
+      odds,
+      score
+    });
+  });
+
+  // STEP 2: Convert to probabilities
+  scored = toProbabilities(scored);
+
+  // STEP 3: Calibrate probabilities
+  scored.forEach(r => {
+    r.prob = calibrate(r.prob);
+  });
+
+  // STEP 4: Compute value / edge
+  scored.forEach(r => {
+    if (r.odds > 0) {
+      var marketProb = 1 / r.odds;
+      r.marketProb = marketProb;
+      r.edge = r.prob - marketProb;
+      r.value = r.edge > 0.02;
+    } else {
+      r.marketProb = 0;
+      r.edge = 0;
+      r.value = false;
+    }
+  });
+
+  // STEP 5: Sort by probability
+  scored.sort((a, b) => b.prob - a.prob);
+
+  // STEP 6: Best value bet
+  var bestValue = scored
+    .filter(r => r.value)
+    .sort((a, b) => b.edge - a.edge)[0] || null;
+
+  showResultsV2(scored, bestValue, race);
 }
 
 // ── Scoring: trained model ─────────────────────────────────
@@ -978,7 +1007,12 @@ function scoreMdl(r, race) {
   var fr   = days < 14 ? 1 : days < 28 ? 0.8 : days < 60 ? 0.5 : 0.2;
   var os   = r.odds > 0 ? Math.max(0, 1 - (r.odds - 1) / 30) : 0.1;
   var w    = m.weights;
-  var base = [wr,pr,jwr,twr,db,gMch,dMch,cMch,fr,os].reduce(function(s,f,i){ return s + (w[i]||0)*f; }, 0);
+  var pace = paceScore(r);
+
+  var base = [wr,pr,jwr,twr,db,gMch,dMch,cMch,fr,os]
+    .reduce(function(s,f,i){ return s + (w[i]||0)*f; }, 0);
+
+  base += pace * 0.08;
   var mvMult = r._mv === 'steam' ? 1.12 : r._mv === 'drift' ? 0.88 : 1.0;
   return base * mvMult;
 }
@@ -998,11 +1032,42 @@ function scoreDef(r, race) {
   var cb   = clm ? Math.min(parseInt(clm[1]) * 0.025, 0.08) : 0;
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
   var tb   = isTip ? 0.09 : 0;
-  var base = orS*0.32 + wr*0.10 + pr*0.08 + os*0.22 + wtS*0.09 + fr*0.09 + cb + tb;
+  var pace = paceScore(r);
+
+  var base = orS*0.32 + wr*0.10 + pr*0.08 + os*0.22 +
+           wtS*0.09 + fr*0.09 + cb + tb;
+
+  base += pace * 0.08;
   var mvMult = r._mv === 'steam' ? 1.12 : r._mv === 'drift' ? 0.88 : 1.0;
   return base * mvMult;
 }
 
+// ── Probability + Calibration + Pace ───────────────────────
+
+// Convert scores → probabilities (softmax)
+function toProbabilities(runners) {
+  var expScores = runners.map(r => Math.exp(r.score));
+  var sumExp = expScores.reduce((a, b) => a + b, 0);
+
+  return runners.map((r, i) => {
+    return Object.assign({}, r, {
+      prob: expScores[i] / sumExp
+    });
+  });
+}
+
+// Calibrate probabilities (fix overconfidence)
+function calibrate(p) {
+  return Math.pow(p, 0.85);
+}
+
+// Simple pace model
+function paceScore(r) {
+  if (!r.rf) return 0.5;
+
+  var early = r.rf.w * 2 + r.rf.p;
+  return Math.min(early / 5, 1);
+}
 // ── Results ────────────────────────────────────────────────
 function row(label, val) {
   return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
@@ -1432,7 +1497,30 @@ function runPlacepot() {
     var scored = active.map(function(r) {
       return Object.assign({}, r, { score: scoreRunnerForPP(r, race, going), _race: race, _raceIdx: ri });
     });
-    scored.sort(function(a, b) { return b.score - a.score; });
+   // Convert to probabilities
+scored = toProbabilities(scored);
+
+// Calibrate
+scored.forEach(function(r) {
+  r.prob = calibrate(r.prob);
+});
+
+// Value detection
+scored.forEach(function(r) {
+  if (r.odds > 0) {
+    var marketProb = 1 / r.odds;
+    r.marketProb = marketProb;
+    r.edge = r.prob - marketProb;
+    r.value = r.edge > 0.02;
+  } else {
+    r.marketProb = 0;
+    r.edge = 0;
+    r.value = false;
+  }
+});
+
+// Sort by probability instead of score
+scored.sort(function(a, b){ return b.prob - a.prob; });
 
     // NAP: horse with the biggest confidence gap over the 2nd pick
     if (scored.length >= 2) {
