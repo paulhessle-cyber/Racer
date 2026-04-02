@@ -953,6 +953,9 @@ function predict() {
     r.prob = calibrate(r.prob);
   });
 
+  var totalProb = scored.reduce((s,r)=>s+r.prob,0);
+  scored.forEach(r => r.prob /= totalProb);
+
   // STEP 4: Compute value / edge
   scored.forEach(r => {
     if (r.odds > 0) {
@@ -975,7 +978,7 @@ function predict() {
     .filter(r => r.value)
     .sort((a, b) => b.edge - a.edge)[0] || null;
 
-  showResultsV2(scored, bestValue, race);
+  showResults(scored, scored.reduce((s,r)=>s+r.score,0), bestValue, race);
 }
 
 // ── Scoring: trained model ─────────────────────────────────
@@ -1075,7 +1078,7 @@ function row(label, val) {
 
 function showResults(scored, tot, val, race) {
   var w    = scored[0];
-  var conf = Math.round((w.score / tot) * 100);
+  var conf = Math.round(w.prob * 100);
   var h    = '';
 
   if (!S.model) h += '<div class="al ali">Using default weights — load a trained model in Setup for better accuracy.</div>';
@@ -1092,23 +1095,25 @@ function showResults(scored, tot, val, race) {
     + '<div class="cb"><div class="cf" style="width:' + conf + '%;background:var(--g)"></div></div>'
     + '</div>';
 
-  if (val) {
-    var vp = scored.indexOf(val) + 1;
-    var vc = Math.round((val.score / tot) * 100);
-    var pl = vp === 1 ? '1st' : vp === 2 ? '2nd' : '3rd';
-    h += '<div class="rval">'
-      + '<div class="vflag">💰 VALUE PLACE BET</div>'
-      + '<div class="bn gd">' + val.name + '</div>'
-      + row('Decimal odds', '<span style="color:var(--gold);font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem">' + val.odds.toFixed(1) + '</span>')
-      + row('Predicted finish', pl)
-      + row('Jockey', val.jockey.replace(/\s*\(\d+\)/, '') || '—')
-      + (val.or > 0 ? row('Official Rating', val.or) : '')
-      + row('Confidence', '<span style="color:var(--gold)">' + vc + '%</span>')
-      + '<div class="cb"><div class="cf" style="width:' + vc + '%;background:var(--gold)"></div></div>'
-      + '</div>';
-  } else {
-    h += '<div class="nva">⚠ No horse in the predicted top 3 has odds ≥ 9.0.<br>No qualifying value place bet for this race.</div>';
-  }
+if (val) {
+  var vp = scored.indexOf(val) + 1;
+  var vc = Math.round(val.prob * 100); // ✅ FIXED (was score)
+  var pl = vp === 1 ? '1st' : vp === 2 ? '2nd' : '3rd';
+
+  h += '<div class="rval">'
+    + '<div class="vflag">💰 VALUE PLACE BET</div>'
+    + '<div class="bn gd">' + val.name + '</div>'
+    + row('Decimal odds', '<span style="color:var(--gold);font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem">' + val.odds.toFixed(1) + '</span>')
+    + row('Predicted finish', pl)
+    + row('Jockey', val.jockey.replace(/\s*\(\d+\)/, '') || '—')
+    + (val.or > 0 ? row('Official Rating', val.or) : '')
+    + row('Edge', (val.edge * 100).toFixed(1) + '%') // ✅ ADDED HERE
+    + row('Confidence', '<span style="color:var(--gold)">' + vc + '%</span>')
+    + '<div class="cb"><div class="cf" style="width:' + vc + '%;background:var(--gold)"></div></div>'
+    + '</div>';
+} else {
+  h += '<div class="nva">⚠ No horse in the predicted top 3 has odds ≥ 9.0.<br>No qualifying value place bet for this race.</div>';
+}
 
   h += '<div class="arc"><div class="art">Full Predicted Order</div>';
   scored.forEach(function(r, i) {
@@ -1124,7 +1129,7 @@ function showResults(scored, tot, val, race) {
       + '</div>'
       + '<div class="rr">'
       + '<div class="ro2">' + (r.odds > 0 ? r.odds.toFixed(1) : '—') + '</div>'
-      + '<div class="rsc">' + (r.score * 100).toFixed(1) + '</div>'
+      + '<div class="rsc">' + (r.prob * 100).toFixed(1) + '%' + '</div>'
       + '</div></div>';
   });
   h += '</div>';
