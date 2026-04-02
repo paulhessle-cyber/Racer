@@ -655,10 +655,9 @@ function parseATR(txt) {
   }
   return races;
 }
-  function parseOddsPaste(text, race) {
+function parseOddsPaste(text, race) {
   if (!text) return;
 
-  // Split everything into lines
   var lines = text
     .replace(/\t/g, '\n')
     .replace(/\r/g, '\n')
@@ -666,34 +665,43 @@ function parseATR(txt) {
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  var map = {};
+  var entries = [];
 
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // Detect decimal odds (1.2 – 200 range)
+    // Detect odds line (decimal like 9.5 or 8)
     if (/^\d+(\.\d+)?$/.test(line)) {
       var odds = parseFloat(line);
 
-      // Look backwards for horse name
+      // Look backwards to find jockey + horse
+      var jockey = null;
+      var horse = null;
+
       for (var j = i - 1; j >= 0; j--) {
-        var name = lines[j];
+        var prev = lines[j];
 
-        // Skip junk
-        if (!name || /^\d+$/.test(name)) continue;
-        if (name.length < 3) continue;
+        // First valid name = jockey
+        if (!jockey && /[A-Z]/.test(prev) && prev.length < 30) {
+          jockey = prev;
+          continue;
+        }
 
-        // Clean name
-        name = name
+        // Next valid name = horse
+        if (jockey && prev.length > 3) {
+          horse = prev;
+          break;
+        }
+      }
+
+      if (horse) {
+        horse = horse
           .replace(/\(.*?\)/g, '')
           .replace(/[^a-zA-Z\s']/g, '')
           .trim()
           .toUpperCase();
 
-        if (name.length > 2) {
-          map[name] = odds;
-          break;
-        }
+        entries.push({ name: horse, odds });
       }
     }
   }
@@ -702,17 +710,16 @@ function parseATR(txt) {
   race.runners.forEach(r => {
     var key = r.name.toUpperCase();
 
-    // Fuzzy match
-    var match = Object.keys(map).find(k =>
-      k.includes(key.substring(0, 6)) ||
-      key.includes(k.substring(0, 6))
+    var match = entries.find(e =>
+      e.name.includes(key.substring(0, 6)) ||
+      key.includes(e.name.substring(0, 6))
     );
 
     if (match) {
-      r.odds = map[match];
+      r.odds = match.odds;
 
       var input = document.getElementById('od_' + r.stall);
-      if (input) input.value = map[match];
+      if (input) input.value = match.odds;
     }
   });
 
