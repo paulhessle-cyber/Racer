@@ -269,6 +269,17 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <span class="mu" style="font-size:.68rem">Enter decimal odds</span>
       </div>
       <div id="prun"></div>
+      <div class="card">
+  <div class="ct">Paste Odds</div>
+  <textarea id="pasteOdds" placeholder="Paste odds here...
+Charming Prince 4.5
+Desert King 6.0" 
+  style="width:100%;height:100px;margin-bottom:10px;
+  background:#0a0f0d;color:#c8ddd0;border:1px solid #1c3024;
+  border-radius:6px;padding:8px;font-family:monospace;"></textarea>
+
+  <button class="btn bg" onclick="applyPastedOdds()">Apply Odds</button>
+</div>
     </div>
     <!-- Add Runner -->
     <div class="card" id="arCard" style="display:none">
@@ -644,7 +655,64 @@ function parseATR(txt) {
   }
   return races;
 }
+// Clean horse names
+function cleanName(n){
+  return n.toLowerCase()
+    .replace(/\(.*?\)/g,'')
+    .replace(/[^a-z0-9\s]/g,'')
+    .trim();
+}
 
+function applyPastedOdds(){
+  const text = document.getElementById('pasteOdds').value;
+  if(!text){ alert('Paste some odds first'); return; }
+
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+
+  let matched = 0;
+
+  for(let i = 0; i < lines.length; i++){
+    let line = lines[i];
+
+    // Skip junk lines
+    if(line.includes('.png') || line.includes('nonrunner')) continue;
+
+    // Detect horse name (text, not just number)
+    if(isNaN(parseFloat(line))){
+      let name = line;
+
+      // Look ahead for odds (next numeric line)
+      for(let j = i+1; j < i+6 && j < lines.length; j++){
+        let possibleOdds = parseFloat(lines[j]);
+
+        if(!isNaN(possibleOdds) && possibleOdds > 1){
+          
+          const cleanInput = cleanName(name);
+
+          const runner = S.sel.runners.find(r=>{
+            return cleanName(r.name).includes(cleanInput) ||
+                   cleanInput.includes(cleanName(r.name));
+          });
+
+          if(runner){
+            runner.odds = possibleOdds;
+
+            const input = document.getElementById('od_' + runner.stall);
+            if(input){
+              input.value = possibleOdds;
+            }
+
+            matched++;
+          }
+
+          break;
+        }
+      }
+    }
+  }
+
+  alert(`✅ Applied odds to ${matched} runners`);
+}
 // ── Runner extraction ──────────────────────────────────────
 // Handles both formats:
 //   Newcastle:      1 form NAME days age st-lbs jockey OR
