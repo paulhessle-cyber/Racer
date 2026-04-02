@@ -670,39 +670,30 @@ function parseOddsPaste(text, race) {
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // Detect odds line (decimal like 9.5 or 8)
+    // Must be a number (potential odds)
     if (/^\d+(\.\d+)?$/.test(line)) {
       var odds = parseFloat(line);
 
-      // Look backwards to find jockey + horse
-      var jockey = null;
-      var horse = null;
+      var prev = lines[i - 1];     // should be jockey
+      var prev2 = lines[i - 2];    // should be horse
 
-      for (var j = i - 1; j >= 0; j--) {
-        var prev = lines[j];
+      // ✅ VALIDATE JOCKEY LINE
+      // Must contain letters AND a space (e.g. "Jack Dace", not "22")
+      if (!prev || !/[A-Za-z]/.test(prev) || !prev.includes(' ')) continue;
 
-        // First valid name = jockey
-        if (!jockey && /[A-Z]/.test(prev) && prev.length < 30) {
-          jockey = prev;
-          continue;
-        }
+      // ❌ Reject pure numbers (weights like 22, 35)
+      if (/^\d+$/.test(prev)) continue;
 
-        // Next valid name = horse
-        if (jockey && prev.length > 3) {
-          horse = prev;
-          break;
-        }
-      }
+      // ✅ Horse line
+      if (!prev2 || prev2.length < 3) continue;
 
-      if (horse) {
-        horse = horse
-          .replace(/\(.*?\)/g, '')
-          .replace(/[^a-zA-Z\s']/g, '')
-          .trim()
-          .toUpperCase();
+      var horse = prev2
+        .replace(/\(.*?\)/g, '')
+        .replace(/[^a-zA-Z\s']/g, '')
+        .trim()
+        .toUpperCase();
 
-        entries.push({ name: horse, odds });
-      }
+      entries.push({ name: horse, odds });
     }
   }
 
