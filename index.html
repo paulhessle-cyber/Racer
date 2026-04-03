@@ -1169,7 +1169,7 @@ function lsSave() {
   if (!S.races||!S.races.length) return;
   try {
     var data = {};
-    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady'}; }); });
+    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0}; }); });
     localStorage.setItem(lsKey(S.races), JSON.stringify(data));
   } catch(e){}
 }
@@ -1178,7 +1178,7 @@ function lsRestore(races) {
     var raw = localStorage.getItem(lsKey(races));
     if (!raw) return;
     var data = JSON.parse(raw);
-    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv;} }); });
+    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv; if(d.open)r._openingOdds=d.open;} }); });
   } catch(e){}
 }
 function lsPurgeOld() {
@@ -1247,7 +1247,7 @@ function renderPredict(race) {
       +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
       +'</button></div></div>';
     d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseFloat(e.target.value)||0; lsSave(); }; })(r));
-    c.appendChild(d);
+    c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
 }
 
@@ -1415,12 +1415,8 @@ function applyPastedOdds() {
     showPasteStatus('⚠ No race loaded — select a race first.', 'warn');
     return;
   }
-
   var text = document.getElementById('pasteInput').value;
-  if (!text.trim()) {
-    showPasteStatus('⚠ Nothing pasted yet.', 'warn');
-    return;
-  }
+  if (!text.trim()) { showPasteStatus('⚠ Nothing pasted yet.', 'warn'); return; }
 
   var parsed = parseATROdds(text);
   if (!parsed.length) {
@@ -1428,34 +1424,99 @@ function applyPastedOdds() {
     return;
   }
 
-  // Apply to runners — match by stall number
-  var matched = 0, skipped = 0;
+  var matched = 0, skipped = 0, steamers = [], drifters = [];
+
   parsed.forEach(function(p) {
     var runner = race.runners.find(function(r){ return r.stall === p.stall; });
-    if (runner) {
-      runner.odds = p.odds;
-      // Update the input field if it exists
-      var inp = document.getElementById('od_' + runner.stall);
-      if (inp) { inp.value = p.odds; }
-      matched++;
-    } else {
-      skipped++;
+    if (!runner) { skipped++; return; }
+
+    var prevOdds = runner.odds || 0;
+    var newOdds  = p.odds;
+
+    // ── Auto-detect market movement ───────────────────────
+    // Only meaningful if we already had odds entered (second paste)
+    if (prevOdds > 0 && Math.abs(newOdds - prevOdds) > 0.01) {
+      // Store the earliest odds we saw as opening price
+      if (!runner._openingOdds) runner._openingOdds = prevOdds;
+
+      // Movement relative to opening price
+      var open = runner._openingOdds;
+      var pctChange = (newOdds - open) / open; // negative = shorter = steam
+
+      // Thresholds: >10% shorter = steam, >10% longer = drift
+      if (pctChange <= -0.10) {
+        runner._mv = 'steam';
+        steamers.push(runner.name.split(' ')[0] + ' (' + open.toFixed(1) + '→' + newOdds.toFixed(1) + ')');
+      } else if (pctChange >= 0.10) {
+        runner._mv = 'drift';
+        drifters.push(runner.name.split(' ')[0] + ' (' + open.toFixed(1) + '→' + newOdds.toFixed(1) + ')');
+      } else {
+        // Inside 10% — keep as steady unless already tagged
+        if (runner._mv !== 'steam' && runner._mv !== 'drift') runner._mv = 'steady';
+      }
+    } else if (prevOdds === 0) {
+      // First paste — just store as opening, no movement yet
+      runner._openingOdds = newOdds;
     }
+
+    // Update odds
+    runner.odds = newOdds;
+    var inp = document.getElementById('od_' + runner.stall);
+    if (inp) { inp.value = newOdds; }
+
+    // Update the mv button label live if it exists
+    var mvBtn = document.getElementById('mv_' + runner.stall);
+    if (mvBtn && runner._mv) {
+      mvBtn.className = 'mv-btn' + (runner._mv==='steam'?' steam':runner._mv==='drift'?' drift':'');
+      mvBtn.textContent = runner._mv==='steam'?'▲ Steam':runner._mv==='drift'?'▽ Drift':'~ Steady';
+    }
+
+    // Update the odds display on the card to show old→new if movement detected
+    updateOddsDisplay(runner);
+
+    matched++;
   });
 
   lsSave();
 
-  var msg = '✓ ' + matched + ' odds applied';
-  if (skipped) msg += ' (' + skipped + ' stalls not found in race — check for non-runners)';
+  // Build status message
+  var msg = '✓ ' + matched + ' odds updated';
+  if (steamers.length) msg += ' · 🔵 Steaming: ' + steamers.join(', ');
+  if (drifters.length) msg += ' · 🟠 Drifting: ' + drifters.join(', ');
+  if (skipped) msg += ' (' + skipped + ' not matched)';
   showPasteStatus(msg, 'ok');
 
-  // Hide paste box after a short delay
   setTimeout(function(){
     document.getElementById('pasteBox').style.display = 'none';
     document.getElementById('pasteInput').value = '';
     document.getElementById('pasteStatus').innerHTML = '';
-  }, 2200);
+  }, 3500);
 }
+
+// Update the odds display on a runner card to show movement
+function updateOddsDisplay(runner) {
+  var inp = document.getElementById('od_' + runner.stall);
+  if (!inp) return;
+  var wrap = inp.closest('.oi');
+  if (!wrap) return;
+
+  // Remove any existing movement label
+  var existing = wrap.querySelector('.odds-mv-label');
+  if (existing) existing.remove();
+
+  if (runner._openingOdds && runner._openingOdds !== runner.odds) {
+    var pct = ((runner.odds - runner._openingOdds) / runner._openingOdds * 100);
+    var dir = pct < 0 ? 'steam' : 'drift';
+    var arrow = pct < 0 ? '▼' : '▲';
+    var col = pct < 0 ? '#00b0ff' : '#ff6d00';
+    var lbl = document.createElement('div');
+    lbl.className = 'odds-mv-label';
+    lbl.style.cssText = 'font-size:.6rem;font-family:\'IBM Plex Mono\',monospace;color:'+col+';white-space:nowrap;padding-bottom:2px';
+    lbl.textContent = arrow + ' ' + runner._openingOdds.toFixed(1) + '→' + runner.odds.toFixed(1) + ' (' + (pct > 0 ? '+' : '') + Math.round(pct) + '%)';
+    wrap.appendChild(lbl);
+  }
+}
+
 
 // Core parser for ATR pasted runners text.
 // A stall header line must be followed by a long silks description line (>20 chars).
