@@ -278,7 +278,7 @@ Desert King 6.0"
   background:#0a0f0d;color:#c8ddd0;border:1px solid #1c3024;
   border-radius:6px;padding:8px;font-family:monospace;"></textarea>
 
-  <button class="btn bg" onclick="parseOddsPaste(document.getElementById('pasteOdds').value, S.sel)">Apply Odds</button>
+  <button class="btn bg" onclick="applyPastedOddsFixed()">Apply Odds</button>
 </div>
     </div>
     <!-- Add Runner -->
@@ -829,7 +829,78 @@ function parseForm(f) {
   });
   return { w: w, p: p, r: Math.max(r, 1) };
 }
+function applyPastedOddsFixed() {
+  const text = document.getElementById('pasteOdds').value;
+  if (!text || !S.sel) {
+    alert('Paste odds first and select a race');
+    return;
+  }
 
+  const lines = text
+    .replace(/\t/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  let matched = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // Only process numbers
+    if (!/^\d+(\.\d+)?$/.test(line)) continue;
+
+    let odds = parseFloat(line);
+
+    // Ignore weights like 22, 35
+    if (odds > 20 && !line.includes('.')) continue;
+
+    let jockey = null;
+    let horse = null;
+
+    // 🔥 Walk backwards to find jockey + horse
+    for (let j = i - 1; j >= 0; j--) {
+      let l = lines[j];
+
+      if (!jockey && /[A-Za-z]/.test(l) && l.includes(' ')) {
+        jockey = l;
+        continue;
+      }
+
+      if (jockey && l.length > 3) {
+        horse = l;
+        break;
+      }
+    }
+
+    if (!horse) continue;
+
+    horse = horse
+      .replace(/\(.*?\)/g, '')
+      .replace(/[^a-zA-Z\s']/g, '')
+      .trim()
+      .toUpperCase();
+
+    const runner = S.sel.runners.find(r => {
+      const key = r.name.toUpperCase();
+      return key.includes(horse.substring(0, 6)) ||
+             horse.includes(key.substring(0, 6));
+    });
+
+    if (runner) {
+      runner.odds = odds;
+
+      const input = document.getElementById('od_' + runner.stall);
+      if (input) input.value = odds;
+
+      matched++;
+    }
+  }
+
+  alert(`✅ Applied odds to ${matched} runners`);
+  lsSave();
+}
 
 // ── localStorage odds persistence (today only) ────────────
 function lsKey(races) {
