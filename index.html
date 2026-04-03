@@ -104,6 +104,31 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .fwb{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
 .fwf{height:100%;background:var(--g);border-radius:2px}
 select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:6px;font-size:.8rem;-webkit-appearance:none;font-family:'IBM Plex Sans',sans-serif}
+/* Bet Advisor */
+.ba-card{border-radius:12px;padding:16px;margin-bottom:12px;position:relative}
+.ba-go{background:linear-gradient(135deg,rgba(0,230,118,.10),rgba(0,230,118,.03));border:2px solid var(--g)}
+.ba-ew{background:linear-gradient(135deg,rgba(64,196,255,.08),rgba(64,196,255,.02));border:2px solid var(--bl)}
+.ba-place{background:linear-gradient(135deg,rgba(124,77,255,.08),rgba(124,77,255,.02));border:2px solid var(--closer)}
+.ba-nobet{background:rgba(255,82,82,.05);border:1px solid rgba(255,82,82,.25)}
+.ba-flag{position:absolute;top:-10px;left:16px;font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
+.ba-go .ba-flag{background:var(--g);color:var(--bg)}
+.ba-ew .ba-flag{background:var(--bl);color:var(--bg)}
+.ba-place .ba-flag{background:var(--closer);color:#fff}
+.ba-nobet .ba-flag{background:#ff5252;color:#fff}
+.ba-rec{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:1px;line-height:1;margin-bottom:8px}
+.ba-go .ba-rec{color:var(--g)}.ba-ew .ba-rec{color:var(--bl)}.ba-place .ba-rec{color:var(--closer)}.ba-nobet .ba-rec{color:#ff8a80;font-size:1.4rem}
+.ba-opts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
+.ba-opt{background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 6px;text-align:center}
+.ba-opt.best{border-color:var(--g);background:rgba(0,230,118,.06)}
+.ba-opt-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:3px}
+.ba-opt-ev{font-family:'Bebas Neue',sans-serif;font-size:1.1rem}
+.ba-opt-ev.pos{color:var(--g)}.ba-opt-ev.neg{color:#ff8a80}
+.ba-opt-roi{font-size:.6rem;font-family:'IBM Plex Mono',monospace;color:var(--mt)}
+.ba-stake{display:flex;align-items:center;gap:8px;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:10px}
+.ba-stake label{font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);white-space:nowrap}
+.ba-stake input{flex:1;background:transparent;border:none;color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:600;text-align:right;outline:none;width:60px}
+.ba-reason{font-size:.75rem;color:var(--mt);line-height:1.5;margin-top:6px}
+.ba-kelly{font-size:.65rem;font-family:'IBM Plex Mono',monospace;color:var(--mt);margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)}
 /* Pace banner */
 .pace-banner{border-radius:8px;padding:10px 13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;font-size:.78rem;line-height:1.5}
 .pace-contested{background:rgba(255,109,0,.08);border:1px solid rgba(255,109,0,.3);color:#ffb74d}
@@ -842,12 +867,225 @@ function predict() {
   showResults(scored, valueBet, race, paceInfo);
 }
 
+// ── Bet Advisor ────────────────────────────────────────────
+// Calculates expected value for Win, Each Way, and Place bets
+// and recommends the best option for a £stake on a given horse.
+
+function estimatePlaceProb(winProb, fieldSize) {
+  // Standard UK each way terms: 1/4 odds
+  // Places paid: 2 (5-7 runners), 3 (8-11), 4 (12+)
+  var places = fieldSize >= 12 ? 4 : fieldSize >= 8 ? 3 : fieldSize >= 5 ? 2 : 1;
+  // Harville approximation: place prob = p + (1-p)*(places-1)/(n-1)
+  var placeProb = winProb + (1 - winProb) * (places - 1) / Math.max(fieldSize - 1, 1);
+  return { placeProb: Math.min(placeProb, 0.99), places: places };
+}
+
+function calcBetEV(winProb, winOdds, fieldSize, stake, placeFrac) {
+  placeFrac = placeFrac || 4; // 4 = 1/4 odds, 5 = 1/5 odds
+  var pp = estimatePlaceProb(winProb, fieldSize);
+  var placeProb = pp.placeProb;
+  var places    = pp.places;
+  var placeOdds = (winOdds - 1) / placeFrac + 1;
+  var h = stake / 2;
+
+  var winEV   = (winProb * (winOdds - 1) - (1 - winProb)) * stake;
+  var ewWin   = (winProb * (winOdds - 1) - (1 - winProb)) * h;
+  var ewPlace = (placeProb * (placeOdds - 1) - (1 - placeProb)) * h;
+  var ewEV    = ewWin + ewPlace;
+  var placeEV = (placeProb * (placeOdds - 1) - (1 - placeProb)) * stake;
+  var kelly   = (winProb * (winOdds - 1) - (1 - winProb)) / (winOdds - 1);
+
+  return { winEV, ewEV, placeEV, placeProb, placeOdds, places, kelly, placeFrac,
+           winROI: winEV/stake*100, ewROI: ewEV/stake*100, placeROI: placeEV/stake*100,
+           impliedProb: 1/winOdds };
+}
+
+function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
+  stake     = stake     || 10;
+  placeFrac = placeFrac || 4;
+  var w = scored[0];
+  if (!w || !w.odds || w.odds <= 0) return '';
+
+  var winProb = w.score;
+  var ev = calcBetEV(winProb, w.odds, fieldSize, stake, placeFrac);
+  var edge = winProb - ev.impliedProb;
+
+  var options = [
+    { type: 'Win',      ev: ev.winEV,   roi: ev.winROI   },
+    { type: 'Each Way', ev: ev.ewEV,    roi: ev.ewROI    },
+    { type: 'Place',    ev: ev.placeEV, roi: ev.placeROI },
+  ];
+  options.sort(function(a,b){ return b.ev - a.ev; });
+  var best = options[0];
+
+  var noBet = best.ev <= 0 || ev.kelly < 0.01;
+
+  var fracLabel = '1/' + placeFrac;
+  var cardCls, flagTxt, recTxt, reason;
+  if (noBet) {
+    cardCls = 'ba-nobet';
+    flagTxt = '🚫 BET ADVISOR';
+    recTxt  = 'NO VALUE BET';
+    reason  = edge < -0.02
+      ? 'The market rates ' + w.name + ' at ' + Math.round(ev.impliedProb*100) + '% implied — significantly higher than our ' + Math.round(winProb*100) + '% confidence. The odds don\'t offer value.'
+      : 'Expected value is negative or too thin at ' + w.odds.toFixed(1) + '. The edge doesn\'t justify the risk for a £' + stake + ' bet.';
+  } else if (best.type === 'Win') {
+    cardCls = 'ba-go';
+    flagTxt = '💡 BET ADVISOR';
+    recTxt  = 'WIN — £' + stake;
+    reason  = w.name + ' looks overpriced at ' + w.odds.toFixed(1) + '. Model gives ' + Math.round(winProb*100) + '% vs ' + Math.round(ev.impliedProb*100) + '% market implied. Win bet has best EV.';
+  } else if (best.type === 'Each Way') {
+    cardCls = 'ba-ew';
+    flagTxt = '💡 BET ADVISOR';
+    recTxt  = 'EACH WAY — £' + stake + ' (£' + (stake/2) + ' win + £' + (stake/2) + ' place)';
+    reason  = 'Place probability (~' + Math.round(ev.placeProb*100) + '% for ' + ev.places + ' places at ' + fracLabel + ' odds) adds value. Each way returns better combined EV than win alone at ' + w.odds.toFixed(1) + '.';
+  } else {
+    cardCls = 'ba-place';
+    flagTxt = '💡 BET ADVISOR';
+    recTxt  = 'PLACE ONLY — £' + stake;
+    reason  = 'Win odds too short to justify win bet, but place at ' + ev.placeOdds.toFixed(2) + ' (' + fracLabel + ') with ~' + Math.round(ev.placeProb*100) + '% place probability offers positive EV.';
+  }
+
+  var optGrid = options.map(function(o) {
+    var isBest = !noBet && o.type === best.type;
+    var evCls  = o.ev >= 0 ? 'pos' : 'neg';
+    var evSign = o.ev >= 0 ? '+' : '';
+    return '<div class="ba-opt' + (isBest ? ' best' : '') + '">'
+      + '<div class="ba-opt-lbl">' + o.type + '</div>'
+      + '<div class="ba-opt-ev ' + evCls + '">' + evSign + '£' + Math.abs(o.ev).toFixed(2) + '</div>'
+      + '<div class="ba-opt-roi">' + (o.roi >= 0 ? '+' : '') + o.roi.toFixed(1) + '% ROI</div>'
+      + '</div>';
+  }).join('');
+
+  var kellyTxt;
+  if (ev.kelly <= 0)        kellyTxt = 'Negative edge — bet not recommended';
+  else if (ev.kelly < 0.02) kellyTxt = 'Thin edge (Kelly: ' + (ev.kelly*100).toFixed(1) + '%) — small stakes only';
+  else if (ev.kelly < 0.05) kellyTxt = 'Modest edge (Kelly: ' + (ev.kelly*100).toFixed(1) + '%) — sensible stake';
+  else                      kellyTxt = 'Strong edge (Kelly: ' + (ev.kelly*100).toFixed(1) + '%) — confident bet';
+
+  // Place terms toggle
+  var toggleHtml = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    + '<span style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">Place terms</span>'
+    + '<div style="display:flex;border:1px solid var(--bd);border-radius:5px;overflow:hidden;font-family:\'IBM Plex Mono\',monospace;font-size:.7rem;font-weight:600">'
+    + '<button onclick="setPlaceFrac(4)" style="padding:5px 12px;border:none;cursor:pointer;'
+    +   (placeFrac===4 ? 'background:var(--g);color:var(--bg)' : 'background:transparent;color:var(--mt)') + '">1/4</button>'
+    + '<button onclick="setPlaceFrac(5)" style="padding:5px 12px;border:none;border-left:1px solid var(--bd);cursor:pointer;'
+    +   (placeFrac===5 ? 'background:var(--g);color:var(--bg)' : 'background:transparent;color:var(--mt)') + '">1/5</button>'
+    + '</div>'
+    + '</div>';
+
+  // ── Head-to-head comparison ──────────────────────────────
+  // Compare: £stake WIN on predicted winner vs £stake PLACE on value bet
+  var compHtml = '';
+  var valBet = null;
+  for (var vi = 0; vi < Math.min(3, scored.length); vi++) {
+    if (scored[vi].odds >= 9 && scored[vi] !== w) { valBet = scored[vi]; break; }
+  }
+  // Also check if top horse itself is the value bet (odds >= 9)
+  if (!valBet && w.odds >= 9) valBet = null; // no separate comparison needed
+
+  if (valBet && valBet.odds > 0 && w.odds > 0) {
+    var pp_w   = estimatePlaceProb(w.score, fieldSize);
+    var pp_val = estimatePlaceProb(valBet.score, fieldSize);
+    var placeOdds_val = (valBet.odds - 1) / placeFrac + 1;
+
+    // Win on w
+    var winReturn    = w.odds * stake;
+    var winProfit    = (w.odds - 1) * stake;
+    var winExpProfit = w.score * winProfit - (1 - w.score) * stake;
+
+    // Place on val
+    var placeReturn    = placeOdds_val * stake;
+    var placeProfit    = (placeOdds_val - 1) * stake;
+    var placeExpProfit = pp_val.placeProb * placeProfit - (1 - pp_val.placeProb) * stake;
+
+    var winBetter   = winExpProfit >= placeExpProfit;
+    var wName       = w.name.split(' ')[0];
+    var vName       = valBet.name.split(' ')[0];
+
+    var winCol   = winExpProfit  >= 0 ? 'var(--g)'    : '#ff8a80';
+    var placeCol = placeExpProfit >= 0 ? 'var(--gold)' : '#ff8a80';
+    var winBg    = winBetter   ? 'rgba(0,230,118,.07)' : 'transparent';
+    var placeBg  = !winBetter  ? 'rgba(255,193,7,.07)' : 'transparent';
+    var winBord  = winBetter   ? '2px solid var(--g)'  : '1px solid var(--bd)';
+    var placeBord= !winBetter  ? '2px solid var(--gold)':'1px solid var(--bd)';
+
+    compHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">'
+      + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:8px">📊 £' + stake + ' comparison</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+
+      // Win column
+      + '<div style="background:'+winBg+';border:'+winBord+';border-radius:8px;padding:10px">'
+      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Win · '+wName+'</div>'
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+winCol+'">'+(winExpProfit>=0?'+':'')+'£'+winExpProfit.toFixed(2)+' exp</div>'
+      + '<div style="height:1px;background:var(--bd);margin:6px 0"></div>'
+      + '<div style="font-size:.68rem;color:var(--mt)">If wins</div>'
+      + '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.82rem;color:var(--g)">+£'+winProfit.toFixed(2)+'</div>'
+      + '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">returns £'+winReturn.toFixed(2)+'</div>'
+      + '<div style="font-size:.62rem;color:var(--mt);margin-top:4px">'+Math.round(w.score*100)+'% chance</div>'
+      + (winBetter ? '<div style="font-size:.6rem;color:var(--g);font-weight:600;margin-top:5px;font-family:\'IBM Plex Mono\',monospace">▲ BETTER EV</div>' : '')
+      + '</div>'
+
+      // Place column
+      + '<div style="background:'+placeBg+';border:'+placeBord+';border-radius:8px;padding:10px">'
+      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Place · '+vName+'</div>'
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+placeCol+'">'+(placeExpProfit>=0?'+':'')+'£'+placeExpProfit.toFixed(2)+' exp</div>'
+      + '<div style="height:1px;background:var(--bd);margin:6px 0"></div>'
+      + '<div style="font-size:.68rem;color:var(--mt)">If places</div>'
+      + '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.82rem;color:var(--gold)">+£'+placeProfit.toFixed(2)+'</div>'
+      + '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">returns £'+placeReturn.toFixed(2)+'</div>'
+      + '<div style="font-size:.62rem;color:var(--mt);margin-top:4px">'+Math.round(pp_val.placeProb*100)+'% chance · '+fracLabel+' · '+placeOdds_val.toFixed(2)+'</div>'
+      + (!winBetter ? '<div style="font-size:.6rem;color:var(--gold);font-weight:600;margin-top:5px;font-family:\'IBM Plex Mono\',monospace">▲ BETTER EV</div>' : '')
+      + '</div>'
+
+      + '</div>'
+      + '<div style="font-size:.65rem;color:var(--mt);margin-top:7px;line-height:1.4">'
+      + '"Exp" = expected profit over many bets at these odds and probabilities. "If wins/places" = actual return this race if successful.'
+      + '</div>'
+      + '</div>';
+  }
+
+  return '<div class="ba-card ' + cardCls + '" style="padding-top:22px">'
+    + '<div class="ba-flag">' + flagTxt + '</div>'
+    + '<div class="ba-rec">' + recTxt + '</div>'
+    + '<div class="ba-stake">'
+    +   '<label>Stake £</label>'
+    +   '<input type="number" id="baStake" min="1" max="10000" step="1" value="' + stake + '" inputmode="decimal" onchange="refreshAdvisor()">'
+    + '</div>'
+    + toggleHtml
+    + '<div class="ba-opts">' + optGrid + '</div>'
+    + '<div class="ba-reason">' + reason + '</div>'
+    + (ev.places > 1 ? '<div style="font-size:.68rem;color:var(--mt);margin-top:5px">Place terms: ' + ev.places + ' places · ' + fracLabel + ' odds · place odds ' + ev.placeOdds.toFixed(2) + ' · est. place prob ' + Math.round(ev.placeProb*100) + '%</div>' : '')
+    + '<div class="ba-kelly">' + kellyTxt + '</div>'
+    + compHtml
+    + '</div>';
+}
+
+// Re-render advisor when stake or place fraction changes
+function refreshAdvisor() {
+  if (!S.sel || !S._lastScored) return;
+  var stake     = parseFloat(document.getElementById('baStake').value) || 10;
+  var placeFrac = S._placeFrac || 4;
+  var adv = document.getElementById('betAdvisorSlot');
+  if (adv) adv.innerHTML = betAdvisorHTML(S._lastScored, S._lastFieldSize, stake, placeFrac);
+}
+
+function setPlaceFrac(frac) {
+  S._placeFrac = frac;
+  refreshAdvisor();
+}
+
+
 // ── Results display ────────────────────────────────────────
 function row(label, val) {
   return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
 }
 
 function showResults(scored, val, race, paceInfo) {
+  // Store for stake refresh
+  S._lastScored    = scored;
+  S._lastFieldSize = scored.length;
+  var stake = (document.getElementById('baStake') && parseFloat(document.getElementById('baStake').value)) || 10;
   var w    = scored[0];
   var conf = Math.round(w.score * 100);
   var h    = '';
@@ -896,6 +1134,8 @@ function showResults(scored, val, race, paceInfo) {
   }
 
   // Full order
+  // Bet Advisor
+  h += '<div id="betAdvisorSlot">' + betAdvisorHTML(scored, scored.length, stake, S._placeFrac || 4) + '</div>';
   h += '<div class="arc"><div class="art">Full Predicted Order</div>';
   scored.forEach(function(r, i) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
