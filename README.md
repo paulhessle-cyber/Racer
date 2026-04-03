@@ -3,3 +3,5 @@ It has a trainer that is used on a computer. Data for the trainer is in the form
 The resulting .json file is then able to be loaded into the main app. Racecards are downloaded as a pdf from attheraces.com. It seems better with large text.
 
 Downloading the .json file and racecard will allow you to use it at the racecourse on a mobile. it doesn't have to be online
+
+I had a certain plan in the beginning which is currently evolving. The app now recognises horse bets that are potentially more lucrative than the "winner", classing these as extra value bets. I have added the ability to copy and paste odds from the attheraces site to eliminate manual input. I have added a steamer/drifter alert if the horses odds drop/raise from the previous input, showing market confidence
