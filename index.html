@@ -278,7 +278,7 @@ Desert King 6.0"
   background:#0a0f0d;color:#c8ddd0;border:1px solid #1c3024;
   border-radius:6px;padding:8px;font-family:monospace;"></textarea>
 
-  <button class="btn bg" onclick="applyPastedOdds()">Apply Odds</button>
+  <button class="btn bg" onclick="parseOddsPaste(document.getElementById('pasteOdds').value, S.sel)">Apply Odds</button>
 </div>
     </div>
     <!-- Add Runner -->
@@ -670,31 +670,41 @@ function parseOddsPaste(text, race) {
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // Must be a number (potential odds)
-    if (/^\d+(\.\d+)?$/.test(line)) {
-      var odds = parseFloat(line);
+    // Must be number
+    if (!/^\d+(\.\d+)?$/.test(line)) continue;
 
-      var prev = lines[i - 1];     // should be jockey
-      var prev2 = lines[i - 2];    // should be horse
+    var odds = parseFloat(line);
 
-      // ✅ VALIDATE JOCKEY LINE
-      // Must contain letters AND a space (e.g. "Jack Dace", not "22")
-      if (!prev || !/[A-Za-z]/.test(prev) || !prev.includes(' ')) continue;
+    // Ignore weights like 22, 35
+    if (odds > 20 && !line.includes('.')) continue;
 
-      // ❌ Reject pure numbers (weights like 22, 35)
-      if (/^\d+$/.test(prev)) continue;
+    var jockey = null;
+    var horse = null;
 
-      // ✅ Horse line
-      if (!prev2 || prev2.length < 3) continue;
+    // 🔥 walk backwards to FIND jockey + horse
+    for (var j = i - 1; j >= 0; j--) {
+      var l = lines[j];
 
-      var horse = prev2
-        .replace(/\(.*?\)/g, '')
-        .replace(/[^a-zA-Z\s']/g, '')
-        .trim()
-        .toUpperCase();
+      if (!jockey && /[A-Za-z]/.test(l) && l.includes(' ')) {
+        jockey = l;
+        continue;
+      }
 
-      entries.push({ name: horse, odds });
+      if (jockey && l.length > 3) {
+        horse = l;
+        break;
+      }
     }
+
+    if (!horse) continue;
+
+    horse = horse
+      .replace(/\(.*?\)/g, '')
+      .replace(/[^a-zA-Z\s']/g, '')
+      .trim()
+      .toUpperCase();
+
+    entries.push({ name: horse, odds });
   }
 
   // Apply to runners
@@ -730,53 +740,7 @@ function cleanName(n){
     .trim();
 }
 
-function applyPastedOdds(){
-  const text = document.getElementById('pasteOdds').value;
-  if(!text){ alert('Paste some odds first'); return; }
 
-  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-
-  let matched = 0;
-
-  for(let i = 0; i < lines.length; i++){
-    let line = lines[i];
-
-    // Skip junk lines
-    if(line.includes('.png') || line.includes('nonrunner')) continue;
-
-    // Detect horse name (text, not just number)
-    if(isNaN(parseFloat(line))){
-      let name = line;
-
-      // Look ahead for odds (next numeric line)
-      for(let j = i+1; j < i+6 && j < lines.length; j++){
-        let possibleOdds = parseFloat(lines[j]);
-
-        if(!isNaN(possibleOdds) && possibleOdds > 1){
-          
-          const cleanInput = cleanName(name);
-
-          const runner = S.sel.runners.find(r=>{
-            return cleanName(r.name).includes(cleanInput) ||
-                   cleanInput.includes(cleanName(r.name));
-          });
-
-          if(runner){
-            runner.odds = possibleOdds;
-
-            const input = document.getElementById('od_' + runner.stall);
-            if(input){
-              input.value = possibleOdds;
-            }
-
-            matched++;
-          }
-
-          break;
-        }
-      }
-    }
-  }
 
   alert(`✅ Applied odds to ${matched} runners`);
 }
