@@ -265,7 +265,19 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds</div>
-        <span class="mu" style="font-size:.68rem">Enter decimal odds</span>
+        <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="togglePasteBox()">📋 Paste Odds</button>
+      </div>
+      <!-- Paste odds panel -->
+      <div id="pasteBox" style="display:none;margin-bottom:14px">
+        <div style="font-size:.7rem;color:var(--mt);margin-bottom:6px;line-height:1.5">
+          Copy the runners section from <strong style="color:var(--tx)">attheraces.com</strong> and paste below. Odds are matched to runners by stall number.
+        </div>
+        <textarea id="pasteInput" rows="5" style="width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:8px 10px;resize:vertical;outline:none;line-height:1.5" placeholder="Paste ATR runners text here…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;font-size:.72rem" onclick="applyPastedOdds()">✓ Apply Odds</button>
+          <button class="btn bo" style="flex:1;margin-bottom:0;padding:9px 12px;font-size:.72rem" onclick="togglePasteBox()">Cancel</button>
+        </div>
+        <div id="pasteStatus" style="margin-top:8px;min-height:18px"></div>
       </div>
       <div id="prun"></div>
     </div>
@@ -1127,6 +1139,124 @@ function initAC() {
   AC.build(S.model);
   setupAC('arHorse','horseDrop',AC.horses,function(){},'horseStatus');
   setupAC('arJockey','jockeyDrop',AC.jockeys,function(){},'jockeyStatus');
+}
+
+// ── Paste Odds ─────────────────────────────────────────────
+// Parses the ATR runners block pasted from attheraces.com.
+//
+// ATR format (one runner per block):
+//   1 (8)
+//   [silks description]
+//   Horse Name (IRE)
+//   [official rating number]
+//   Jockey Name
+//   [decimal odds]
+//
+// Strategy: scan every line for a decimal odds pattern (digits,
+// optional decimal point, digits) that appears AFTER a line that
+// looks like a jockey name, and associate it with the stall number
+// found earlier in the same block.
+
+function togglePasteBox() {
+  var box = document.getElementById('pasteBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  if (box.style.display === 'block') {
+    setTimeout(function(){ document.getElementById('pasteInput').focus(); }, 100);
+  }
+}
+
+function applyPastedOdds() {
+  var race = S.sel;
+  if (!race || !race.runners.length) {
+    showPasteStatus('⚠ No race loaded — select a race first.', 'warn');
+    return;
+  }
+
+  var text = document.getElementById('pasteInput').value;
+  if (!text.trim()) {
+    showPasteStatus('⚠ Nothing pasted yet.', 'warn');
+    return;
+  }
+
+  var parsed = parseATROdds(text);
+  if (!parsed.length) {
+    showPasteStatus('❌ Could not find any stall + odds pairs. Make sure you copied the full runners section.', 'warn');
+    return;
+  }
+
+  // Apply to runners — match by stall number
+  var matched = 0, skipped = 0;
+  parsed.forEach(function(p) {
+    var runner = race.runners.find(function(r){ return r.stall === p.stall; });
+    if (runner) {
+      runner.odds = p.odds;
+      // Update the input field if it exists
+      var inp = document.getElementById('od_' + runner.stall);
+      if (inp) { inp.value = p.odds; }
+      matched++;
+    } else {
+      skipped++;
+    }
+  });
+
+  lsSave();
+
+  var msg = '✓ ' + matched + ' odds applied';
+  if (skipped) msg += ' (' + skipped + ' stalls not found in race — check for non-runners)';
+  showPasteStatus(msg, 'ok');
+
+  // Hide paste box after a short delay
+  setTimeout(function(){
+    document.getElementById('pasteBox').style.display = 'none';
+    document.getElementById('pasteInput').value = '';
+    document.getElementById('pasteStatus').innerHTML = '';
+  }, 2200);
+}
+
+// Core parser for ATR pasted runners text.
+// A stall header line must be followed by a long silks description line (>20 chars).
+// This distinguishes stall "1" from OR rating "22" etc. which are also short numbers.
+// Within each runner block, the LAST number-only line is the odds.
+function parseATROdds(text) {
+  var lines = text.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
+  var results = [];
+  var stallIdx = [];
+  for (var i = 0; i < lines.length - 1; i++) {
+    if (/^(\d{1,2})(?:\s*\(\d+\))?$/.test(lines[i])) {
+      var next = lines[i + 1];
+      // Stall headers are always followed by a silks line (long, contains letters)
+      if (next && next.length > 20 && /[a-zA-Z]/.test(next)) {
+        stallIdx.push(i);
+      }
+    }
+  }
+  if (!stallIdx.length) return [];
+  stallIdx.forEach(function(idx, si) {
+    var stall = parseInt(lines[idx].match(/^(\d{1,2})/)[1]);
+    var blockEnd = (stallIdx[si + 1] !== undefined) ? stallIdx[si + 1] : lines.length;
+    var block = lines.slice(idx + 1, blockEnd);
+    var numLines = [];
+    for (var j = 0; j < block.length; j++) {
+      if (/^\d+(\.\d+)?$/.test(block[j])) {
+        numLines.push(parseFloat(block[j]));
+      }
+    }
+    if (numLines.length >= 1) {
+      var oddsVal = numLines[numLines.length - 1];
+      if (oddsVal >= 1.5) {
+        results.push({ stall: stall, odds: oddsVal });
+      }
+    }
+  });
+  return results;
+}
+
+function showPasteStatus(msg, type) {
+  var el = document.getElementById('pasteStatus');
+  if (!el) return;
+  var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
+  var bg  = type === 'ok' ? 'rgba(0,230,118,.08)' : 'rgba(255,193,7,.08)';
+  el.innerHTML = '<div style="padding:6px 10px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.72rem;font-family:\'IBM Plex Mono\',monospace;line-height:1.4">'+msg+'</div>';
 }
 
 // ── Add Runner ─────────────────────────────────────────────
