@@ -4,521 +4,462 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>🏇 Bet Results Tracker</title>
+<title>🏇 Bet Tracker</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 :root{--g:#00e676;--gold:#ffc107;--bg:#07100a;--sf:#0e1a11;--sf2:#132017;--bd:#1c3024;--tx:#c8ddd0;--mt:#4a6a55;--bl:#40c4ff;--re:#ff5252}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx);padding-bottom:60px}
-.hdr{background:#0b1a0e;border-bottom:1px solid var(--bd);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
-.hdr h1{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--g);letter-spacing:3px;flex:1}
-.pg{padding:14px}
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;padding-bottom:72px}
+.hdr{background:#0b1a0e;border-bottom:1px solid var(--bd);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.hdr-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--g);letter-spacing:3px}
+.pl-pill{font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid var(--bd);color:var(--mt)}
+.pl-pill.pos{border-color:var(--g);color:var(--g);background:rgba(0,230,118,.1)}
+.pl-pill.neg{border-color:var(--re);color:var(--re);background:rgba(255,82,82,.1)}
+.bnav{position:fixed;bottom:0;left:0;right:0;background:#0b1a0e;border-top:1px solid var(--bd);display:flex;z-index:200;padding-bottom:env(safe-area-inset-bottom)}
+.bnav-tab{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--mt);font-family:'IBM Plex Mono',monospace;font-size:.55rem;letter-spacing:.5px;text-transform:uppercase}
+.bnav-tab .ico{font-size:1.3rem;display:block;margin-bottom:2px}
+.bnav-tab.on{color:var(--g)}
+.scr{display:none;padding:14px 14px 16px}
+.scr.on{display:block}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:12px}
 .ct{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
-
-/* Stat grid */
-.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.sg4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px}
-.sb{background:var(–sf2);border:1px solid var(–bd);border-radius:8px;padding:12px;text-align:center}
-.sv{font-family:‘Bebas Neue’,sans-serif;font-size:1.8rem;line-height:1}
-.sl{font-size:.6rem;color:var(–mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px}
-.sv.pos{color:var(–g)}.sv.neg{color:var(–re)}.sv.neu{color:var(–gold)}
-
-/* Chart */
-.chart-wrap{position:relative;width:100%;height:180px;margin-bottom:8px}
+.sg2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.sg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.sbox{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:14px 10px;text-align:center}
+.sval{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;line-height:1;margin-bottom:3px}
+.slbl{font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px}
+.sval.pos{color:var(--g)}.sval.neg{color:var(--re)}.sval.neu{color:var(--gold)}.sval.wh{color:var(--tx)}
+.hero{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:20px 16px;margin-bottom:12px;text-align:center}
+.hero-lbl{font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:6px}
+.hero-val{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;line-height:1;letter-spacing:2px}
+.hero-val.pos{color:var(--g)}.hero-val.neg{color:var(--re)}
+.hero-sub{font-size:.75rem;color:var(--mt);margin-top:6px;font-family:'IBM Plex Mono',monospace}
+.chart-wrap{width:100%;height:160px;margin-bottom:6px}
 canvas{width:100%!important;height:100%!important}
-
-/* Log table */
-.log-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.78rem}
-th{text-align:left;padding:7px 10px;font-family:‘IBM Plex Mono’,monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);border-bottom:1px solid var(–bd);background:var(–sf2);white-space:nowrap}
-td{padding:8px 10px;border-bottom:1px solid rgba(28,48,36,.5);font-family:‘IBM Plex Mono’,monospace;font-size:.75rem}
-tr:last-child td{border-bottom:none}
-.pos-row td:nth-child(4){color:var(–g)}
-.neg-row td:nth-child(4){color:var(–re)}
-.del-btn{background:transparent;border:1px solid var(–bd);color:var(–mt);border-radius:3px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:‘IBM Plex Mono’,monospace}
-.del-btn:hover{border-color:var(–re);color:var(–re)}
-.retrain-badge{display:inline-block;font-size:.55rem;font-family:‘IBM Plex Mono’,monospace;padding:1px 5px;border-radius:2px;background:rgba(64,196,255,.1);color:var(–bl);border:1px solid rgba(64,196,255,.3);margin-left:4px;vertical-align:middle}
-
-/* Entry form */
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
-.form-row.three{grid-template-columns:1fr 1fr 1fr}
-.fl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);margin-bottom:4px}
-.fi{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.85rem;padding:8px 10px;outline:none;-webkit-appearance:none}
-.fi:focus{border-color:var(–g)}
-.fi.gold{color:var(–gold)}
-.btn{font-family:‘IBM Plex Mono’,monospace;font-size:.75rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:11px 16px;border:none;border-radius:8px;cursor:pointer;width:100%;margin-top:4px}
-.bg{background:var(–g);color:var(–bg)}
-.bo{background:transparent;color:var(–g);border:1px solid var(–g)}
-
-/* Insights */
-.insight{padding:9px 13px;border-radius:7px;font-size:.78rem;margin-bottom:8px;border-left:3px solid;line-height:1.5}
-.ig{background:rgba(0,230,118,.07);border-color:var(–g);color:#9ef5c0}
-.iw{background:rgba(255,193,7,.07);border-color:var(–gold);color:#ffe082}
-.ir{background:rgba(255,82,82,.07);border-color:var(–re);color:#ff8a80}
-.ib{background:rgba(64,196,255,.07);border-color:var(–bl);color:#80d8ff}
-
-/* Bet type toggle */
-.bt-row{display:flex;gap:6px;margin-bottom:12px}
-.bt{flex:1;padding:8px 6px;text-align:center;border-radius:6px;border:1px solid var(–bd);cursor:pointer;font-size:.68rem;font-family:‘IBM Plex Mono’,monospace;color:var(–mt);background:var(–sf2)}
-.bt.on{border-color:var(–g);color:var(–g);background:rgba(0,230,118,.08)}
-
-/* Trend indicator */
-.trend{font-size:.7rem;font-family:‘IBM Plex Mono’,monospace;padding:3px 8px;border-radius:3px;display:inline-block}
-.trend.up{background:rgba(0,230,118,.12);color:var(–g)}
-.trend.dn{background:rgba(255,82,82,.12);color:var(–re)}
-.trend.fl{background:rgba(255,193,7,.1);color:var(–gold)}
-
-/* Breakeven line note */
-.be-note{font-size:.62rem;color:var(–mt);text-align:right;margin-top:4px;font-family:‘IBM Plex Mono’,monospace}
+.chart-note{font-size:.6rem;color:var(--mt);text-align:right;font-family:'IBM Plex Mono',monospace}
+.insight{padding:10px 13px;border-radius:8px;font-size:.8rem;margin-bottom:8px;border-left:3px solid;line-height:1.55}
+.ig{background:rgba(0,230,118,.07);border-color:var(--g);color:#9ef5c0}
+.iw{background:rgba(255,193,7,.07);border-color:var(--gold);color:#ffe082}
+.ir{background:rgba(255,82,82,.07);border-color:var(--re);color:#ff8a80}
+.ib{background:rgba(64,196,255,.07);border-color:var(--bl);color:#80d8ff}
+.trend{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:4px 10px;border-radius:4px;margin-bottom:10px}
+.trend.up{background:rgba(0,230,118,.12);color:var(--g)}
+.trend.dn{background:rgba(255,82,82,.12);color:var(--re)}
+.trend.fl{background:rgba(255,193,7,.1);color:var(--gold)}
+.day-card{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.day-card.win{border-left:3px solid var(--g)}
+.day-card.loss{border-left:3px solid var(--re)}
+.day-date{font-size:.7rem;color:var(--mt);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+.day-type{font-size:.62rem;color:var(--mt);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.day-notes{font-size:.65rem;color:var(--mt);margin-top:3px;line-height:1.3}
+.day-pl{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;text-align:right;white-space:nowrap;flex-shrink:0}
+.day-pl.pos{color:var(--g)}.day-pl.neg{color:var(--re)}
+.day-stake{font-size:.6rem;color:var(--mt);text-align:right;font-family:'IBM Plex Mono',monospace}
+.day-del{background:transparent;border:none;color:var(--bd);font-size:.9rem;cursor:pointer;padding:6px;flex-shrink:0}
+.day-del:active{color:var(--re)}
+.retrain-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--bl);margin-left:5px;vertical-align:middle}
+.fl{font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:5px}
+.fi{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:8px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:1rem;padding:12px;outline:none;-webkit-appearance:none;margin-bottom:10px}
+.fi:focus{border-color:var(--g)}
+.fi.gold{color:var(--gold)}
+.fi-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:14px 16px;border:none;border-radius:10px;cursor:pointer;width:100%;margin-top:4px}
+.bg{background:var(--g);color:var(--bg)}
+.bo{background:transparent;color:var(--g);border:1px solid var(--g)}
+.bt-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.bt{padding:9px 14px;border-radius:20px;border:1px solid var(--bd);cursor:pointer;font-size:.72rem;font-family:'IBM Plex Mono',monospace;color:var(--mt);background:var(--sf2)}
+.bt.on{border-color:var(--g);color:var(--g);background:rgba(0,230,118,.1)}
+.retrain-row{display:flex;align-items:center;gap:10px;padding:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:10px}
+.retrain-row label{font-size:.8rem;color:var(--mt);flex:1;cursor:pointer}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:var(--bd);border-radius:11px;cursor:pointer;transition:.2s}
+.toggle input:checked+.toggle-track{background:var(--bl)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;pointer-events:none}
+.toggle input:checked~.toggle-thumb{left:21px}
+.add-status{min-height:20px;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:.75rem}
 </style>
-
 </head>
 <body>
 
 <div class="hdr">
-  <h1>🏇 Results Tracker</h1>
-  <div id="plPill" style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;padding:3px 10px;border-radius:20px;border:1px solid var(--bd);color:var(--mt)">Loading…</div>
+  <div class="hdr-title">🏇 Tracker</div>
+  <div class="pl-pill" id="plPill">—</div>
 </div>
 
-<div class="pg">
+<!-- OVERVIEW -->
 
-  <!-- Summary stats -->
-
-  <div class="card">
-    <div class="ct">Season Overview</div>
-    <div class="sg4" id="statsGrid"></div>
-    <div id="trendLine" style="margin-bottom:10px"></div>
-    <div id="insightsBox"></div>
+<div class="scr on" id="s-overview">
+  <div class="hero">
+    <div class="hero-lbl">Season P/L</div>
+    <div class="hero-val" id="heroVal">—</div>
+    <div class="hero-sub" id="heroSub">—</div>
   </div>
-
-  <!-- Chart -->
-
+  <div class="sg3" id="statsTop"></div>
+  <div class="sg2" id="statsBot"></div>
+  <div id="trendWrap" style="margin-bottom:10px"></div>
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Running P/L</div>
-      <div id="peakNote" style="font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--mt)"></div>
+      <span id="peakNote" style="font-size:.62rem;color:var(--mt);font-family:'IBM Plex Mono',monospace"></span>
     </div>
     <div class="chart-wrap"><canvas id="plChart"></canvas></div>
-    <div class="be-note">Dashed line = breakeven</div>
+    <div class="chart-note">· · · breakeven &nbsp;|&nbsp; R = retrain</div>
   </div>
+  <div id="insightsBox"></div>
+</div>
 
-  <!-- Add result -->
+<!-- LOG -->
 
+<div class="scr" id="s-log">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--g);letter-spacing:2px">Full Log</div>
+    <button onclick="exportCSV()" style="font-family:'IBM Plex Mono',monospace;font-size:.65rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:7px 14px;border-radius:8px;background:transparent;color:var(--g);border:1px solid var(--g);cursor:pointer">⬇ CSV</button>
+  </div>
+  <div id="logCards"></div>
+</div>
+
+<!-- ADD -->
+
+<div class="scr" id="s-add">
   <div class="card">
-    <div class="ct">Log Today's Result</div>
-    <div class="bt-row">
-      <div class="bt on" id="bt-l15" onclick="setBetType('Lucky 15')">Lucky 15</div>
-      <div class="bt" id="bt-pp" onclick="setBetType('Placepot')">Placepot</div>
-      <div class="bt" id="bt-ew" onclick="setBetType('Each Way')">Each Way</div>
-      <div class="bt" id="bt-win" onclick="setBetType('Win')">Win</div>
-      <div class="bt" id="bt-other" onclick="setBetType('Other')">Other</div>
+    <div class="ct">Log Today's Bet</div>
+    <div class="fl">Bet Type</div>
+    <div class="bt-wrap">
+      <div class="bt on" onclick="setBetType(this,'Lucky 15')">Lucky 15</div>
+      <div class="bt" onclick="setBetType(this,'Placepot')">Placepot</div>
+      <div class="bt" onclick="setBetType(this,'Each Way')">Each Way</div>
+      <div class="bt" onclick="setBetType(this,'Win')">Win</div>
+      <div class="bt" onclick="setBetType(this,'Other')">Other</div>
     </div>
-    <div class="form-row">
-      <div>
-        <div class="fl">Date</div>
-        <input class="fi" type="date" id="fDate">
-      </div>
-      <div>
-        <div class="fl">Bet Type</div>
-        <input class="fi" type="text" id="fType" value="Lucky 15" readonly style="color:var(--g)">
-      </div>
-    </div>
-    <div class="form-row">
+    <div class="fl">Date</div>
+    <input class="fi" type="date" id="fDate">
+    <div class="fi-row" style="margin-bottom:0">
       <div>
         <div class="fl">Stake £</div>
-        <input class="fi gold" type="number" id="fSpent" min="0" step="0.50" placeholder="e.g. 15" inputmode="decimal">
+        <input class="fi gold" type="number" id="fSpent" min="0" step="0.5" placeholder="15.00" inputmode="decimal">
       </div>
       <div>
         <div class="fl">Returned £</div>
-        <input class="fi gold" type="number" id="fWon" min="0" step="0.01" placeholder="e.g. 0.00" inputmode="decimal">
+        <input class="fi gold" type="number" id="fWon" min="0" step="0.01" placeholder="0.00" inputmode="decimal">
       </div>
     </div>
-    <div class="form-row" style="margin-bottom:8px">
-      <div style="grid-column:1/-1">
-        <div class="fl">Notes (optional)</div>
-        <input class="fi" type="text" id="fNotes" placeholder="e.g. 4/6 placepot, 2 wins Lucky 15…">
+    <div class="fl">Notes</div>
+    <input class="fi" type="text" id="fNotes" placeholder="e.g. 3/6 placepot, 2 wins…">
+    <div class="retrain-row">
+      <label for="fRetrain">Model retrained today</label>
+      <div class="toggle">
+        <input type="checkbox" id="fRetrain">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
       </div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer">
-      <input type="checkbox" id="fRetrain" style="accent-color:var(--bl);width:14px;height:14px">
-      <span style="font-size:.75rem;color:var(--mt)">Model retrained today</span>
-    </label>
     <button class="btn bg" onclick="addEntry()">+ Add Result</button>
-    <div id="addStatus" style="margin-top:8px;min-height:18px"></div>
+    <div class="add-status" id="addStatus"></div>
   </div>
+</div>
 
-  <!-- Log -->
+<!-- Nav -->
 
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Full Log</div>
-      <button class="btn bo" style="width:auto;padding:5px 12px;font-size:.65rem" onclick="exportCSV()">⬇ Export CSV</button>
-    </div>
-    <div class="log-wrap" id="logTable"></div>
-  </div>
-
+<div class="bnav">
+  <button class="bnav-tab on" id="nav-overview" onclick="goTab('overview')">
+    <span class="ico">📊</span>Overview
+  </button>
+  <button class="bnav-tab" id="nav-log" onclick="goTab('log')">
+    <span class="ico">📋</span>Log
+  </button>
+  <button class="bnav-tab" id="nav-add" onclick="goTab('add')">
+    <span class="ico">➕</span>Add
+  </button>
 </div>
 
 <script>
-// ── Seed data from spreadsheet ─────────────────────────────
-var SEED = [
-  {date:'2025-03-19',type:'Lucky 15',spent:24,   won:98.66, notes:'',        retrain:false},
-  {date:'2025-03-20',type:'Lucky 15',spent:25,   won:27.35, notes:'',        retrain:false},
-  {date:'2025-03-21',type:'Lucky 15',spent:21,   won:8.25,  notes:'',        retrain:false},
-  {date:'2025-03-22',type:'Lucky 15',spent:19,   won:39.15, notes:'',        retrain:false},
-  {date:'2025-03-23',type:'Lucky 15',spent:20,   won:11.54, notes:'',        retrain:false},
-  {date:'2025-03-24',type:'Lucky 15',spent:16,   won:19.33, notes:'',        retrain:false},
-  {date:'2025-03-25',type:'Lucky 15',spent:19.5, won:11.46, notes:'',        retrain:false},
-  {date:'2025-03-26',type:'Lucky 15',spent:17,   won:7.60,  notes:'Retrained model', retrain:true},
-  {date:'2025-03-27',type:'Lucky 15',spent:17,   won:1.20,  notes:'',        retrain:false},
-  {date:'2025-03-28',type:'Lucky 15',spent:15,   won:11.80, notes:'',        retrain:false},
-  {date:'2025-03-29',type:'Lucky 15',spent:9,    won:0,     notes:'',        retrain:false},
-  {date:'2025-03-30',type:'Lucky 15',spent:10,   won:0,     notes:'Retrained model', retrain:true},
-  {date:'2025-03-31',type:'Lucky 15',spent:15,   won:5.36,  notes:'',        retrain:false},
-  {date:'2025-04-01',type:'Lucky 15',spent:9,    won:5.50,  notes:'',        retrain:false},
-  {date:'2025-04-02',type:'Lucky 15',spent:7,    won:4.90,  notes:'',        retrain:false},
-  {date:'2025-04-03',type:'Lucky 15',spent:21,   won:10.56, notes:'',        retrain:false},
-  {date:'2025-04-04',type:'Lucky 15',spent:19,   won:11.87, notes:'1 win 1 place, still lost money. Retrained model', retrain:true},
+var SEED=[
+  {date:'2025-03-19',type:'Lucky 15',spent:24,   won:98.66,notes:'',        retrain:false},
+  {date:'2025-03-20',type:'Lucky 15',spent:25,   won:27.35,notes:'',        retrain:false},
+  {date:'2025-03-21',type:'Lucky 15',spent:21,   won:8.25, notes:'',        retrain:false},
+  {date:'2025-03-22',type:'Lucky 15',spent:19,   won:39.15,notes:'',        retrain:false},
+  {date:'2025-03-23',type:'Lucky 15',spent:20,   won:11.54,notes:'',        retrain:false},
+  {date:'2025-03-24',type:'Lucky 15',spent:16,   won:19.33,notes:'',        retrain:false},
+  {date:'2025-03-25',type:'Lucky 15',spent:19.5, won:11.46,notes:'',        retrain:false},
+  {date:'2025-03-26',type:'Lucky 15',spent:17,   won:7.60, notes:'Retrained model',retrain:true},
+  {date:'2025-03-27',type:'Lucky 15',spent:17,   won:1.20, notes:'',        retrain:false},
+  {date:'2025-03-28',type:'Lucky 15',spent:15,   won:11.80,notes:'',        retrain:false},
+  {date:'2025-03-29',type:'Lucky 15',spent:9,    won:0,    notes:'',        retrain:false},
+  {date:'2025-03-30',type:'Lucky 15',spent:10,   won:0,    notes:'Retrained model',retrain:true},
+  {date:'2025-03-31',type:'Lucky 15',spent:15,   won:5.36, notes:'',        retrain:false},
+  {date:'2025-04-01',type:'Lucky 15',spent:9,    won:5.50, notes:'',        retrain:false},
+  {date:'2025-04-02',type:'Lucky 15',spent:7,    won:4.90, notes:'',        retrain:false},
+  {date:'2025-04-03',type:'Lucky 15',spent:21,   won:10.56,notes:'',        retrain:false},
+  {date:'2025-04-04',type:'Lucky 15',spent:19,   won:11.87,notes:'1 win 1 place, still lost. Retrained.',retrain:true},
 ];
 
-// ── Storage ────────────────────────────────────────────────
-var LS_KEY = 'rp_results_v1';
-
-function loadData() {
-  try {
-    var raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  // First load — seed with spreadsheet data
-  localStorage.setItem(LS_KEY, JSON.stringify(SEED));
+var LS_KEY='rp_results_v2';
+var DATA=(function(){
+  try{var r=localStorage.getItem(LS_KEY);if(r)return JSON.parse(r);}catch(e){}
+  localStorage.setItem(LS_KEY,JSON.stringify(SEED));
   return SEED.slice();
-}
-
-function saveData(data) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) {}
-}
-
-var DATA = loadData();
-
-// ── Bet type toggle ────────────────────────────────────────
-var currentBetType = 'Lucky 15';
-function setBetType(t) {
-  currentBetType = t;
-  document.getElementById('fType').value = t;
-  ['l15','pp','ew','win','other'].forEach(function(id) {
-    var el = document.getElementById('bt-' + id);
-    var match = (id === 'l15' && t === 'Lucky 15') ||
-                (id === 'pp'  && t === 'Placepot') ||
-                (id === 'ew'  && t === 'Each Way') ||
-                (id === 'win' && t === 'Win') ||
-                (id === 'other' && t === 'Other');
-    el.className = 'bt' + (match ? ' on' : '');
-  });
-}
-
-// ── Date default ───────────────────────────────────────────
-(function() {
-  var today = new Date();
-  var y = today.getFullYear();
-  var m = String(today.getMonth()+1).padStart(2,'0');
-  var d = String(today.getDate()).padStart(2,'0');
-  document.getElementById('fDate').value = y+'-'+m+'-'+d;
 })();
 
-// ── Core calculations ──────────────────────────────────────
-function calcStats(data) {
-  if (!data.length) return { days:0, spent:0, won:0, net:0, roi:0, winDays:0, lossDays:0, running:[], streak:0, best:0, worst:0 };
-  var spent=0, won=0, winDays=0, lossDays=0, running=[], cum=0, best=-999, worst=999, streak=0, curStreak=0, lastDir=null;
-  data.forEach(function(r) {
-    var pl = r.won - r.spent;
-    spent  += r.spent;
-    won    += r.won;
-    cum    += pl;
-    running.push(Math.round(cum * 100) / 100);
-    if (pl > 0)  { winDays++;  if (pl  > best)  best  = pl;  if (lastDir==='win')  curStreak++; else { curStreak=1; lastDir='win';  } }
-    if (pl < 0)  { lossDays++; if (pl  < worst) worst = pl;  if (lastDir==='loss') curStreak++; else { curStreak=1; lastDir='loss'; } }
-    if (pl === 0){ if (lastDir==='loss') curStreak++; else { curStreak=1; lastDir='loss'; } }
-    if (curStreak > Math.abs(streak)) streak = lastDir==='win' ? curStreak : -curStreak;
+function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DATA));}catch(e){}}
+function sortedData(){return DATA.slice().sort(function(a,b){return a.date<b.date?-1:1;});}
+
+function goTab(t){
+  ['overview','log','add'].forEach(function(id){
+    document.getElementById('s-'+id).classList.toggle('on',id===t);
+    document.getElementById('nav-'+id).classList.toggle('on',id===t);
   });
-  var net = won - spent;
-  var roi = spent > 0 ? (net / spent * 100) : 0;
-  var last5 = data.slice(-5);
-  var last5Net = last5.reduce(function(s,r){ return s + (r.won - r.spent); }, 0);
-  return { days:data.length, spent:Math.round(spent*100)/100, won:Math.round(won*100)/100,
-           net:Math.round(net*100)/100, roi:Math.round(roi*100)/100, winDays, lossDays,
-           running, streak, best:Math.round(best*100)/100, worst:Math.round(worst*100)/100,
-           last5Net:Math.round(last5Net*100)/100,
-           avgStake: Math.round(spent/data.length*100)/100,
-           avgReturn: Math.round(won/data.length*100)/100 };
+  if(t==='log')renderLog();
 }
 
-// ── Render ─────────────────────────────────────────────────
-function render() {
-  var sorted = DATA.slice().sort(function(a,b){ return a.date < b.date ? -1 : 1; });
-  var s = calcStats(sorted);
+var curType='Lucky 15';
+function setBetType(el,t){
+  curType=t;
+  document.querySelectorAll('.bt').forEach(function(b){b.classList.remove('on');});
+  el.classList.add('on');
+}
 
-  // Header pill
-  var pill = document.getElementById('plPill');
-  var netStr = (s.net >= 0 ? '+' : '') + '£' + Math.abs(s.net).toFixed(2);
-  pill.textContent = netStr;
-  pill.style.borderColor = s.net >= 0 ? 'var(--g)' : 'var(--re)';
-  pill.style.color        = s.net >= 0 ? 'var(--g)' : 'var(--re)';
-  pill.style.background   = s.net >= 0 ? 'rgba(0,230,118,.08)' : 'rgba(255,82,82,.08)';
+(function(){
+  var n=new Date();
+  document.getElementById('fDate').value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+})();
 
-  // Stats grid
-  var netCls = s.net >= 0 ? 'pos' : 'neg';
-  var roiCls = s.roi >= 0 ? 'pos' : 'neg';
-  document.getElementById('statsGrid').innerHTML =
-    sb(s.days, 'Days Bet') +
-    sb((s.net>=0?'+':'') + '£'+Math.abs(s.net).toFixed(2), 'Net P/L', netCls) +
-    sb(s.roi.toFixed(1)+'%', 'ROI', roiCls) +
-    sb(s.winDays+'/'+s.days, 'Win Days') +
-    sb('£'+s.spent.toFixed(2), 'Total Staked') +
-    sb('£'+s.won.toFixed(2), 'Total Returned') +
-    sb('£'+s.avgStake.toFixed(2), 'Avg Stake') +
-    sb('£'+s.avgReturn.toFixed(2), 'Avg Return');
+function calc(data){
+  if(!data.length)return{days:0,spent:0,won:0,net:0,roi:0,winDays:0,lossDays:0,running:[],best:0,worst:0,last5:0,avgStake:0,avgReturn:0};
+  var spent=0,won=0,winDays=0,lossDays=0,running=[],cum=0,best=-9999,worst=9999;
+  data.forEach(function(r){
+    var pl=r.won-r.spent;spent+=r.spent;won+=r.won;cum+=pl;
+    running.push(Math.round(cum*100)/100);
+    if(pl>0){winDays++;if(pl>best)best=pl;}
+    if(pl<=0){lossDays++;if(pl<worst)worst=pl;}
+  });
+  var net=won-spent;
+  var last5=data.slice(-5).reduce(function(s,r){return s+(r.won-r.spent);},0);
+  return{
+    days:data.length,spent:Math.round(spent*100)/100,won:Math.round(won*100)/100,
+    net:Math.round(net*100)/100,roi:Math.round(net/spent*10000)/100,
+    winDays,lossDays,running,
+    best:Math.round(best*100)/100,worst:Math.round(worst*100)/100,
+    last5:Math.round(last5*100)/100,
+    avgStake:Math.round(spent/data.length*100)/100,
+    avgReturn:Math.round(won/data.length*100)/100
+  };
+}
 
-  // Trend
-  var trendEl = document.getElementById('trendLine');
-  var trendCls, trendTxt;
-  if (s.last5Net > 2) { trendCls='up'; trendTxt='▲ Last 5 days: +£'+s.last5Net.toFixed(2)+' — improving'; }
-  else if (s.last5Net < -2) { trendCls='dn'; trendTxt='▼ Last 5 days: £'+s.last5Net.toFixed(2)+' — deteriorating'; }
-  else { trendCls='fl'; trendTxt='~ Last 5 days: £'+(s.last5Net>=0?'+':'')+s.last5Net.toFixed(2)+' — flat'; }
-  if (s.days >= 3) trendEl.innerHTML = '<span class="trend '+trendCls+'">'+trendTxt+'</span>';
+function sbox(v,l,c){return'<div class="sbox"><div class="sval '+c+'">'+v+'</div><div class="slbl">'+l+'</div></div>';}
 
-  // Insights
-  var ins = [];
-  if (s.roi < -10) ins.push({cls:'ir', txt:'ROI is '+s.roi.toFixed(1)+'%. The Lucky 15 format requires multiple winners to profit — even 1 win and 1 place rarely covers the stake on a £15 bet.'});
-  if (s.winDays / Math.max(s.days,1) < 0.3) ins.push({cls:'iw', txt: Math.round(s.winDays/s.days*100)+'% of days are profitable. Lucky 15s typically need 2–3 placed horses to break even — consider whether the bet type suits the predictions.'});
-  if (s.best > 0) ins.push({cls:'ig', txt:'Best day: +£'+s.best.toFixed(2)+'. Worst day: £'+s.worst.toFixed(2)+'. The big win on 19th March shows the upside is there — consistency is the challenge.'});
-  if (s.days >= 10) {
-    var retrains = sorted.filter(function(r){return r.retrain;}).length;
-    if (retrains > 0) ins.push({cls:'ib', txt: retrains+' model retrain'+(retrains>1?'s':'')+' logged. Compare performance before and after to see if retraining helped.'});
+function render(){
+  var d=sortedData();
+  var s=calc(d);
+
+  var pill=document.getElementById('plPill');
+  var ns=(s.net>=0?'+':'')+'£'+Math.abs(s.net).toFixed(2);
+  pill.textContent=ns;
+  pill.className='pl-pill '+(s.net>=0?'pos':'neg');
+
+  document.getElementById('heroVal').textContent=(s.net>=0?'+':'')+'£'+Math.abs(s.net).toFixed(2);
+  document.getElementById('heroVal').className='hero-val '+(s.net>=0?'pos':'neg');
+  document.getElementById('heroSub').textContent=s.days+' days · £'+s.spent.toFixed(2)+' staked · '+s.roi.toFixed(1)+'% ROI';
+
+  document.getElementById('statsTop').innerHTML=
+    sbox(s.winDays+'/'+s.days,'Win Days','wh')+
+    sbox(s.roi.toFixed(1)+'%','ROI',s.roi>=0?'pos':'neg')+
+    sbox('£'+s.avgStake.toFixed(2),'Avg Stake','neu');
+  document.getElementById('statsBot').innerHTML=
+    sbox('+£'+s.best.toFixed(2),'Best Day','pos')+
+    sbox('£'+s.worst.toFixed(2),'Worst Day','neg');
+
+  var tEl=document.getElementById('trendWrap');
+  if(s.days>=3){
+    var tc,tt;
+    if(s.last5>2){tc='up';tt='▲ Last 5 days: +£'+s.last5.toFixed(2)+' — improving';}
+    else if(s.last5<-2){tc='dn';tt='▼ Last 5 days: £'+s.last5.toFixed(2)+' — declining';}
+    else{tc='fl';tt='~ Last 5 days: flat (£'+(s.last5>=0?'+':'')+s.last5.toFixed(2)+')';}
+    tEl.innerHTML='<span class="trend '+tc+'">'+tt+'</span>';
   }
-  // Lucky 15 break-even note
-  ins.push({cls:'ib', txt:'Lucky 15 break-even: with a £1 stake (£15 total), you need returns > £15. One winner at 3/1 returns ~£4. Two winners at 3/1 each returns ~£19 (just breaks even). The bet only pays well with 3+ winners or big odds.'});
 
-  document.getElementById('insightsBox').innerHTML = ins.map(function(i){
-    return '<div class="insight '+i.cls+'">'+i.txt+'</div>';
+  drawChart(d,s);
+
+  if(s.running.length){
+    var pk=Math.max.apply(null,s.running);
+    document.getElementById('peakNote').textContent='Peak +£'+pk.toFixed(2);
+  }
+
+  // Honest insights
+  var ins=[];
+  var winPct=Math.round(s.winDays/Math.max(s.days,1)*100);
+
+  if(s.roi<-10)
+    ins.push({c:'ir',t:'🔴 ROI is '+s.roi.toFixed(1)+'% — the app is losing money at a meaningful rate. Worth reconsidering stake size or bet type before continuing.'});
+  else if(s.roi<0)
+    ins.push({c:'iw',t:'🟡 ROI is '+s.roi.toFixed(1)+'%. Slightly loss-making overall — a few more winning days would tip this positive.'});
+  else
+    ins.push({c:'ig',t:'🟢 ROI is +'+s.roi.toFixed(1)+'% — currently profitable. Variance is still a factor so keep consistent.'});
+
+  if(winPct<30)
+    ins.push({c:'ir',t:'Only '+winPct+'% of days show a profit. Lucky 15s need 2–3 placed horses just to cover the stake — one win and one place is rarely enough unless the odds are long.'});
+
+  if(s.days>=6){
+    var early=d.slice(0,Math.floor(d.length/2));
+    var late=d.slice(Math.floor(d.length/2));
+    var earlyNet=early.reduce(function(s,r){return s+(r.won-r.spent);},0);
+    var lateNet=late.reduce(function(s,r){return s+(r.won-r.spent);},0);
+    if(lateNet<earlyNet-10)
+      ins.push({c:'ir',t:'Performance has got worse over time. First '+early.length+' days: '+(earlyNet>=0?'+':'')+'£'+earlyNet.toFixed(2)+'. Last '+late.length+' days: £'+lateNet.toFixed(2)+'.'});
+  }
+
+  var retrains=d.filter(function(r){return r.retrain;});
+  if(retrains.length>=2)
+    ins.push({c:'ib',t:retrains.length+' model retrains logged (R markers on chart). Results have not improved after retraining — the issue is more likely bet structure than model accuracy.'});
+
+  ins.push({c:'iw',t:'💡 Lucky 15 maths: £1 unit = £15 total. Two 3/1 winners returns ~£8 each from the doubles — barely covering the stake. You need 3+ results, or longer odds, for meaningful profit.'});
+
+  document.getElementById('insightsBox').innerHTML=ins.map(function(i){
+    return'<div class="insight '+i.c+'">'+i.t+'</div>';
   }).join('');
-
-  // Chart
-  drawChart(sorted, s);
-
-  // Peak note
-  if (s.running.length) {
-    var peak = Math.max.apply(null, s.running);
-    document.getElementById('peakNote').textContent = 'Peak: +£' + peak.toFixed(2);
-  }
-
-  // Log table
-  renderTable(sorted);
 }
 
-function sb(val, lbl, cls) {
-  return '<div class="sb"><div class="sv '+(cls||'neu')+'">'+val+'</div><div class="sl">'+lbl+'</div></div>';
-}
-
-// ── Chart ──────────────────────────────────────────────────
-function drawChart(sorted, s) {
-  var canvas = document.getElementById('plChart');
-  var ctx = canvas.getContext('2d');
-  var dpr = window.devicePixelRatio || 1;
-  var W = canvas.offsetWidth, H = canvas.offsetHeight;
-  canvas.width  = W * dpr;
-  canvas.height = H * dpr;
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, W, H);
-
-  if (!s.running.length) return;
-
-  var pts = s.running;
-  var min = Math.min(0, Math.min.apply(null, pts));
-  var max = Math.max(0, Math.max.apply(null, pts));
-  var pad = { t:12, r:10, b:28, l:46 };
-  var cW = W - pad.l - pad.r;
-  var cH = H - pad.t - pad.b;
-  var range = (max - min) || 1;
-
-  function xp(i){ return pad.l + (i / Math.max(pts.length-1,1)) * cW; }
-  function yp(v){ return pad.t + cH - ((v - min) / range) * cH; }
-
-  // Grid lines
-  ctx.strokeStyle = 'rgba(28,48,36,.5)';
-  ctx.lineWidth = 1;
-  var steps = 4;
-  for (var s2 = 0; s2 <= steps; s2++) {
-    var v = min + (max - min) / steps * s2;
-    var y = yp(v);
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(74,106,85,.8)';
-    ctx.font = '9px IBM Plex Mono, monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText((v >= 0 ? '+' : '') + '£' + Math.abs(v).toFixed(0), pad.l - 4, y + 3);
+function drawChart(d,s){
+  var cv=document.getElementById('plChart');
+  var ctx=cv.getContext('2d');
+  var dpr=window.devicePixelRatio||1;
+  var W=cv.offsetWidth,H=cv.offsetHeight;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  var pts=s.running;
+  if(!pts.length)return;
+  var mn=Math.min(0,Math.min.apply(null,pts));
+  var mx=Math.max(0,Math.max.apply(null,pts));
+  var pd={t:10,r:8,b:24,l:44};
+  var cW=W-pd.l-pd.r,cH=H-pd.t-pd.b,rng=(mx-mn)||1;
+  function xp(i){return pd.l+(i/Math.max(pts.length-1,1))*cW;}
+  function yp(v){return pd.t+cH-((v-mn)/rng)*cH;}
+  ctx.strokeStyle='rgba(28,48,36,.6)';ctx.lineWidth=1;
+  for(var g=0;g<=4;g++){
+    var gv=mn+(mx-mn)/4*g,gy=yp(gv);
+    ctx.beginPath();ctx.moveTo(pd.l,gy);ctx.lineTo(W-pd.r,gy);ctx.stroke();
+    ctx.fillStyle='rgba(74,106,85,.9)';ctx.font='9px IBM Plex Mono,monospace';ctx.textAlign='right';
+    ctx.fillText((gv>=0?'+':'')+'£'+Math.abs(gv).toFixed(0),pd.l-3,gy+3);
   }
-
-  // Zero / breakeven line
-  var y0 = yp(0);
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = 'rgba(74,106,85,.8)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(W - pad.r, y0); ctx.stroke();
+  var y0=yp(0);
+  ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(74,106,85,.7)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pd.l,y0);ctx.lineTo(W-pd.r,y0);ctx.stroke();
   ctx.setLineDash([]);
-
-  // Retrain markers
-  sorted.forEach(function(r, i) {
-    if (r.retrain) {
-      var x = xp(i);
-      ctx.strokeStyle = 'rgba(64,196,255,.4)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H - pad.b); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(64,196,255,.7)';
-      ctx.font = '8px IBM Plex Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('R', x, pad.t + 8);
-    }
+  d.forEach(function(r,i){
+    if(!r.retrain)return;
+    var x=xp(i);
+    ctx.setLineDash([2,3]);ctx.strokeStyle='rgba(64,196,255,.35)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,pd.t);ctx.lineTo(x,H-pd.b);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(64,196,255,.65)';ctx.font='8px IBM Plex Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('R',x,pd.t+8);
   });
-
-  // Gradient fill under curve
-  var grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-  grad.addColorStop(0, 'rgba(0,230,118,.18)');
-  grad.addColorStop(1, 'rgba(0,230,118,.0)');
   ctx.beginPath();
-  ctx.moveTo(xp(0), yp(pts[0]));
-  pts.forEach(function(v, i){ ctx.lineTo(xp(i), yp(v)); });
-  ctx.lineTo(xp(pts.length-1), y0);
-  ctx.lineTo(xp(0), y0);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Line
+  ctx.moveTo(xp(0),yp(pts[0]));
+  pts.forEach(function(v,i){ctx.lineTo(xp(i),yp(v));});
+  ctx.lineTo(xp(pts.length-1),y0);ctx.lineTo(xp(0),y0);ctx.closePath();
+  var grad=ctx.createLinearGradient(0,pd.t,0,H-pd.b);
+  grad.addColorStop(0,pts[pts.length-1]>=0?'rgba(0,230,118,.2)':'rgba(255,82,82,.15)');
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grad;ctx.fill();
   ctx.beginPath();
-  pts.forEach(function(v, i){
-    if (i === 0) ctx.moveTo(xp(0), yp(v));
-    else ctx.lineTo(xp(i), yp(v));
+  pts.forEach(function(v,i){i===0?ctx.moveTo(xp(0),yp(v)):ctx.lineTo(xp(i),yp(v));});
+  ctx.strokeStyle=pts[pts.length-1]>=0?'#00e676':'#ff5252';
+  ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.stroke();
+  pts.forEach(function(v,i){
+    ctx.beginPath();ctx.arc(xp(i),yp(v),3.5,0,Math.PI*2);
+    ctx.fillStyle=v>=0?'#00e676':'#ff5252';ctx.fill();
   });
-  ctx.strokeStyle = '#00e676';
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-
-  // Dots on each point
-  pts.forEach(function(v, i) {
-    ctx.beginPath();
-    ctx.arc(xp(i), yp(v), 3, 0, Math.PI*2);
-    ctx.fillStyle = v >= 0 ? '#00e676' : '#ff5252';
-    ctx.fill();
-  });
-
-  // X labels — show every Nth date
-  var step = Math.max(1, Math.ceil(pts.length / 6));
-  sorted.forEach(function(r, i) {
-    if (i % step === 0 || i === pts.length - 1) {
-      var d = new Date(r.date);
-      var lbl = (d.getDate()) + '/' + (d.getMonth()+1);
-      ctx.fillStyle = 'rgba(74,106,85,.8)';
-      ctx.font = '9px IBM Plex Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(lbl, xp(i), H - pad.b + 12);
+  var step=Math.max(1,Math.ceil(pts.length/5));
+  d.forEach(function(r,i){
+    if(i%step===0||i===pts.length-1){
+      var dt=new Date(r.date);
+      ctx.fillStyle='rgba(74,106,85,.8)';ctx.font='9px IBM Plex Mono,monospace';ctx.textAlign='center';
+      ctx.fillText(dt.getDate()+'/'+(dt.getMonth()+1),xp(i),H-pd.b+13);
     }
   });
 }
 
-// ── Log table ──────────────────────────────────────────────
-function renderTable(sorted) {
-  if (!sorted.length) {
-    document.getElementById('logTable').innerHTML = '<div style="color:var(--mt);font-size:.82rem;padding:12px">No results logged yet.</div>';
+function renderLog(){
+  var d=sortedData().reverse();
+  if(!d.length){
+    document.getElementById('logCards').innerHTML='<div style="color:var(--mt);font-size:.85rem;padding:20px;text-align:center">No results yet.</div>';
     return;
   }
-  var rev = sorted.slice().reverse();
-  var html = '<table><thead><tr>'
-    + '<th>Date</th><th>Type</th><th>Stake</th><th>P/L</th><th>Return</th><th>Notes</th><th></th>'
-    + '</tr></thead><tbody>';
-  rev.forEach(function(r, i) {
-    var pl = r.won - r.spent;
-    var plStr = (pl >= 0 ? '+' : '') + '£' + Math.abs(pl).toFixed(2);
-    var cls = pl >= 0 ? 'pos-row' : 'neg-row';
-    var d = new Date(r.date);
-    var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
-    var retBadge = r.retrain ? '<span class="retrain-badge">RETRAIN</span>' : '';
-    var notes = (r.notes || '') + (r.retrain && !r.notes ? 'Model retrained' : '');
-    html += '<tr class="'+cls+'">'
-      + '<td style="white-space:nowrap">'+dateStr+retBadge+'</td>'
-      + '<td>'+r.type+'</td>'
-      + '<td>£'+r.spent.toFixed(2)+'</td>'
-      + '<td>'+plStr+'</td>'
-      + '<td>£'+r.won.toFixed(2)+'</td>'
-      + '<td style="color:var(--mt);font-size:.68rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+notes+'</td>'
-      + '<td><button class="del-btn" onclick="deleteEntry(\''+r.date+'_'+r.spent+'\')">✕</button></td>'
-      + '</tr>';
-  });
-  html += '</tbody></table>';
-  document.getElementById('logTable').innerHTML = html;
+  document.getElementById('logCards').innerHTML=d.map(function(r){
+    var pl=r.won-r.spent;
+    var plStr=(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2);
+    var dt=new Date(r.date);
+    var ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+dt.getFullYear();
+    var retDot=r.retrain?'<span class="retrain-dot"></span>':'';
+    var notes=r.notes?'<div class="day-notes">'+r.notes+'</div>':'';
+    var key=r.date+'||'+r.spent;
+    return'<div class="day-card '+(pl>0?'win':'loss')+(r.retrain?' retrain':'')+'">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div class="day-date">'+ds+retDot+'</div>'
+        +'<div class="day-type">'+r.type+'</div>'
+        +notes
+      +'</div>'
+      +'<div style="text-align:right;flex-shrink:0">'
+        +'<div class="day-pl '+(pl>=0?'pos':'neg')+'">'+plStr+'</div>'
+        +'<div class="day-stake">Staked £'+r.spent.toFixed(2)+'</div>'
+        +'<div class="day-stake">Ret £'+r.won.toFixed(2)+'</div>'
+      +'</div>'
+      +'<button class="day-del" onclick="delEntry(\''+key+'\')">✕</button>'
+      +'</div>';
+  }).join('');
 }
 
-// ── Add entry ──────────────────────────────────────────────
-function addEntry() {
-  var date  = document.getElementById('fDate').value;
-  var spent = parseFloat(document.getElementById('fSpent').value);
-  var won   = parseFloat(document.getElementById('fWon').value) || 0;
-  var notes = document.getElementById('fNotes').value.trim();
-  var retrain = document.getElementById('fRetrain').checked;
-  var type  = currentBetType;
+function delEntry(key){
+  if(!confirm('Delete this entry?'))return;
+  var p=key.split('||');
+  DATA=DATA.filter(function(r){return!(r.date===p[0]&&r.spent===parseFloat(p[1]));});
+  save();render();renderLog();
+}
 
-  if (!date) { showStatus('⚠ Please select a date.', 'warn'); return; }
-  if (isNaN(spent) || spent <= 0) { showStatus('⚠ Enter a valid stake.', 'warn'); return; }
-
-  DATA.push({ date, type, spent, won, notes, retrain });
-  saveData(DATA);
-
-  // Reset form
-  document.getElementById('fSpent').value = '';
-  document.getElementById('fWon').value = '';
-  document.getElementById('fNotes').value = '';
-  document.getElementById('fRetrain').checked = false;
-
-  var pl = won - spent;
-  showStatus('✓ Added: '+(pl>=0?'+':'')+'£'+pl.toFixed(2)+' on '+date, 'ok');
+function addEntry(){
+  var date=document.getElementById('fDate').value;
+  var spent=parseFloat(document.getElementById('fSpent').value);
+  var won=parseFloat(document.getElementById('fWon').value)||0;
+  var notes=document.getElementById('fNotes').value.trim();
+  var retrain=document.getElementById('fRetrain').checked;
+  if(!date){showStatus('⚠ Select a date.','warn');return;}
+  if(isNaN(spent)||spent<=0){showStatus('⚠ Enter your stake.','warn');return;}
+  DATA.push({date:date,type:curType,spent:spent,won:won,notes:notes,retrain:retrain});
+  save();
+  document.getElementById('fSpent').value='';
+  document.getElementById('fWon').value='';
+  document.getElementById('fNotes').value='';
+  document.getElementById('fRetrain').checked=false;
+  var pl=won-spent;
+  showStatus('✓ '+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+' logged','ok');
   render();
+  setTimeout(function(){goTab('overview');},900);
 }
 
-function deleteEntry(key) {
-  if (!confirm('Delete this entry?')) return;
-  DATA = DATA.filter(function(r) { return (r.date+'_'+r.spent) !== key; });
-  saveData(DATA);
-  render();
+function showStatus(msg,type){
+  var el=document.getElementById('addStatus');
+  el.style.color=type==='ok'?'var(--g)':'var(--gold)';
+  el.textContent=msg;
+  setTimeout(function(){el.textContent='';},3000);
 }
 
-function showStatus(msg, type) {
-  var el = document.getElementById('addStatus');
-  var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
-  el.innerHTML = '<div style="font-size:.72rem;font-family:\'IBM Plex Mono\',monospace;color:'+col+'">'+msg+'</div>';
-  setTimeout(function(){ el.innerHTML = ''; }, 3000);
-}
-
-// ── Export CSV ─────────────────────────────────────────────
-function exportCSV() {
-  var sorted = DATA.slice().sort(function(a,b){ return a.date < b.date ? -1 : 1; });
-  var rows = ['Date,Type,Stake,Returned,P/L,Retrain,Notes'];
-  sorted.forEach(function(r) {
-    var pl = (r.won - r.spent).toFixed(2);
-    rows.push([r.date, r.type, r.spent.toFixed(2), r.won.toFixed(2), pl, r.retrain?'Yes':'No', '"'+(r.notes||'')+'"'].join(','));
+function exportCSV(){
+  var d=sortedData();
+  var rows=['Date,Type,Stake,Returned,P/L,Retrain,Notes'];
+  d.forEach(function(r){
+    var pl=(r.won-r.spent).toFixed(2);
+    rows.push([r.date,r.type,r.spent.toFixed(2),r.won.toFixed(2),pl,r.retrain?'Yes':'No','"'+(r.notes||'')+'"'].join(','));
   });
-  var blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  a.href = url; a.download = 'bet_results.csv';
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  var blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='bet_results.csv';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},200);
 }
 
-// ── Init ───────────────────────────────────────────────────
 render();
-window.addEventListener('resize', function(){ render(); });
+window.addEventListener('resize',function(){render();});
 </script>
 
 </body>
