@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>🏇 Racecourse Predictor</title>
+<title>🏇 Racecourse Predictor v4</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
@@ -238,7 +237,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- RACES -->
-
 <div class="scr on" id="s-races">
   <div class="card">
     <div class="ct">Load Racecard PDF</div>
@@ -266,7 +264,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PREDICT -->
-
 <div class="scr" id="s-predict">
   <div id="nosel" class="al alw">← Go to Races tab and select a race first.</div>
   <div id="rdet" style="display:none">
@@ -345,7 +342,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PLACEPOT -->
-
 <div class="scr" id="s-placepot">
   <div id="pp-nomodel" class="al alw" style="display:none">⚠ Load your trained model in Setup for best results.</div>
   <div id="pp-norace" class="al alw">← Load a PDF racecard first, then come back here.</div>
@@ -392,7 +388,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- SETUP -->
-
 <div class="scr" id="s-setup">
   <div class="card">
     <div class="ct">Trained Model</div>
@@ -419,7 +414,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- HELP -->
-
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
   <div style="padding-bottom:4px">
     <div class="h-sec">
@@ -773,19 +767,48 @@ function rawScoreMdl(r, race, ctx) {
   var t = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
   var dist = parseFloat(race.dist) || 10;
   var gs = gm[(r.going||'good').toLowerCase()] || 4;
-  var H = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
-  var J = js[j] || {r:1,w:0};
-  var T2 = ts[t] || {r:1,w:0};
+  var H = hs[h] || {r:1,w:0,p:0,rr:0,rw:0,rp:0,gw:{},dw:{},cw:{}};
+  var J = js[j] || {r:1,w:0,rr:0,rw:0};
+  var T2 = ts[t] || {r:1,w:0,rr:0,rw:0};
 
-  var wr   = H.w / Math.max(H.r, 1);
-  var pr   = H.p / Math.max(H.r, 1);
-  var jwr  = J.w / Math.max(J.r, 1);
-  var twr  = T2.w / Math.max(T2.r, 1);
+  var POP_WIN = m.popWinRate || 0.12;
+
+  // ── Recency-blended horse win/place rate ─────────────────────
+  // If model has recency fields (v3+), blend lifetime + recent.
+  // Falls back gracefully to lifetime-only for older models.
+  var HP = 8, RHP = 4;
+  var wr_life = H.w / Math.max(H.r, 1);
+  var pr_life = H.p / Math.max(H.r, 1);
+  var wr, pr;
+  if (H.rr > 0) {
+    var wr_rec = (H.rw + RHP * POP_WIN)   / (H.rr + RHP);
+    var pr_rec = (H.rp + RHP * POP_WIN * 2.5) / (H.rr + RHP);
+    wr = 0.4 * wr_life + 0.6 * wr_rec;
+    pr = 0.4 * pr_life + 0.6 * pr_rec;
+  } else {
+    wr = wr_life;
+    pr = pr_life;
+  }
+
+  // ── Jockey win rate — recency blend ─────────────────────────
+  var JP = 15;
+  var jwr_life = (J.w  + JP * 0.12) / (J.r  + JP);
+  var jwr = J.rr > 0
+    ? 0.5 * jwr_life + 0.5 * ((J.rw + 8 * 0.12) / (J.rr + 8))
+    : jwr_life;
+
+  // ── Trainer win rate — recency blend ─────────────────────────
+  var twr_life = (T2.w  + JP * 0.12) / (T2.r  + JP);
+  var twr = T2.rr > 0
+    ? 0.5 * twr_life + 0.5 * ((T2.rw + 8 * 0.12) / (T2.rr + 8))
+    : twr_life;
+
   var dd   = (cd[c]||{})[r.stall] || {r:1,w:0};
   var db   = dd.r > 2 ? dd.w / dd.r : 0.05;
-  var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1, 1), 1);
-  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1, 1), 1);
-  var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1, 1), 1);
+  var hw   = Math.max(H.rr > 0 ? H.rr : H.w, 1);
+  var gMch = Math.min(((H.gw||{})[gs]||0)   / (hw + 4), 1);
+  var dMch = Math.min(((H.dw||{})[dist]||0) / (hw + 4), 1);
+  var cMch = Math.min(((H.cw||{})[c]||0)    / (hw + 4), 1);
   var fr   = r.daysSince < 14 ? 1 : r.daysSince < 28 ? 0.8 : r.daysSince < 60 ? 0.5 : 0.2;
 
   // Market: implied probability share (real separation, not just rank position)
@@ -1689,6 +1712,5 @@ function runPlacepot() {
   sumEl.style.display='block';
 }
 </script>
-
 </body>
 </html>
