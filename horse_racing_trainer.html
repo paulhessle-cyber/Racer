@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Racing Model Trainer</title>
+<title>Racing Model Trainer v3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
@@ -153,7 +153,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER v2</span>
+  <span class="sub">DESKTOP MODEL BUILDER v3 — RECENCY WEIGHTED</span>
 </header>
 
 <div class="container">
@@ -185,9 +185,10 @@ header .sub {
       <button class="btn btn-g" id="surfTurf"  onclick="setSurface('turf')"  style="padding:8px 16px;flex:1">🌿 Turf</button>
       <button class="btn btn-o" id="surfAW"    onclick="setSurface('aw')"    style="padding:8px 16px;flex:1">🏟 All-Weather</button>
       <button class="btn btn-o" id="surfJumps" onclick="setSurface('jumps')" style="padding:8px 16px;flex:1">🏇 Jumps</button>
+      <button class="btn btn-o" id="surfAll"   onclick="setSurface('all')"   style="padding:8px 16px;flex:1">📊 All Data</button>
     </div>
     <div class="alert alert-i" id="surfAlert">
-      <strong>Turf mode:</strong> Filters to UK &amp; Ireland flat turf races only. Load raceform.csv or flat_turf_trainer.csv.
+      <strong>Turf mode:</strong> Loads all flat turf races (non-AW). Accepts all courses in the CSV — no horses are excluded by course name. Load raceform.csv or flat_turf_trainer.csv.
     </div>
 
     <table class="col-ref">
@@ -431,10 +432,12 @@ function setSurface(s) {
   document.getElementById('surfTurf').className  = s === 'turf'  ? 'btn btn-g' : 'btn btn-o';
   document.getElementById('surfAW').className    = s === 'aw'    ? 'btn btn-g' : 'btn btn-o';
   document.getElementById('surfJumps').className = s === 'jumps' ? 'btn btn-g' : 'btn btn-o';
+  document.getElementById('surfAll').className   = s === 'all'   ? 'btn btn-g' : 'btn btn-o';
   var alerts = {
-    turf:  '<strong>Turf mode:</strong> Filters to UK &amp; Ireland flat turf races only. Load raceform.csv.',
-    aw:    '<strong>All-Weather mode:</strong> Filters to UK &amp; Ireland AW flat races only (Chelmsford, Kempton, Lingfield, Newcastle, Southwell, Wolverhampton, Dundalk). Load raceform.csv.',
-    jumps: '<strong>Jumps mode:</strong> Filters to UK &amp; Ireland jump races (Chase, Hurdle, NH Flat) on turf. Load raceform.csv.'
+    turf:  '<strong>Turf mode:</strong> Loads all flat turf races (non-AW). Accepts all courses in the CSV — no horses are excluded by course name. Load raceform.csv.',
+    aw:    '<strong>All-Weather mode:</strong> Filters to AW flat races only (Chelmsford, Kempton, Lingfield, Newcastle, Southwell, Wolverhampton, Dundalk). Load raceform.csv.',
+    jumps: '<strong>Jumps mode:</strong> Loads all jump races (Chase, Hurdle, NH Flat) on turf — no courses excluded. Load raceform.csv.',
+    all:   '<strong>All Data mode:</strong> Loads every row in the CSV with no filtering — flat, jumps, turf and AW all included. Use this to build a general-purpose model across all race types.'
   };
   document.getElementById('surfAlert').innerHTML = alerts[s] || alerts.turf;
   // Reset data if already loaded
@@ -451,19 +454,23 @@ function setSurface(s) {
 var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1};
 
 function isValidRow(row) {
+  // All Data mode — no filtering at all
+  if (currentSurface === 'all') return true;
+
   var type   = (row.type   || '').toLowerCase().trim();
   var course = (row.course || '').toLowerCase().trim();
   var going  = (row.going  || '').toLowerCase().trim();
 
   if (currentSurface === 'jumps') {
-    // Jumps: must be a jump race type, turf only (no AW), UK/Ireland course
+    // Jumps: must be a jump race type, turf only (no AW)
+    // Accept ALL courses — the Kaggle CSV is UK/Ireland only
     if (!JUMPS_TYPES[type]) return false;
     if (course.indexOf('(aw)') !== -1) return false;
     if (AW_GOING_VALS[going]) return false;
-    return !!(TURF_COURSES[course] || course); // accept any UK/IRE course
+    return true; // any non-AW course is valid
   }
 
-  // Flat modes: must be flat
+  // Flat modes: must be flat (or no type field set)
   if (type && type !== 'flat') return false;
 
   if (currentSurface === 'aw') {
@@ -471,10 +478,11 @@ function isValidRow(row) {
     var isAWGoing  = AW_GOING_VALS[going];
     return isAWCourse || isAWGoing;
   } else {
-    // Turf flat
+    // Turf flat — exclude AW courses/goings, accept ALL other courses
+    // The Kaggle raceform CSV is UK/Ireland only, so no need to whitelist courses
     if (course.indexOf('(aw)') !== -1) return false;
     if (AW_GOING_VALS[going]) return false;
-    return !!TURF_COURSES[course];
+    return true; // accept any turf course
   }
 }
 
@@ -583,12 +591,12 @@ function showDataInfo(data, fname, totalRows) {
   var dateMin = data.reduce(function(m,r){ return (!m||r.date<m)?r.date:m; }, '');
   var dateMax = data.reduce(function(m,r){ return r.date>m?r.date:m; }, '');
 
-  var surfLabel = currentSurface === 'aw' ? 'all-weather' : currentSurface === 'jumps' ? 'jumps' : 'turf';
+  var surfLabel = currentSurface === 'aw' ? 'all-weather' : currentSurface === 'jumps' ? 'jumps' : currentSurface === 'all' ? 'all data' : 'turf';
   var filterNote = (totalRows > data.length)
     ? '<div class="alert alert-i" style="margin-top:10px;">&#128504; Auto-filtered: kept '
-      + data.length.toLocaleString() + ' UK &amp; Ireland ' + surfLabel + ' flat rows from '
-      + totalRows.toLocaleString() + ' total (' + (totalRows - data.length).toLocaleString() + ' removed).</div>'
-    : '<div class="alert alert-s" style="margin-top:10px;">&#10003; ' + data.length.toLocaleString() + ' UK &amp; Ireland ' + surfLabel + ' flat rows loaded.</div>';
+      + data.length.toLocaleString() + ' ' + surfLabel + ' rows from '
+      + totalRows.toLocaleString() + ' total (' + (totalRows - data.length).toLocaleString() + ' removed — wrong surface type).</div>'
+    : '<div class="alert alert-s" style="margin-top:10px;">&#10003; ' + data.length.toLocaleString() + ' ' + surfLabel + ' rows loaded.</div>';
 
   document.getElementById('dataStats').innerHTML =
     '<div class="stat-grid">'
@@ -702,6 +710,25 @@ async function trainModel() {
   var CD = {};  // course draw stats
   var horseLastRun = {};
 
+  // ── Recency decay ─────────────────────────────────────────────
+  // Each run is weighted by how recent it is relative to the latest
+  // date in the dataset.  Half-life = 180 days (≈ 6 months):
+  //   weight = 0.5^(age_days / 180)
+  // A run 180 days ago counts as 0.5, one year ago as 0.25, etc.
+  // This means a horse improving recently will score higher than
+  // one whose wins are all in the distant past.
+  var HALF_LIFE_DAYS = 180;
+  var latestDateStr  = sorted[sorted.length - 1] ? sorted[sorted.length - 1].date : '';
+  var latestDate     = latestDateStr ? new Date(latestDateStr) : new Date();
+
+  function recencyWeight(dateStr) {
+    if (!dateStr) return 0.5;
+    var d = new Date(dateStr);
+    if (isNaN(d)) return 0.5;
+    var ageDays = Math.max(0, (latestDate - d) / 86400000);
+    return Math.pow(0.5, ageDays / HALF_LIFE_DAYS);
+  }
+
   sorted.forEach(function(r) {
     // Strip country code from horse name for matching
     var h = (r.horse   || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
@@ -726,26 +753,39 @@ async function trainModel() {
     r._days = days;
     horseLastRun[h] = r.date;
 
-    // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
+    // Recency weight for this run
+    var rw = recencyWeight(r.date);
+
+    // Horse stats — raw counts (for Bayesian shrinkage) AND
+    // recency-weighted counts (rr/rw/rp) for form trajectory.
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, rr:0, rw:0, rp:0, gw:{}, dw:{}, cw:{} };
     HS[h].r++;
-    if (pos === 1)                     HS[h].w++;
-    if (pos <= 3 && pos > 0)           HS[h].p++;
+    HS[h].rr += rw;                          // weighted run count
     if (pos === 1) {
-      HS[h].gw[gs]   = (HS[h].gw[gs]   || 0) + 1;
-      HS[h].dw[dist] = (HS[h].dw[dist] || 0) + 1;
-      HS[h].cw[c]    = (HS[h].cw[c]    || 0) + 1;
+      HS[h].w++;
+      HS[h].rw += rw;                        // weighted win count
+    }
+    if (pos <= 3 && pos > 0) {
+      HS[h].p++;
+      HS[h].rp += rw;                        // weighted place count
+    }
+    if (pos === 1) {
+      HS[h].gw[gs]   = (HS[h].gw[gs]   || 0) + rw;
+      HS[h].dw[dist] = (HS[h].dw[dist] || 0) + rw;
+      HS[h].cw[c]    = (HS[h].cw[c]    || 0) + rw;
     }
 
-    // Jockey stats
-    if (!JS[j]) JS[j] = { r:0, w:0 };
+    // Jockey stats — also recency-weighted
+    if (!JS[j]) JS[j] = { r:0, w:0, rr:0, rw:0 };
     JS[j].r++;
-    if (pos === 1) JS[j].w++;
+    JS[j].rr += rw;
+    if (pos === 1) { JS[j].w++; JS[j].rw += rw; }
 
-    // Trainer stats
-    if (!TS[t]) TS[t] = { r:0, w:0 };
+    // Trainer stats — also recency-weighted
+    if (!TS[t]) TS[t] = { r:0, w:0, rr:0, rw:0 };
     TS[t].r++;
-    if (pos === 1) TS[t].w++;
+    TS[t].rr += rw;
+    if (pos === 1) { TS[t].w++; TS[t].rw += rw; }
 
     // Draw bias by course (only when draw is known)
     if (draw > 0) {
@@ -757,6 +797,7 @@ async function trainModel() {
   });
 
   pf.style.width = '30%';
+  log('Recency decay: half-life ' + HALF_LIFE_DAYS + ' days (runs >1yr ago count ~12%)', 'info');
   log('Horses tracked: '  + Object.keys(HS).length.toLocaleString(), 'ok');
   log('Jockeys tracked: ' + Object.keys(JS).length.toLocaleString(), 'ok');
   log('Trainers tracked: '+ Object.keys(TS).length.toLocaleString(), 'ok');
@@ -804,29 +845,47 @@ async function trainModel() {
     var gs   = goingScore(r.going);
     var draw = parseInt(r.draw) || 0;
 
-    var H = HS[h] || { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
-    var J = JS[j] || { r:0, w:0 };
-    var T = TS[t] || { r:0, w:0 };
+    var H = HS[h] || { r:0, w:0, p:0, rr:0, rw:0, rp:0, gw:{}, dw:{}, cw:{} };
+    var J = JS[j] || { r:0, w:0, rr:0, rw:0 };
+    var T = TS[t] || { r:0, w:0, rr:0, rw:0 };
 
-    // Horse win/place rate: prior weight = 8 runs worth of population average
+    // ── Horse win/place rate: blend lifetime + recency-weighted ──
+    // Lifetime rate uses Bayesian shrinkage (prior = 8 runs at pop avg).
+    // Recency-weighted rate gives more influence to recent form.
+    // Final rate = 40% lifetime + 60% recency-weighted, so a horse
+    // that's been winning lately beats one coasting on old results.
     var HP = 8;
-    var wr = (H.w + HP * POP_WIN)   / (H.r + HP);
-    var pr = (H.p + HP * POP_PLACE) / (H.r + HP);
+    var wr_life = (H.w + HP * POP_WIN)   / (H.r + HP);
+    var pr_life = (H.p + HP * POP_PLACE) / (H.r + HP);
 
-    // Jockey/trainer: prior = 15 rides at 12% (typical flat win rate)
+    // Recency-weighted rate (prior = 4 weighted runs at pop avg)
+    var RHP = 4;
+    var wr_rec = (H.rw + RHP * POP_WIN)   / (H.rr + RHP);
+    var pr_rec = (H.rp + RHP * POP_PLACE) / (H.rr + RHP);
+
+    // Blend: 40% lifetime, 60% recent
+    var wr = 0.4 * wr_life + 0.6 * wr_rec;
+    var pr = 0.4 * pr_life + 0.6 * pr_rec;
+
+    // Jockey/trainer: same recency blend
     var JP = 15;
-    var jwr = (J.w + JP * 0.12) / (J.r + JP);
-    var twr = (T.w + JP * 0.12) / (T.r + JP);
+    var jwr_life = (J.w  + JP * 0.12) / (J.r  + JP);
+    var jwr_rec  = (J.rw + 8  * 0.12) / (J.rr + 8);
+    var jwr = 0.5 * jwr_life + 0.5 * jwr_rec;
+
+    var twr_life = (T.w  + JP * 0.12) / (T.r  + JP);
+    var twr_rec  = (T.rw + 8  * 0.12) / (T.rr + 8);
+    var twr = 0.5 * twr_life + 0.5 * twr_rec;
 
     // Draw bias: only use when 4+ samples at this stall on this course
     var dd = draw > 0 ? ((CD[c] || {})[draw] || { r:0, w:0 }) : { r:0, w:0 };
     var db = dd.r >= 4 ? dd.w / dd.r : POP_WIN;
 
-    // Going/distance/course preference: shrink toward 0 when wins are few
-    var hw = Math.max(H.w, 1);
-    var gm = (H.gw[gs]   || 0) / (hw + 4);
-    var dm = (H.dw[dist] || 0) / (hw + 4);
-    var cm = (H.cw[c]    || 0) / (hw + 4);
+    // Going/distance/course preference: use recency-weighted wins as numerator
+    var hw = Math.max(H.rr, 1);
+    var gm = ((H.gw[gs]   || 0)) / (hw + 4);
+    var dm = ((H.dw[dist] || 0)) / (hw + 4);
+    var cm = ((H.cw[c]    || 0)) / (hw + 4);
 
     // Freshness (days since last run)
     var days = r._days || 21;
@@ -924,11 +983,19 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw };
+    // rr/rw/rp = recency-weighted run/win/place counts (half-life 180 days)
+    HS_compact[h] = {
+      r:s.r, w:s.w, p:s.p,
+      rr:parseFloat((s.rr||0).toFixed(3)),
+      rw:parseFloat((s.rw||0).toFixed(3)),
+      rp:parseFloat((s.rp||0).toFixed(3)),
+      gw:s.gw, dw:s.dw, cw:s.cw
+    };
   });
 
   trainedModel = {
-    version:           '2.1',
+    version:           '3.0',
+    recencyHalfLifeDays: HALF_LIFE_DAYS,
     created:           new Date().toISOString(),
     surface:           currentSurface,
     trainingRecords:   rawData.length,
