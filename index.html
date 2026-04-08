@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -237,6 +238,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- RACES -->
+
 <div class="scr on" id="s-races">
   <div class="card">
     <div class="ct">Load Racecard PDF</div>
@@ -264,6 +266,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PREDICT -->
+
 <div class="scr" id="s-predict">
   <div id="nosel" class="al alw">← Go to Races tab and select a race first.</div>
   <div id="rdet" style="display:none">
@@ -275,7 +278,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       </div>
       <div style="flex-shrink:0">
         <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going</div>
-        <select id="gsel">
+        <select id="gsel" onchange="S.goingSet=true">
           <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
           <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
           <option disabled>── All-Weather ──</option>
@@ -342,6 +345,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- PLACEPOT -->
+
 <div class="scr" id="s-placepot">
   <div id="pp-nomodel" class="al alw" style="display:none">⚠ Load your trained model in Setup for best results.</div>
   <div id="pp-norace" class="al alw">← Load a PDF racecard first, then come back here.</div>
@@ -388,6 +392,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- SETUP -->
+
 <div class="scr" id="s-setup">
   <div class="card">
     <div class="ct">Trained Model</div>
@@ -414,6 +419,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 </div>
 
 <!-- HELP -->
+
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
   <div style="padding-bottom:4px">
     <div class="h-sec">
@@ -589,7 +595,9 @@ function parseRunnerLine(line) {
   var daysSince = daysM ? parseInt(daysM[1]) : 21;
   var fClean = form.replace(/\d+$/, '').replace(/[^0-9PFpUuRr/\-]/g, '');
   return { stall, draw, form, name, age, wst, wlbs, jockey, or: OR,
-           daysSince, rf: parseForm(fClean), odds: 0, _pace: classifyPace(fClean) };
+           daysSince, rf: parseForm(fClean), odds: 0,
+           _pace: classifyPace(fClean),
+           _traj: formTrajectory(fClean) };
 }
 
 function parseForm(f) {
@@ -597,6 +605,47 @@ function parseForm(f) {
   var w = 0, p = 0, r = 0;
   chars.forEach(function(c){ var n = parseInt(c); if (isNaN(n)) return; r++; if (n===1) w++; if (n<=3&&n>0) p++; });
   return { w, p, r: Math.max(r, 1) };
+}
+
+// ── Form trajectory ────────────────────────────────────────
+// Looks at the last 5 numeric form figures and measures whether
+// the horse is improving or declining.
+//
+// Method: compare the average of the most recent half vs the older
+// half. Lower position = better, so declining avg position = improving.
+//
+// Returns a multiplier:
+//   > 1.0  = improving form (reward)
+//   < 1.0  = declining form (penalise)
+//   = 1.0  = flat / insufficient data
+//
+// Examples:
+//   9,5,2,1  → avg(9,5)=7  vs avg(2,1)=1.5  → big improvement → 1.10
+//   1,1,1,7,8 → avg(1,1,1)=1 vs avg(7,8)=7.5 → declining        → 0.91
+//   3,2,4,3   → avg(3,2)=2.5 vs avg(4,3)=3.5 → slight improve   → 1.03
+function formTrajectory(formStr) {
+  if (!formStr) return 1.0;
+  var chars = formStr.replace(/[-/PFpUuRrBbCcDd]/g, '').split('').filter(function(c){ return /\d/.test(c); });
+  if (chars.length < 3) return 1.0;  // not enough data to judge trend
+
+  // Use last 5 figures, split older half vs recent half
+  var figs = chars.slice(-5).map(Number);
+  var mid  = Math.floor(figs.length / 2);
+  var older  = figs.slice(0, mid);
+  var recent = figs.slice(mid + (figs.length % 2));  // skip middle figure if odd length
+
+  if (!older.length || !recent.length) return 1.0;
+
+  var avgOlder  = older.reduce(function(s,n){ return s+n; }, 0) / older.length;
+  var avgRecent = recent.reduce(function(s,n){ return s+n; }, 0) / recent.length;
+
+  // diff > 0 means older avg was worse (higher position number) = improving
+  var diff = avgOlder - avgRecent;
+
+  // Scale: each position-number improvement per run = ~1.5% multiplier
+  // Cap at ±10% so it influences but doesn't dominate
+  var mult = 1.0 + Math.max(-0.10, Math.min(0.10, diff * 0.015));
+  return mult;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -830,8 +879,9 @@ function rawScoreMdl(r, race, ctx) {
            + mktShr  * 0.28         // implied prob share — main signal
            + orRank  * 0.11;        // OR rank in field
 
-  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  return base * mvMult;
+  var mvMult   = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  var trajMult = r._traj || 1.0;
+  return base * mvMult * trajMult;
 }
 
 function rawScoreDef(r, race, ctx) {
@@ -842,8 +892,9 @@ function rawScoreDef(r, race, ctx) {
   var fr = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
   var base = orRank*0.25 + wr*0.09 + pr*0.07 + mktShr*0.38 + fr*0.09 + (isTip ? 0.07 : 0);
-  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  return base * mvMult;
+  var mvMult   = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  var trajMult = r._traj || 1.0;
+  return base * mvMult * trajMult;
 }
 
 // ── Main prediction entry point ────────────────────────────
@@ -1129,6 +1180,7 @@ function showResults(scored, val, race, paceInfo) {
     + row('Draw / stall', w.stall)
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
+    + row('Form trend', w._traj >= 1.04 ? '▲ Improving' : w._traj <= 0.96 ? '▼ Declining' : '~ Consistent')
     + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
     + row('Pace scenario', paceInfo.scenario === 'lone_front' ? '✅ Lone leader' : paceInfo.scenario === 'contested' ? '⚠ Contested' : paceInfo.scenario === 'slow' ? '🟣 Slow' : '—')
     + row('Confidence', '<span style="color:#1a6b3a">' + conf + '%</span>')
@@ -1163,11 +1215,14 @@ function showResults(scored, val, race, paceInfo) {
   scored.forEach(function(r, i) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
     var paceLbl = r._pace === 'front' ? ' <span class="mk front">▶</span>' : r._pace === 'closer' ? ' <span class="mk closer">◀</span>' : '';
+    var trajLbl = r._traj >= 1.04 ? ' <span class="mk tip" style="font-size:.5rem">▲</span>'
+                : r._traj <= 0.96 ? ' <span class="mk" style="font-size:.5rem;border-color:#ff5252;color:#ff5252">▼</span>'
+                : '';
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + trajLbl + mvLbl + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
       + '</div>'
       + '<div class="rr">'
@@ -1233,7 +1288,13 @@ function selRace(i) {
   S.sel = S.races[i];
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
-  if (S.model) { document.getElementById('gsel').value = S.model.surface==='aw' ? 'Standard' : 'Good'; }
+  // Only auto-set going if the user has not yet chosen one this session.
+  // Once they touch the selector (or we set it once), S.goingSet = true.
+  if (!S.goingSet) {
+    var defaultGoing = S.model ? (S.model.surface==='aw' ? 'Standard' : 'Good') : 'Good';
+    document.getElementById('gsel').value = defaultGoing;
+    S.goingSet = true;
+  }
   go('predict');
 }
 
@@ -1252,13 +1313,16 @@ function renderPredict(race) {
     var isWatch = race.watchFor && race.watchFor.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
     var mk = isTip ? '<span class="mk tip">ATR TIP</span>' : isWatch ? '<span class="mk wch">WATCH</span>' : '';
     var paceMk = r._pace === 'front' ? '<span class="mk front">▶ FRONT</span>' : r._pace === 'closer' ? '<span class="mk closer">◀ CLOSER</span>' : '';
+    var trajMk = r._traj >= 1.04 ? '<span class="mk tip" style="background:rgba(0,230,118,.12)">▲ IN FORM</span>'
+               : r._traj <= 0.96 ? '<span class="mk" style="border-color:#ff5252;color:#ff5252;background:rgba(255,82,82,.08)">▼ OUT OF FORM</span>'
+               : '';
     var jClm = r.jockey.match(/(\d+)\)/), jn = r.jockey.replace(/\s*\(\d+\)/,'');
     var claim = jClm ? ' ('+jClm[1]+'lb)' : '';
     var d = document.createElement('div');
     d.className = 're'; if (r._nr) d.classList.add('nr');
     d.innerHTML = '<div class="sn">'+r.stall+'</div>'
       +'<div class="hh"><div class="hn">'+r.name+'</div>'
-      +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
+      +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+trajMk+'</div>'
       +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
       +'<div style="flex:1"><label>Decimal Odds</label>'
@@ -1712,5 +1776,6 @@ function runPlacepot() {
   sumEl.style.display='block';
 }
 </script>
+
 </body>
 </html>
