@@ -1668,8 +1668,9 @@ function addRunner() {
   if (!jock) { alert('Please enter a jockey name'); return; }
   var used=race.runners.map(function(r){return r.stall;});
   while (used.indexOf(stall)!==-1) stall++;
-  race.runners.push({ stall,draw:stall,name,jockey:jock,or:OR,age,wst:9,wlbs:0,daysSince:days,form:'',rf:{w:0,p:0,r:1},odds:0,isAdded:true,_pace:'mid' });
+  race.runners.push({ stall,draw:stall,name,jockey:jock,or:OR,age,wst:9,wlbs:0,daysSince:days,form:'',rf:{w:0,p:0,r:1},odds:0,isAdded:true,_pace:'mid',_traj:1.0 });
   renderPredict(race);
+  if (S.model) setTimeout(initAC, 0);  // re-attach AC listeners after DOM rebuild
   setTimeout(function(){ var el=document.getElementById('od_'+stall); if(el) el.closest('.re').scrollIntoView({behavior:'smooth',block:'center'}); },100);
   ['arHorse','arJockey','arStall','arOR','arAge','arDays'].forEach(function(id){ document.getElementById(id).value=''; });
   ['horseStatus','jockeyStatus'].forEach(function(id){ document.getElementById(id).innerHTML=''; });
