@@ -78,6 +78,16 @@ canvas{width:100%!important;height:100%!important}
 .toggle-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;pointer-events:none}
 .toggle input:checked~.toggle-thumb{left:21px}
 .add-status{min-height:20px;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:.75rem}
+.edit-panel{display:none;background:#0a0f0d;border-top:1px solid var(--bd);padding:12px;margin-top:2px;border-radius:0 0 10px 10px}
+.edit-panel.open{display:block}
+.edit-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.edit-inp{width:100%;background:var(--sf);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.9rem;padding:9px 10px;outline:none;-webkit-appearance:none}
+.edit-inp:focus{border-color:var(--g)}
+.edit-inp.gold{color:var(--gold)}
+.edit-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.edit-save{background:var(--g);color:var(--bg);border:none;border-radius:7px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;width:100%}
+.edit-cancel{background:transparent;color:var(--mt);border:1px solid var(--bd);border-radius:7px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;width:100%}
+.day-edit{background:transparent;border:none;color:var(--mt);font-size:.85rem;cursor:pointer;padding:6px;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -386,15 +396,36 @@ function renderLog(){
     document.getElementById('logCards').innerHTML='<div style="color:var(--mt);font-size:.85rem;padding:20px;text-align:center">No results yet.</div>';
     return;
   }
+  // Use index in DATA array as stable key
+  var asc=sortedData();
   document.getElementById('logCards').innerHTML=d.map(function(r){
+    var idx=DATA.indexOf(r); // original index
     var pl=r.won-r.spent;
     var plStr=(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2);
     var dt=new Date(r.date);
     var ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+dt.getFullYear();
     var retDot=r.retrain?'<span class="retrain-dot"></span>':'';
     var notes=r.notes?'<div class="day-notes">'+r.notes+'</div>':'';
-    var key=r.date+'||'+r.spent;
-    return'<div class="day-card '+(pl>0?'win':'loss')+(r.retrain?' retrain':'')+'">'
+    // Edit panel pre-filled with current values
+    var editPanel=
+      '<div class="edit-panel" id="ep_'+idx+'">'
+        +'<div class="edit-row">'
+          +'<div><div class="fl">Stake £</div>'
+            +'<input class="edit-inp gold" id="es_'+idx+'" type="number" min="0" step="0.5" inputmode="decimal" value="'+r.spent.toFixed(2)+'">'
+          +'</div>'
+          +'<div><div class="fl">Returned £</div>'
+            +'<input class="edit-inp gold" id="ew_'+idx+'" type="number" min="0" step="0.01" inputmode="decimal" value="'+r.won.toFixed(2)+'">'
+          +'</div>'
+        +'</div>'
+        +'<div style="margin-bottom:8px"><div class="fl">Notes</div>'
+          +'<input class="edit-inp" id="en_'+idx+'" type="text" value="'+((r.notes||'').replace(/'/g,"&#39;"))+'">'
+        +'</div>'
+        +'<div class="edit-btns">'
+          +'<button class="edit-save" onclick="saveEdit('+idx+')">✓ Save</button>'
+          +'<button class="edit-cancel" onclick="closeEdit('+idx+')">Cancel</button>'
+        +'</div>'
+      +'</div>';
+    return'<div class="day-card '+(pl>0?'win':'loss')+(r.retrain?' retrain':'')+'" id="dc_'+idx+'" style="flex-wrap:wrap;align-items:flex-start">'
       +'<div style="flex:1;min-width:0">'
         +'<div class="day-date">'+ds+retDot+'</div>'
         +'<div class="day-type">'+r.type+'</div>'
@@ -405,15 +436,48 @@ function renderLog(){
         +'<div class="day-stake">Staked £'+r.spent.toFixed(2)+'</div>'
         +'<div class="day-stake">Ret £'+r.won.toFixed(2)+'</div>'
       +'</div>'
-      +'<button class="day-del" onclick="delEntry(\''+key+'\')">✕</button>'
+      +'<div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">'
+        +'<button class="day-edit" onclick="toggleEdit('+idx+')" title="Edit">✏️</button>'
+        +'<button class="day-del"  onclick="delEntry('+idx+')"   title="Delete">✕</button>'
+      +'</div>'
+      +'<div style="width:100%">'+editPanel+'</div>'
       +'</div>';
   }).join('');
 }
 
-function delEntry(key){
+function toggleEdit(idx){
+  var panel=document.getElementById('ep_'+idx);
+  if(!panel)return;
+  var isOpen=panel.classList.contains('open');
+  // Close all other open panels first
+  document.querySelectorAll('.edit-panel.open').forEach(function(p){p.classList.remove('open');});
+  if(!isOpen){
+    panel.classList.add('open');
+    // Focus the returned field since that's most likely what needs fixing
+    var ew=document.getElementById('ew_'+idx);
+    if(ew){setTimeout(function(){ew.focus();ew.select();},80);}
+  }
+}
+
+function closeEdit(idx){
+  var panel=document.getElementById('ep_'+idx);
+  if(panel)panel.classList.remove('open');
+}
+
+function saveEdit(idx){
+  var r=DATA[idx];
+  if(!r)return;
+  var newSpent=parseFloat(document.getElementById('es_'+idx).value);
+  var newWon  =parseFloat(document.getElementById('ew_'+idx).value)||0;
+  var newNotes=document.getElementById('en_'+idx).value.trim();
+  if(isNaN(newSpent)||newSpent<=0){alert('Stake must be greater than zero.');return;}
+  DATA[idx]=Object.assign({},r,{spent:newSpent,won:newWon,notes:newNotes});
+  save();render();renderLog();
+}
+
+function delEntry(idx){
   if(!confirm('Delete this entry?'))return;
-  var p=key.split('||');
-  DATA=DATA.filter(function(r){return!(r.date===p[0]&&r.spent===parseFloat(p[1]));});
+  DATA.splice(idx,1);
   save();render();renderLog();
 }
 
