@@ -40,7 +40,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 8px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .re{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
-.re .sn{position:absolute;top:8px;right:10px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--bd);pointer-events:none}
+.re .sn{position:absolute;top:8px;right:10px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--mt);pointer-events:none}
 .re .hn{font-size:.88rem;font-weight:600;color:var(--tx)}
 .re .orb{font-family:'IBM Plex Mono',monospace;font-size:.63rem;padding:2px 6px;border-radius:4px;background:#0a0f0d;color:var(--mt);border:1px solid var(--bd)}
 .re .hh{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
@@ -62,6 +62,11 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .mk.closer{background:rgba(124,77,255,.15);color:var(--closer)}
 .mk.steam{background:rgba(0,176,255,.15);color:#00b0ff}
 .mk.drift{background:rgba(255,109,0,.15);color:#ff6d00}
+.mk.stamina{background:rgba(0,230,118,.15);color:#00e676}
+.mk.nostamina{background:rgba(255,82,82,.12);color:#ff5252}
+.mk.grinder{background:rgba(124,77,255,.15);color:#b39ddb}
+.ld-banner{background:linear-gradient(135deg,rgba(255,193,7,.10),rgba(255,193,7,.03));border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.ld-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--gold);letter-spacing:2px;margin-bottom:8px}
 .rwin{background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,230,118,.02));border:2px solid var(--g);border-radius:12px;padding:18px;margin-bottom:12px}
 .rval{background:linear-gradient(135deg,rgba(255,193,7,.07),rgba(255,193,7,.02));border:2px solid var(--gold);border-radius:12px;padding:18px;margin-bottom:12px;position:relative;padding-top:22px}
 .vflag{position:absolute;top:-10px;left:16px;background:var(--gold);color:var(--bg);font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
@@ -649,7 +654,102 @@ function formTrajectory(formStr) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ── PACE CLASSIFICATION ───────────────────────────────────
+// ── LONG DISTANCE MODE (3m+ / 24f+) ──────────────────────
+//
+// Activated automatically when race distance ≥ 24 furlongs.
+// All signals read automatically from:
+//   - model.horseStats[h].bd  — best proven distance (furlongs)
+//   - model.horseStats[h].xd  — ran ≥ 3m4f / National-type
+//   - model.horseStats[h].fc  — non-finish count (falls/PU)
+//   - model.horseStats[h].cr  — completion rate
+//   - form string              — grinder/fader pattern
+// ══════════════════════════════════════════════════════════
+
+function parseDistFurlongs(distStr) {
+  if (!distStr) return 0;
+  var s = String(distStr).toLowerCase().replace(/,/g,'').trim();
+  var miles = 0, furlongs = 0;
+  var mM = s.match(/(\d+(?:\.\d+)?)\s*m/);
+  var fM = s.match(/(\d+(?:\.\d+)?)\s*f/);
+  if (mM) miles    = parseFloat(mM[1]);
+  if (fM) furlongs = parseFloat(fM[1]);
+  return miles * 8 + furlongs;
+}
+
+function isLongDistance(race) {
+  return parseDistFurlongs(race.dist) >= 24;
+}
+
+function longDistanceOverlay(runner, raceFurlongs) {
+  var name = runner.name.toLowerCase();
+  var H    = (S.model && S.model.horseStats) ? (S.model.horseStats[name] || null) : null;
+  var form = runner.form || '';
+  var fClean = form.replace(/\d+$/, '');
+
+  // ── 1. Stamina score from best proven distance ────────────
+  // bd = best distance the horse has FINISHED at (furlongs)
+  var bd = H ? (H.bd || 0) : 0;
+  var staminaMult, staminaLabel;
+  if (bd >= 30) {
+    staminaMult  = 1.18; staminaLabel = '3m6f+ proven';       // Won/placed 3m6f+
+  } else if (bd >= 26) {
+    staminaMult  = 1.10; staminaLabel = '3m2f–3m5f proven';   // Strong staying form
+  } else if (bd >= 24) {
+    staminaMult  = 1.02; staminaLabel = '3m form only';       // Borderline
+  } else if (bd >= 16 && bd < 24) {
+    staminaMult  = 0.90; staminaLabel = 'Unproven over trip'; // Speed horse
+  } else if (bd === 0) {
+    staminaMult  = 1.00; staminaLabel = 'Unknown';            // Not in model
+  } else {
+    staminaMult  = 0.88; staminaLabel = 'Short-trip horse';   // All flat/short form
+  }
+
+  // ── 2. Marathon experience bonus ─────────────────────────
+  var expMult = (H && H.xd) ? 1.05 : 1.0;
+
+  // ── 3. Completion / safety score ─────────────────────────
+  // cr = completion rate from training data (0–1)
+  // fc = total non-finish count
+  var cr = H ? (H.cr !== undefined ? H.cr : 1.0) : 1.0;
+  var fc = H ? (H.fc || 0) : 0;
+  // Penalise poor completers — each percentage point below 80% costs ~0.4%
+  // Also penalise raw fall count (capped — old falls matter less)
+  var safetyMult = Math.max(0.80,
+    (cr >= 0.80 ? 1.0 : 1.0 - (0.80 - cr) * 0.4)
+    * Math.max(0.88, 1.0 - Math.min(fc, 5) * 0.025)
+  );
+
+  // ── 4. Grinder vs fader from form figures ────────────────
+  var figs = fClean.replace(/[-/PFpUuBbCcDd]/g,'').split('')
+    .filter(function(c){ return /\d/.test(c); }).slice(-6).map(Number);
+  var finishMult = 1.0;
+  var isGrinder = false, isFader = false;
+  if (figs.length >= 4) {
+    var half     = Math.floor(figs.length / 2);
+    var avgEarly = figs.slice(0, half).reduce(function(s,n){return s+n;},0) / half;
+    var avgLate  = figs.slice(half).reduce(function(s,n){return s+n;},0) / (figs.length - half);
+    var trend    = avgEarly - avgLate; // positive = finishes better = grinder
+    if (trend >= 1.5)  { isGrinder = true; finishMult = 1.07; }
+    else if (trend <= -1.5) { isFader = true; finishMult = 0.93; }
+  }
+
+  // ── Combine ───────────────────────────────────────────────
+  var combined = staminaMult * expMult * safetyMult * finishMult;
+
+  // ── Badges for display ────────────────────────────────────
+  var badges = [];
+  if (bd >= 30)              badges.push({cls:'stamina',    txt:'🏅 STAYS 3m6f+'});
+  else if (bd >= 26)         badges.push({cls:'stamina',    txt:'✓ STAYS 3m+'});
+  else if (bd > 0 && bd < 24) badges.push({cls:'nostamina', txt:'⚠ UNPROVEN DIST'});
+  if (H && H.xd)             badges.push({cls:'tip',        txt:'🏇 NATIONAL EXP'});
+  if (isGrinder)             badges.push({cls:'grinder',    txt:'⬆ GRINDER'});
+  if (isFader)               badges.push({cls:'nostamina',  txt:'⬇ FADER'});
+  if (fc >= 3)               badges.push({cls:'nostamina',  txt:'⚠ ' + fc + ' NON-FINISHES'});
+  else if (fc >= 1)          badges.push({cls:'nostamina',  txt:'⚠ ' + fc + ' FALL/PU'});
+  if (cr < 0.70 && H)       badges.push({cls:'nostamina',  txt:'⚠ POOR COMPLETER'});
+
+  return { multiplier: combined, staminaLabel, badges };
+}
 //
 // Reads the form string and classifies each horse as:
 //   'front'  — likely to lead or race prominently
@@ -916,13 +1016,24 @@ function predict() {
     r.going = going;
   });
 
-  var paceInfo = assessPace(activeRunners);
-  var ctx = buildFieldCtx(activeRunners);
+  var raceFurlongs = parseDistFurlongs(race.dist);
+  var ldMode       = raceFurlongs >= 24;
+  var paceInfo     = assessPace(activeRunners);
+  var ctx          = buildFieldCtx(activeRunners);
 
-  // Raw scores with pace adjustment
+  // Compute LD overlay per runner upfront (also stores badges)
+  if (ldMode) {
+    activeRunners.forEach(function(r) {
+      r._ldOverlay = longDistanceOverlay(r, raceFurlongs);
+    });
+  }
+
+  // Raw scores with pace + LD adjustment
   var rawArr = activeRunners.map(function(r) {
     var raw = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
-    return raw * paceAdjust(r, paceInfo);
+    var score = raw * paceAdjust(r, paceInfo);
+    if (ldMode && r._ldOverlay) score *= r._ldOverlay.multiplier;
+    return score;
   });
 
   // Power-curve probabilities (gives spread)
@@ -938,7 +1049,7 @@ function predict() {
     if (scored[i].odds >= 9) { valueBet = scored[i]; break; }
   }
 
-  showResults(scored, valueBet, race, paceInfo);
+  showResults(scored, valueBet, race, paceInfo, ldMode);
 }
 
 // ── Bet Advisor ────────────────────────────────────────────
@@ -1155,7 +1266,7 @@ function row(label, val) {
   return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
 }
 
-function showResults(scored, val, race, paceInfo) {
+function showResults(scored, val, race, paceInfo, ldMode) {
   // Store for stake refresh
   S._lastScored    = scored;
   S._lastFieldSize = scored.length;
@@ -1166,21 +1277,38 @@ function showResults(scored, val, race, paceInfo) {
 
   if (!S.model) h += '<div class="al ali">Using default weights — load a trained model in Setup for better accuracy.</div>';
 
+  // Long distance mode notice
+  if (ldMode) {
+    h += '<div class="al" style="background:rgba(255,193,7,.08);border-color:var(--gold);color:#ffe082;margin-bottom:10px">'
+      + '🏅 <strong>Long Distance Mode active.</strong> Stamina, finishing style, jumping safety and prep race flags are all weighted into these scores.</div>';
+  }
+
   // Pace banner
   h += paceBannerHTML(paceInfo);
 
   // Winner card
   var paceMk = w._pace === 'front' ? '<span class="mk front" style="margin-left:6px">▶ FRONT</span>'
              : w._pace === 'closer' ? '<span class="mk closer" style="margin-left:6px">◀ CLOSER</span>' : '';
+
+  // LD badges for winner
+  var ldBadgeHtml = '';
+  if (ldMode && w._ldOverlay && w._ldOverlay.badges.length) {
+    ldBadgeHtml = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0">'
+      + w._ldOverlay.badges.map(function(b){ return '<span class="mk '+b.cls+'">'+b.txt+'</span>'; }).join('')
+      + '</div>';
+  }
+
   h += '<div class="rwin">'
     + '<div class="slbl">🏆 Predicted Winner</div>'
     + '<div class="bn gn">' + w.name + paceMk + '</div>'
+    + ldBadgeHtml
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
     + row('Jockey', w.jockey.replace(/\s*\(\d+\)/,'') || '—')
     + row('Draw / stall', w.stall)
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
     + row('Form trend', w._traj >= 1.04 ? '▲ Improving' : w._traj <= 0.96 ? '▼ Declining' : '~ Consistent')
+    + (ldMode && w._ldOverlay ? row('Stamina rating', w._ldOverlay.staminaLabel) : '')
     + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
     + row('Pace scenario', paceInfo.scenario === 'lone_front' ? '✅ Lone leader' : paceInfo.scenario === 'contested' ? '⚠ Contested' : paceInfo.scenario === 'slow' ? '🟣 Slow' : '—')
     + row('Confidence', '<span style="color:#1a6b3a">' + conf + '%</span>')
@@ -1218,11 +1346,17 @@ function showResults(scored, val, race, paceInfo) {
     var trajLbl = r._traj >= 1.04 ? ' <span class="mk tip" style="font-size:.5rem">▲</span>'
                 : r._traj <= 0.96 ? ' <span class="mk" style="font-size:.5rem;border-color:#ff5252;color:#ff5252">▼</span>'
                 : '';
+    var ldLbl = '';
+    if (ldMode && r._ldOverlay && r._ldOverlay.badges.length) {
+      ldLbl = ' ' + r._ldOverlay.badges.slice(0,2).map(function(b){
+        return '<span class="mk '+b.cls+'" style="font-size:.5rem">'+b.txt+'</span>';
+      }).join(' ');
+    }
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + trajLbl + mvLbl + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + trajLbl + ldLbl + mvLbl + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
       + '</div>'
       + '<div class="rr">'
@@ -1307,6 +1441,21 @@ function renderPredict(race) {
   document.getElementById('rttl').textContent = race.title || '';
   document.getElementById('rdst').textContent = race.dist + (race.cls?' · Class '+race.cls:'') + ' · ' + race.runners.length + ' runners';
   var c = document.getElementById('prun'); c.innerHTML = '';
+
+  var ldMode = isLongDistance(race);
+
+  // Show/hide long distance notice banner
+  var ldNotice = document.getElementById('ldNotice');
+  if (!ldNotice) {
+    ldNotice = document.createElement('div');
+    ldNotice.id = 'ldNotice';
+    c.parentNode.insertBefore(ldNotice, c);
+  }
+  ldNotice.innerHTML = ldMode
+    ? '<div class="ld-banner"><div class="ld-title">🏅 Long Distance Mode — ' + race.dist + '</div>'
+      + '<div style="font-size:.75rem;color:var(--tx);line-height:1.5">Stamina overlay active. Proven distance, completion rate, marathon experience and finishing style are all read automatically from your trained model.</div></div>'
+    : '';
+
   if (!race.runners.length) { c.innerHTML = '<div class="al alw">No runners extracted.</div>'; return; }
   race.runners.forEach(function(r) {
     var isTip   = race.topTip   && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
