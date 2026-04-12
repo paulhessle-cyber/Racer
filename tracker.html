@@ -156,12 +156,12 @@ canvas{width:100%!important;height:100%!important}
     </div>
     <div class="fl">Notes</div>
     <input class="fi" type="text" id="fNotes" placeholder="e.g. 3/6 placepot, 2 wins…">
-    <div class="retrain-row">
-      <label for="fRetrain">Model retrained today</label>
-      <div class="toggle">
-        <input type="checkbox" id="fRetrain">
-        <div class="toggle-track"></div>
-        <div class="toggle-thumb"></div>
+    <div class="retrain-row" onclick="document.getElementById('fRetrain').click()" style="cursor:pointer">
+      <label style="cursor:pointer;pointer-events:none">Model retrained today</label>
+      <div class="toggle" style="pointer-events:none">
+        <input type="checkbox" id="fRetrain" style="display:none">
+        <div class="toggle-track" id="toggleTrack"></div>
+        <div class="toggle-thumb" id="toggleThumb"></div>
       </div>
     </div>
     <button class="btn bg" onclick="addEntry()">+ Add Result</button>
@@ -245,8 +245,10 @@ function calc(data){
   });
   var net=won-spent;
   var last5=data.slice(-5).reduce(function(s,r){return s+(r.won-r.spent);},0);
+  var uniqueDays=Object.keys(data.reduce(function(m,r){m[r.date]=1;return m;},{})).length;
   return{
-    days:data.length,spent:Math.round(spent*100)/100,won:Math.round(won*100)/100,
+    days:data.length,uniqueDays:uniqueDays,
+    spent:Math.round(spent*100)/100,won:Math.round(won*100)/100,
     net:Math.round(net*100)/100,roi:Math.round(net/spent*10000)/100,
     winDays,lossDays,running,
     best:Math.round(best*100)/100,worst:Math.round(worst*100)/100,
@@ -269,10 +271,10 @@ function render(){
 
   document.getElementById('heroVal').textContent=(s.net>=0?'+':'')+'£'+Math.abs(s.net).toFixed(2);
   document.getElementById('heroVal').className='hero-val '+(s.net>=0?'pos':'neg');
-  document.getElementById('heroSub').textContent=s.days+' days · £'+s.spent.toFixed(2)+' staked · '+s.roi.toFixed(1)+'% ROI';
+  document.getElementById('heroSub').textContent=s.days+' bets · '+s.uniqueDays+' days · £'+s.spent.toFixed(2)+' staked · '+s.roi.toFixed(1)+'% ROI';
 
   document.getElementById('statsTop').innerHTML=
-    sbox(s.winDays+'/'+s.days,'Win Days','wh')+
+    sbox(s.winDays+'/'+s.uniqueDays,'Win Days','wh')+
     sbox(s.roi.toFixed(1)+'%','ROI',s.roi>=0?'pos':'neg')+
     sbox('£'+s.avgStake.toFixed(2),'Avg Stake','neu');
   document.getElementById('statsBot').innerHTML=
@@ -282,9 +284,9 @@ function render(){
   var tEl=document.getElementById('trendWrap');
   if(s.days>=3){
     var tc,tt;
-    if(s.last5>2){tc='up';tt='▲ Last 5 days: +£'+s.last5.toFixed(2)+' — improving';}
-    else if(s.last5<-2){tc='dn';tt='▼ Last 5 days: £'+s.last5.toFixed(2)+' — declining';}
-    else{tc='fl';tt='~ Last 5 days: flat (£'+(s.last5>=0?'+':'')+s.last5.toFixed(2)+')';}
+    if(s.last5>2){tc='up';tt='▲ Last 5 bets: +£'+s.last5.toFixed(2)+' — improving';}
+    else if(s.last5<-2){tc='dn';tt='▼ Last 5 bets: £'+s.last5.toFixed(2)+' — declining';}
+    else{tc='fl';tt='~ Last 5 bets: flat (£'+(s.last5>=0?'+':'')+s.last5.toFixed(2)+')';}
     tEl.innerHTML='<span class="trend '+tc+'">'+tt+'</span>';
   }
 
@@ -297,7 +299,7 @@ function render(){
 
   // Honest insights
   var ins=[];
-  var winPct=Math.round(s.winDays/Math.max(s.days,1)*100);
+  var winPct=Math.round(s.winDays/Math.max(s.uniqueDays,1)*100);
 
   if(s.roi<-10)
     ins.push({c:'ir',t:'🔴 ROI is '+s.roi.toFixed(1)+'% — the app is losing money at a meaningful rate. Worth reconsidering stake size or bet type before continuing.'});
@@ -524,6 +526,14 @@ function exportCSV(){
 
 render();
 window.addEventListener('resize',function(){render();});
+// Sync toggle visual on change
+document.getElementById('fRetrain').addEventListener('change',function(){
+  var checked=this.checked;
+  var track=document.getElementById('toggleTrack');
+  var thumb=document.getElementById('toggleThumb');
+  if(track)track.style.background=checked?'var(--bl)':'var(--bd)';
+  if(thumb)thumb.style.left=checked?'21px':'3px';
+});
 </script>
 
 </body>
