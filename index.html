@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>🏇 Racecourse Predictor v4</title>
+<title>🏇 Racecourse Predictor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
@@ -40,7 +40,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 8px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .re{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
-.re .sn{position:absolute;top:8px;right:10px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--mt);pointer-events:none}
+.re .sn{position:absolute;top:8px;right:10px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--bd);pointer-events:none}
 .re .hn{font-size:.88rem;font-weight:600;color:var(--tx)}
 .re .orb{font-family:'IBM Plex Mono',monospace;font-size:.63rem;padding:2px 6px;border-radius:4px;background:#0a0f0d;color:var(--mt);border:1px solid var(--bd)}
 .re .hh{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
@@ -62,11 +62,6 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)
 .mk.closer{background:rgba(124,77,255,.15);color:var(--closer)}
 .mk.steam{background:rgba(0,176,255,.15);color:#00b0ff}
 .mk.drift{background:rgba(255,109,0,.15);color:#ff6d00}
-.mk.stamina{background:rgba(0,230,118,.15);color:#00e676}
-.mk.nostamina{background:rgba(255,82,82,.12);color:#ff5252}
-.mk.grinder{background:rgba(124,77,255,.15);color:#b39ddb}
-.ld-banner{background:linear-gradient(135deg,rgba(255,193,7,.10),rgba(255,193,7,.03));border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin-bottom:12px}
-.ld-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--gold);letter-spacing:2px;margin-bottom:8px}
 .rwin{background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,230,118,.02));border:2px solid var(--g);border-radius:12px;padding:18px;margin-bottom:12px}
 .rval{background:linear-gradient(135deg,rgba(255,193,7,.07),rgba(255,193,7,.02));border:2px solid var(--gold);border-radius:12px;padding:18px;margin-bottom:12px;position:relative;padding-top:22px}
 .vflag{position:absolute;top:-10px;left:16px;background:var(--gold);color:var(--bg);font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
@@ -134,6 +129,27 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ba-stake input{flex:1;background:transparent;border:none;color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:600;text-align:right;outline:none;width:60px}
 .ba-reason{font-size:.75rem;color:var(--mt);line-height:1.5;margin-top:6px}
 .ba-kelly{font-size:.65rem;font-family:'IBM Plex Mono',monospace;color:var(--mt);margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)}
+
+/* ── AI Analysis ─────────────────────────────────────────── */
+.ai-card{background:linear-gradient(135deg,rgba(124,77,255,.08),rgba(64,196,255,.05));border:2px solid rgba(124,77,255,.4);border-radius:12px;padding:16px;margin-bottom:12px}
+.ai-card .ct{color:#ce93d8;border-color:rgba(124,77,255,.3)}
+.ai-spin{width:22px;height:22px;border:3px solid rgba(124,77,255,.2);border-top-color:#ce93d8;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+.ai-section{margin-bottom:14px}
+.ai-section-title{font-family:‘IBM Plex Mono’,monospace;font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:rgba(124,77,255,.8);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(124,77,255,.2)}
+.ai-text{font-size:.82rem;color:var(–tx);line-height:1.65}
+.ai-pick{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(124,77,255,.06);border:1px solid rgba(124,77,255,.2);border-radius:7px;margin-bottom:6px}
+.ai-pick-rank{font-family:‘Bebas Neue’,sans-serif;font-size:1.3rem;color:#ce93d8;width:22px;text-align:center;flex-shrink:0}
+.ai-pick-name{font-size:.85rem;font-weight:600;color:var(–tx)}
+.ai-pick-reason{font-size:.68rem;color:var(–mt);margin-top:2px}
+.ai-agree{background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.3)}
+.ai-agree .ai-pick-rank{color:var(–g)}
+.ai-differ{background:rgba(255,193,7,.07);border-color:rgba(255,193,7,.3)}
+.ai-differ .ai-pick-rank{color:var(–gold)}
+.ai-warn{background:rgba(255,82,82,.07);border-left:3px solid var(–re);border-radius:6px;padding:9px 12px;font-size:.78rem;color:#ff8a80;margin-bottom:8px;line-height:1.5}
+.ai-note{font-size:.68rem;color:var(–mt);text-align:center;margin-top:8px;line-height:1.4}
+.btn-ai{background:linear-gradient(135deg,rgba(124,77,255,.3),rgba(64,196,255,.2));color:#ce93d8;border:1px solid rgba(124,77,255,.5);font-family:‘IBM Plex Mono’,monospace;font-size:.75rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:12px 16px;border-radius:8px;cursor:pointer;width:100%;margin-top:8px}
+.btn-ai:disabled{opacity:.4;cursor:not-allowed}
+
 /* Pace banner */
 .pace-banner{border-radius:8px;padding:10px 13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;font-size:.78rem;line-height:1.5}
 .pace-contested{background:rgba(255,109,0,.08);border:1px solid rgba(255,109,0,.3);color:#ffb74d}
@@ -141,66 +157,66 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .pace-slow{background:rgba(124,77,255,.08);border:1px solid rgba(124,77,255,.3);color:#ce93d8}
 .pace-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
 /* Placepot */
-.pp-race{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:10px}
-.pp-race-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--sf)}
-.pp-race-tm{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--g)}
-.pp-race-info{font-size:.68rem;color:var(--mt);font-family:'IBM Plex Mono',monospace}
+.pp-race{background:var(–sf2);border:1px solid var(–bd);border-radius:10px;overflow:hidden;margin-bottom:10px}
+.pp-race-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(–bd);background:var(–sf)}
+.pp-race-tm{font-family:‘Bebas Neue’,sans-serif;font-size:1.1rem;color:var(–g)}
+.pp-race-info{font-size:.68rem;color:var(–mt);font-family:‘IBM Plex Mono’,monospace}
 .pp-pick{display:flex;align-items:center;padding:9px 14px;gap:10px;border-bottom:1px solid rgba(28,48,36,.5)}
 .pp-pick:last-child{border-bottom:none}
 .pp-pick.rank1{background:rgba(0,230,118,.07)}.pp-pick.rank2{background:rgba(255,193,7,.04)}.pp-pick.rank3{background:rgba(255,138,101,.03)}
-.pp-rank{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;width:22px;text-align:center;flex-shrink:0}
-.rank1 .pp-rank{color:var(--g)}.rank2 .pp-rank{color:var(--gold)}.rank3 .pp-rank{color:#ff8a65}
+.pp-rank{font-family:‘Bebas Neue’,sans-serif;font-size:1.3rem;width:22px;text-align:center;flex-shrink:0}
+.rank1 .pp-rank{color:var(–g)}.rank2 .pp-rank{color:var(–gold)}.rank3 .pp-rank{color:#ff8a65}
 .pp-info{flex:1;min-width:0}
 .pp-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pp-meta{font-size:.67rem;color:var(--mt);font-family:'IBM Plex Mono',monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-meta{font-size:.67rem;color:var(–mt);font-family:‘IBM Plex Mono’,monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pp-bar-wrap{width:52px;flex-shrink:0;text-align:right}
-.pp-score{font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--mt);margin-bottom:3px}
-.pp-bar{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
-.pp-fill{height:100%;border-radius:2px;background:var(--g)}
-.rank2 .pp-fill{background:var(--gold)}.rank3 .pp-fill{background:#ff8a65}
-.pp-banker{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.3);margin-left:6px;vertical-align:middle}
-.pp-alt{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.3);margin-left:6px;vertical-align:middle}
-.pp-line{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.pp-score{font-family:‘IBM Plex Mono’,monospace;font-size:.65rem;color:var(–mt);margin-bottom:3px}
+.pp-bar{background:var(–bd);height:4px;border-radius:2px;overflow:hidden}
+.pp-fill{height:100%;border-radius:2px;background:var(–g)}
+.rank2 .pp-fill{background:var(–gold)}.rank3 .pp-fill{background:#ff8a65}
+.pp-banker{display:inline-block;font-family:‘IBM Plex Mono’,monospace;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(–g);border:1px solid rgba(0,230,118,.3);margin-left:6px;vertical-align:middle}
+.pp-alt{display:inline-block;font-family:‘IBM Plex Mono’,monospace;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(255,193,7,.1);color:var(–gold);border:1px solid rgba(255,193,7,.3);margin-left:6px;vertical-align:middle}
+.pp-line{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(–bd)}
 .pp-line:last-child{border-bottom:none}
-.pp-line-num{font-family:'Bebas Neue',sans-serif;font-size:1rem;color:var(--gold);width:20px;flex-shrink:0;padding-top:1px}
-.pp-line-horses{flex:1;font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--tx);line-height:1.6}
-.pp-line-label{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:2px}
+.pp-line-num{font-family:‘Bebas Neue’,sans-serif;font-size:1rem;color:var(–gold);width:20px;flex-shrink:0;padding-top:1px}
+.pp-line-horses{flex:1;font-family:‘IBM Plex Mono’,monospace;font-size:.75rem;color:var(–tx);line-height:1.6}
+.pp-line-label{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);margin-bottom:2px}
 /* Autocomplete */
 .ac-wrap{position:relative;flex:1}
-.ac-input{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
-.ac-input:focus{border-color:var(--g)}
-.ac-input.ac-match{border-color:var(--g);color:var(--g)}
+.ac-input{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
+.ac-input:focus{border-color:var(–g)}
+.ac-input.ac-match{border-color:var(–g);color:var(–g)}
 .ac-input.ac-nomatch{border-color:#ff5252;color:#ff8a80}
-.ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#0d1a10;border:1px solid var(--g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
+.ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#0d1a10;border:1px solid var(–g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
 .ac-drop.open{display:block}
-.ac-item{padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--tx);cursor:pointer;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ac-item{padding:9px 12px;font-family:‘IBM Plex Mono’,monospace;font-size:.78rem;color:var(–tx);cursor:pointer;border-bottom:1px solid var(–bd);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ac-item:last-child{border-bottom:none}
-.ac-item:hover,.ac-item.hi{background:rgba(0,230,118,.1);color:var(--g)}
+.ac-item:hover,.ac-item.hi{background:rgba(0,230,118,.1);color:var(–g)}
 .ac-item .ac-main{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ac-item .ac-sub{font-size:.65rem;color:var(--mt);white-space:nowrap;flex-shrink:0}
-.ac-none{padding:10px 12px;font-size:.75rem;color:var(--mt);text-align:center;font-family:'IBM Plex Mono',monospace}
-.ar-form{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-top:12px;display:none}
+.ac-item .ac-sub{font-size:.65rem;color:var(–mt);white-space:nowrap;flex-shrink:0}
+.ac-none{padding:10px 12px;font-size:.75rem;color:var(–mt);text-align:center;font-family:‘IBM Plex Mono’,monospace}
+.ar-form{background:var(–sf2);border:1px solid var(–bd);border-radius:8px;padding:14px;margin-top:12px;display:none}
 .ar-form.open{display:block}
 .ar-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .ar-row.full{grid-template-columns:1fr}
-.ar-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px}
-.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
-.ar-inp:focus{border-color:var(--g)}
-.ar-status{font-size:.68rem;font-family:'IBM Plex Mono',monospace;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
-.ar-known{background:rgba(0,230,118,.12);color:var(--g);border:1px solid rgba(0,230,118,.3)}
-.ar-unknown{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.3)}
-.mv-btn{font-family:'IBM Plex Mono',monospace;font-size:.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:4px 9px;border-radius:3px;cursor:pointer;border:1px solid var(--bd);background:transparent;color:var(--mt);transition:all .15s;white-space:nowrap}
+.ar-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);margin-bottom:4px}
+.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(–bd);border-radius:6px;color:var(–tx);font-family:‘IBM Plex Mono’,monospace;font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
+.ar-inp:focus{border-color:var(–g)}
+.ar-status{font-size:.68rem;font-family:‘IBM Plex Mono’,monospace;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
+.ar-known{background:rgba(0,230,118,.12);color:var(–g);border:1px solid rgba(0,230,118,.3)}
+.ar-unknown{background:rgba(255,193,7,.1);color:var(–gold);border:1px solid rgba(255,193,7,.3)}
+.mv-btn{font-family:‘IBM Plex Mono’,monospace;font-size:.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:4px 9px;border-radius:3px;cursor:pointer;border:1px solid var(–bd);background:transparent;color:var(–mt);transition:all .15s;white-space:nowrap}
 .mv-btn.steam{border-color:#00b0ff;color:#00b0ff;background:rgba(0,176,255,.10)}
 .mv-btn.drift{border-color:#ff6d00;color:#ff6d00;background:rgba(255,109,0,.10)}
 /* Help */
 .h-sec{margin-bottom:24px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .h-sec-hdr{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid #e8f5ee;margin-bottom:12px}
-.h-sec-num{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#fff;background:#1a6b3a;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
-.h-sec-ttl{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;color:#1a6b3a;letter-spacing:2px}
+.h-sec-num{font-family:‘Bebas Neue’,sans-serif;font-size:1.1rem;color:#fff;background:#1a6b3a;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.h-sec-ttl{font-family:‘Bebas Neue’,sans-serif;font-size:1.15rem;color:#1a6b3a;letter-spacing:2px}
 .h-p{font-size:.83rem;color:#222;line-height:1.65;margin-bottom:10px}
 .h-steps{list-style:none;counter-reset:hs}
 .h-steps li{counter-increment:hs;display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;font-size:.83rem;color:#222;line-height:1.55}
-.h-steps li::before{content:counter(hs);font-family:'Bebas Neue',sans-serif;font-size:.85rem;color:#fff;background:#2d7a4f;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.h-steps li::before{content:counter(hs);font-family:‘Bebas Neue’,sans-serif;font-size:.85rem;color:#fff;background:#2d7a4f;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
 .h-callout{border-radius:6px;padding:11px 13px;margin:10px 0;display:flex;gap:10px;font-size:.8rem;line-height:1.6;color:#222}
 .h-callout .ci{flex-shrink:0;font-size:1rem;margin-top:1px}
 .h-tip{background:#e8f5ee;border-left:3px solid #1a6b3a}
@@ -208,7 +224,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .h-warn{background:#fdf0ee;border-left:3px solid #c0392b}
 .h-info{background:#eef4ff;border-left:3px solid #3b6fd4}
 .h-going{width:100%;border-collapse:collapse;font-size:.78rem;margin:10px 0;border-radius:6px;overflow:hidden}
-.h-going th{background:#1a6b3a;color:#fff;text-align:left;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase}
+.h-going th{background:#1a6b3a;color:#fff;text-align:left;padding:7px 10px;font-family:‘IBM Plex Mono’,monospace;font-size:.65rem;letter-spacing:1px;text-transform:uppercase}
 .h-going td{padding:8px 10px;border-bottom:1px solid #e0e0e0;color:#222;vertical-align:top;background:#fff}
 .h-going tr:last-child td{border-bottom:none}
 .h-going tr:nth-child(even) td{background:#f7f7f7}
@@ -224,9 +240,10 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .h-nr-row{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid #e0e0e0;font-size:.8rem;color:#222}
 .h-nr-row:last-child{border-bottom:none}
 .h-nr-row.h-struck{opacity:.5;text-decoration:line-through;background:#fff5f5}
-.h-nr-tag{font-size:.6rem;font-weight:600;letter-spacing:1px;padding:2px 7px;border-radius:3px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;font-family:'IBM Plex Mono',monospace}
-.h-btn-eg{font-size:.6rem;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid #bbb;background:#fff;color:#666;font-family:'IBM Plex Mono',monospace}
+.h-nr-tag{font-size:.6rem;font-weight:600;letter-spacing:1px;padding:2px 7px;border-radius:3px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;font-family:‘IBM Plex Mono’,monospace}
+.h-btn-eg{font-size:.6rem;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid #bbb;background:#fff;color:#666;font-family:‘IBM Plex Mono’,monospace}
 </style>
+
 </head>
 <body>
 
@@ -283,7 +300,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       </div>
       <div style="flex-shrink:0">
         <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going</div>
-        <select id="gsel" onchange="S.goingSet=true">
+        <select id="gsel">
           <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
           <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
           <option disabled>── All-Weather ──</option>
@@ -393,6 +410,16 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       </div>
       <div style="text-align:center;padding:8px 0 4px;font-size:.7rem;color:var(--mt)">Selections based on model score only. Enter odds per race for full prediction accuracy.</div>
     </div>
+
+```
+<!-- AI Analysis -->
+<div id="pp-ai-wrap" style="display:none">
+  <button class="btn-ai" id="aiBtn" onclick="runAIAnalysis()">🤖 Ask Claude for a Second Opinion</button>
+  <div id="pp-ai-result"></div>
+  <div class="ai-note">Claude analyses the race data and your model's picks independently.<br>This is a qualitative second opinion, not a replacement for the model.</div>
+</div>
+```
+
   </div>
 </div>
 
@@ -600,9 +627,7 @@ function parseRunnerLine(line) {
   var daysSince = daysM ? parseInt(daysM[1]) : 21;
   var fClean = form.replace(/\d+$/, '').replace(/[^0-9PFpUuRr/\-]/g, '');
   return { stall, draw, form, name, age, wst, wlbs, jockey, or: OR,
-           daysSince, rf: parseForm(fClean), odds: 0,
-           _pace: classifyPace(fClean),
-           _traj: formTrajectory(fClean) };
+           daysSince, rf: parseForm(fClean), odds: 0, _pace: classifyPace(fClean) };
 }
 
 function parseForm(f) {
@@ -612,144 +637,8 @@ function parseForm(f) {
   return { w, p, r: Math.max(r, 1) };
 }
 
-// ── Form trajectory ────────────────────────────────────────
-// Looks at the last 5 numeric form figures and measures whether
-// the horse is improving or declining.
-//
-// Method: compare the average of the most recent half vs the older
-// half. Lower position = better, so declining avg position = improving.
-//
-// Returns a multiplier:
-//   > 1.0  = improving form (reward)
-//   < 1.0  = declining form (penalise)
-//   = 1.0  = flat / insufficient data
-//
-// Examples:
-//   9,5,2,1  → avg(9,5)=7  vs avg(2,1)=1.5  → big improvement → 1.10
-//   1,1,1,7,8 → avg(1,1,1)=1 vs avg(7,8)=7.5 → declining        → 0.91
-//   3,2,4,3   → avg(3,2)=2.5 vs avg(4,3)=3.5 → slight improve   → 1.03
-function formTrajectory(formStr) {
-  if (!formStr) return 1.0;
-  var chars = formStr.replace(/[-/PFpUuRrBbCcDd]/g, '').split('').filter(function(c){ return /\d/.test(c); });
-  if (chars.length < 3) return 1.0;  // not enough data to judge trend
-
-  // Use last 5 figures, split older half vs recent half
-  var figs = chars.slice(-5).map(Number);
-  var mid  = Math.floor(figs.length / 2);
-  var older  = figs.slice(0, mid);
-  var recent = figs.slice(mid + (figs.length % 2));  // skip middle figure if odd length
-
-  if (!older.length || !recent.length) return 1.0;
-
-  var avgOlder  = older.reduce(function(s,n){ return s+n; }, 0) / older.length;
-  var avgRecent = recent.reduce(function(s,n){ return s+n; }, 0) / recent.length;
-
-  // diff > 0 means older avg was worse (higher position number) = improving
-  var diff = avgOlder - avgRecent;
-
-  // Scale: each position-number improvement per run = ~1.5% multiplier
-  // Cap at ±10% so it influences but doesn't dominate
-  var mult = 1.0 + Math.max(-0.10, Math.min(0.10, diff * 0.015));
-  return mult;
-}
-
 // ══════════════════════════════════════════════════════════
-// ── LONG DISTANCE MODE (3m+ / 24f+) ──────────────────────
-//
-// Activated automatically when race distance ≥ 24 furlongs.
-// All signals read automatically from:
-//   - model.horseStats[h].bd  — best proven distance (furlongs)
-//   - model.horseStats[h].xd  — ran ≥ 3m4f / National-type
-//   - model.horseStats[h].fc  — non-finish count (falls/PU)
-//   - model.horseStats[h].cr  — completion rate
-//   - form string              — grinder/fader pattern
-// ══════════════════════════════════════════════════════════
-
-function parseDistFurlongs(distStr) {
-  if (!distStr) return 0;
-  var s = String(distStr).toLowerCase().replace(/,/g,'').trim();
-  var miles = 0, furlongs = 0;
-  var mM = s.match(/(\d+(?:\.\d+)?)\s*m/);
-  var fM = s.match(/(\d+(?:\.\d+)?)\s*f/);
-  if (mM) miles    = parseFloat(mM[1]);
-  if (fM) furlongs = parseFloat(fM[1]);
-  return miles * 8 + furlongs;
-}
-
-function isLongDistance(race) {
-  return parseDistFurlongs(race.dist) >= 24;
-}
-
-function longDistanceOverlay(runner, raceFurlongs) {
-  var name = runner.name.toLowerCase();
-  var H    = (S.model && S.model.horseStats) ? (S.model.horseStats[name] || null) : null;
-  var form = runner.form || '';
-  var fClean = form.replace(/\d+$/, '');
-
-  // ── 1. Stamina score from best proven distance ────────────
-  // bd = best distance the horse has FINISHED at (furlongs)
-  var bd = H ? (H.bd || 0) : 0;
-  var staminaMult, staminaLabel;
-  if (bd >= 30) {
-    staminaMult  = 1.18; staminaLabel = '3m6f+ proven';       // Won/placed 3m6f+
-  } else if (bd >= 26) {
-    staminaMult  = 1.10; staminaLabel = '3m2f–3m5f proven';   // Strong staying form
-  } else if (bd >= 24) {
-    staminaMult  = 1.02; staminaLabel = '3m form only';       // Borderline
-  } else if (bd >= 16 && bd < 24) {
-    staminaMult  = 0.90; staminaLabel = 'Unproven over trip'; // Speed horse
-  } else if (bd === 0) {
-    staminaMult  = 1.00; staminaLabel = 'Unknown';            // Not in model
-  } else {
-    staminaMult  = 0.88; staminaLabel = 'Short-trip horse';   // All flat/short form
-  }
-
-  // ── 2. Marathon experience bonus ─────────────────────────
-  var expMult = (H && H.xd) ? 1.05 : 1.0;
-
-  // ── 3. Completion / safety score ─────────────────────────
-  // cr = completion rate from training data (0–1)
-  // fc = total non-finish count
-  var cr = H ? (H.cr !== undefined ? H.cr : 1.0) : 1.0;
-  var fc = H ? (H.fc || 0) : 0;
-  // Penalise poor completers — each percentage point below 80% costs ~0.4%
-  // Also penalise raw fall count (capped — old falls matter less)
-  var safetyMult = Math.max(0.80,
-    (cr >= 0.80 ? 1.0 : 1.0 - (0.80 - cr) * 0.4)
-    * Math.max(0.88, 1.0 - Math.min(fc, 5) * 0.025)
-  );
-
-  // ── 4. Grinder vs fader from form figures ────────────────
-  var figs = fClean.replace(/[-/PFpUuBbCcDd]/g,'').split('')
-    .filter(function(c){ return /\d/.test(c); }).slice(-6).map(Number);
-  var finishMult = 1.0;
-  var isGrinder = false, isFader = false;
-  if (figs.length >= 4) {
-    var half     = Math.floor(figs.length / 2);
-    var avgEarly = figs.slice(0, half).reduce(function(s,n){return s+n;},0) / half;
-    var avgLate  = figs.slice(half).reduce(function(s,n){return s+n;},0) / (figs.length - half);
-    var trend    = avgEarly - avgLate; // positive = finishes better = grinder
-    if (trend >= 1.5)  { isGrinder = true; finishMult = 1.07; }
-    else if (trend <= -1.5) { isFader = true; finishMult = 0.93; }
-  }
-
-  // ── Combine ───────────────────────────────────────────────
-  var combined = staminaMult * expMult * safetyMult * finishMult;
-
-  // ── Badges for display ────────────────────────────────────
-  var badges = [];
-  if (bd >= 30)              badges.push({cls:'stamina',    txt:'🏅 STAYS 3m6f+'});
-  else if (bd >= 26)         badges.push({cls:'stamina',    txt:'✓ STAYS 3m+'});
-  else if (bd > 0 && bd < 24) badges.push({cls:'nostamina', txt:'⚠ UNPROVEN DIST'});
-  if (H && H.xd)             badges.push({cls:'tip',        txt:'🏇 NATIONAL EXP'});
-  if (isGrinder)             badges.push({cls:'grinder',    txt:'⬆ GRINDER'});
-  if (isFader)               badges.push({cls:'nostamina',  txt:'⬇ FADER'});
-  if (fc >= 3)               badges.push({cls:'nostamina',  txt:'⚠ ' + fc + ' NON-FINISHES'});
-  else if (fc >= 1)          badges.push({cls:'nostamina',  txt:'⚠ ' + fc + ' FALL/PU'});
-  if (cr < 0.70 && H)       badges.push({cls:'nostamina',  txt:'⚠ POOR COMPLETER'});
-
-  return { multiplier: combined, staminaLabel, badges };
-}
+// ── PACE CLASSIFICATION ───────────────────────────────────
 //
 // Reads the form string and classifies each horse as:
 //   'front'  — likely to lead or race prominently
@@ -869,7 +758,7 @@ function rankIn(val, arr, direction) {
   return sorted.length > 1 ? 1 - pos / (sorted.length - 1) : 0.5;
 }
 
-// Implied probability share for a runner's odds within the field.
+// Implied probability share for a runner\'s odds within the field.
 // This captures REAL market separation — favourite at 4.0 gets ~25% share,
 // a 33/1 shot gets ~3% share. Pure rank would give them equally spaced slots.
 function impliedShare(odds, allOdds) {
@@ -916,48 +805,19 @@ function rawScoreMdl(r, race, ctx) {
   var t = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
   var dist = parseFloat(race.dist) || 10;
   var gs = gm[(r.going||'good').toLowerCase()] || 4;
-  var H = hs[h] || {r:1,w:0,p:0,rr:0,rw:0,rp:0,gw:{},dw:{},cw:{}};
-  var J = js[j] || {r:1,w:0,rr:0,rw:0};
-  var T2 = ts[t] || {r:1,w:0,rr:0,rw:0};
+  var H = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
+  var J = js[j] || {r:1,w:0};
+  var T2 = ts[t] || {r:1,w:0};
 
-  var POP_WIN = m.popWinRate || 0.12;
-
-  // ── Recency-blended horse win/place rate ─────────────────────
-  // If model has recency fields (v3+), blend lifetime + recent.
-  // Falls back gracefully to lifetime-only for older models.
-  var HP = 8, RHP = 4;
-  var wr_life = H.w / Math.max(H.r, 1);
-  var pr_life = H.p / Math.max(H.r, 1);
-  var wr, pr;
-  if (H.rr > 0) {
-    var wr_rec = (H.rw + RHP * POP_WIN)   / (H.rr + RHP);
-    var pr_rec = (H.rp + RHP * POP_WIN * 2.5) / (H.rr + RHP);
-    wr = 0.4 * wr_life + 0.6 * wr_rec;
-    pr = 0.4 * pr_life + 0.6 * pr_rec;
-  } else {
-    wr = wr_life;
-    pr = pr_life;
-  }
-
-  // ── Jockey win rate — recency blend ─────────────────────────
-  var JP = 15;
-  var jwr_life = (J.w  + JP * 0.12) / (J.r  + JP);
-  var jwr = J.rr > 0
-    ? 0.5 * jwr_life + 0.5 * ((J.rw + 8 * 0.12) / (J.rr + 8))
-    : jwr_life;
-
-  // ── Trainer win rate — recency blend ─────────────────────────
-  var twr_life = (T2.w  + JP * 0.12) / (T2.r  + JP);
-  var twr = T2.rr > 0
-    ? 0.5 * twr_life + 0.5 * ((T2.rw + 8 * 0.12) / (T2.rr + 8))
-    : twr_life;
-
+  var wr   = H.w / Math.max(H.r, 1);
+  var pr   = H.p / Math.max(H.r, 1);
+  var jwr  = J.w / Math.max(J.r, 1);
+  var twr  = T2.w / Math.max(T2.r, 1);
   var dd   = (cd[c]||{})[r.stall] || {r:1,w:0};
   var db   = dd.r > 2 ? dd.w / dd.r : 0.05;
-  var hw   = Math.max(H.rr > 0 ? H.rr : H.w, 1);
-  var gMch = Math.min(((H.gw||{})[gs]||0)   / (hw + 4), 1);
-  var dMch = Math.min(((H.dw||{})[dist]||0) / (hw + 4), 1);
-  var cMch = Math.min(((H.cw||{})[c]||0)    / (hw + 4), 1);
+  var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1, 1), 1);
+  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1, 1), 1);
+  var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1, 1), 1);
   var fr   = r.daysSince < 14 ? 1 : r.daysSince < 28 ? 0.8 : r.daysSince < 60 ? 0.5 : 0.2;
 
   // Market: implied probability share (real separation, not just rank position)
@@ -979,9 +839,8 @@ function rawScoreMdl(r, race, ctx) {
            + mktShr  * 0.28         // implied prob share — main signal
            + orRank  * 0.11;        // OR rank in field
 
-  var mvMult   = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  var trajMult = r._traj || 1.0;
-  return base * mvMult * trajMult;
+  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  return base * mvMult;
 }
 
 function rawScoreDef(r, race, ctx) {
@@ -992,9 +851,8 @@ function rawScoreDef(r, race, ctx) {
   var fr = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
   var base = orRank*0.25 + wr*0.09 + pr*0.07 + mktShr*0.38 + fr*0.09 + (isTip ? 0.07 : 0);
-  var mvMult   = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  var trajMult = r._traj || 1.0;
-  return base * mvMult * trajMult;
+  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  return base * mvMult;
 }
 
 // ── Main prediction entry point ────────────────────────────
@@ -1016,24 +874,13 @@ function predict() {
     r.going = going;
   });
 
-  var raceFurlongs = parseDistFurlongs(race.dist);
-  var ldMode       = raceFurlongs >= 24;
-  var paceInfo     = assessPace(activeRunners);
-  var ctx          = buildFieldCtx(activeRunners);
+  var paceInfo = assessPace(activeRunners);
+  var ctx = buildFieldCtx(activeRunners);
 
-  // Compute LD overlay per runner upfront (also stores badges)
-  if (ldMode) {
-    activeRunners.forEach(function(r) {
-      r._ldOverlay = longDistanceOverlay(r, raceFurlongs);
-    });
-  }
-
-  // Raw scores with pace + LD adjustment
+  // Raw scores with pace adjustment
   var rawArr = activeRunners.map(function(r) {
     var raw = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
-    var score = raw * paceAdjust(r, paceInfo);
-    if (ldMode && r._ldOverlay) score *= r._ldOverlay.multiplier;
-    return score;
+    return raw * paceAdjust(r, paceInfo);
   });
 
   // Power-curve probabilities (gives spread)
@@ -1049,7 +896,7 @@ function predict() {
     if (scored[i].odds >= 9) { valueBet = scored[i]; break; }
   }
 
-  showResults(scored, valueBet, race, paceInfo, ldMode);
+  showResults(scored, valueBet, race, paceInfo);
 }
 
 // ── Bet Advisor ────────────────────────────────────────────
@@ -1266,7 +1113,7 @@ function row(label, val) {
   return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
 }
 
-function showResults(scored, val, race, paceInfo, ldMode) {
+function showResults(scored, val, race, paceInfo) {
   // Store for stake refresh
   S._lastScored    = scored;
   S._lastFieldSize = scored.length;
@@ -1277,38 +1124,20 @@ function showResults(scored, val, race, paceInfo, ldMode) {
 
   if (!S.model) h += '<div class="al ali">Using default weights — load a trained model in Setup for better accuracy.</div>';
 
-  // Long distance mode notice
-  if (ldMode) {
-    h += '<div class="al" style="background:rgba(255,193,7,.08);border-color:var(--gold);color:#ffe082;margin-bottom:10px">'
-      + '🏅 <strong>Long Distance Mode active.</strong> Stamina, finishing style, jumping safety and prep race flags are all weighted into these scores.</div>';
-  }
-
   // Pace banner
   h += paceBannerHTML(paceInfo);
 
   // Winner card
   var paceMk = w._pace === 'front' ? '<span class="mk front" style="margin-left:6px">▶ FRONT</span>'
              : w._pace === 'closer' ? '<span class="mk closer" style="margin-left:6px">◀ CLOSER</span>' : '';
-
-  // LD badges for winner
-  var ldBadgeHtml = '';
-  if (ldMode && w._ldOverlay && w._ldOverlay.badges.length) {
-    ldBadgeHtml = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0">'
-      + w._ldOverlay.badges.map(function(b){ return '<span class="mk '+b.cls+'">'+b.txt+'</span>'; }).join('')
-      + '</div>';
-  }
-
   h += '<div class="rwin">'
     + '<div class="slbl">🏆 Predicted Winner</div>'
     + '<div class="bn gn">' + w.name + paceMk + '</div>'
-    + ldBadgeHtml
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
     + row('Jockey', w.jockey.replace(/\s*\(\d+\)/,'') || '—')
     + row('Draw / stall', w.stall)
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
-    + row('Form trend', w._traj >= 1.04 ? '▲ Improving' : w._traj <= 0.96 ? '▼ Declining' : '~ Consistent')
-    + (ldMode && w._ldOverlay ? row('Stamina rating', w._ldOverlay.staminaLabel) : '')
     + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
     + row('Pace scenario', paceInfo.scenario === 'lone_front' ? '✅ Lone leader' : paceInfo.scenario === 'contested' ? '⚠ Contested' : paceInfo.scenario === 'slow' ? '🟣 Slow' : '—')
     + row('Confidence', '<span style="color:#1a6b3a">' + conf + '%</span>')
@@ -1343,20 +1172,11 @@ function showResults(scored, val, race, paceInfo, ldMode) {
   scored.forEach(function(r, i) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
     var paceLbl = r._pace === 'front' ? ' <span class="mk front">▶</span>' : r._pace === 'closer' ? ' <span class="mk closer">◀</span>' : '';
-    var trajLbl = r._traj >= 1.04 ? ' <span class="mk tip" style="font-size:.5rem">▲</span>'
-                : r._traj <= 0.96 ? ' <span class="mk" style="font-size:.5rem;border-color:#ff5252;color:#ff5252">▼</span>'
-                : '';
-    var ldLbl = '';
-    if (ldMode && r._ldOverlay && r._ldOverlay.badges.length) {
-      ldLbl = ' ' + r._ldOverlay.badges.slice(0,2).map(function(b){
-        return '<span class="mk '+b.cls+'" style="font-size:.5rem">'+b.txt+'</span>';
-      }).join(' ');
-    }
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + trajLbl + ldLbl + mvLbl + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
       + '</div>'
       + '<div class="rr">'
@@ -1422,13 +1242,7 @@ function selRace(i) {
   S.sel = S.races[i];
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
-  // Only auto-set going if the user has not yet chosen one this session.
-  // Once they touch the selector (or we set it once), S.goingSet = true.
-  if (!S.goingSet) {
-    var defaultGoing = S.model ? (S.model.surface==='aw' ? 'Standard' : 'Good') : 'Good';
-    document.getElementById('gsel').value = defaultGoing;
-    S.goingSet = true;
-  }
+  if (S.model) { document.getElementById('gsel').value = S.model.surface==='aw' ? 'Standard' : 'Good'; }
   go('predict');
 }
 
@@ -1441,37 +1255,19 @@ function renderPredict(race) {
   document.getElementById('rttl').textContent = race.title || '';
   document.getElementById('rdst').textContent = race.dist + (race.cls?' · Class '+race.cls:'') + ' · ' + race.runners.length + ' runners';
   var c = document.getElementById('prun'); c.innerHTML = '';
-
-  var ldMode = isLongDistance(race);
-
-  // Show/hide long distance notice banner
-  var ldNotice = document.getElementById('ldNotice');
-  if (!ldNotice) {
-    ldNotice = document.createElement('div');
-    ldNotice.id = 'ldNotice';
-    c.parentNode.insertBefore(ldNotice, c);
-  }
-  ldNotice.innerHTML = ldMode
-    ? '<div class="ld-banner"><div class="ld-title">🏅 Long Distance Mode — ' + race.dist + '</div>'
-      + '<div style="font-size:.75rem;color:var(--tx);line-height:1.5">Stamina overlay active. Proven distance, completion rate, marathon experience and finishing style are all read automatically from your trained model.</div></div>'
-    : '';
-
   if (!race.runners.length) { c.innerHTML = '<div class="al alw">No runners extracted.</div>'; return; }
   race.runners.forEach(function(r) {
     var isTip   = race.topTip   && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
     var isWatch = race.watchFor && race.watchFor.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
     var mk = isTip ? '<span class="mk tip">ATR TIP</span>' : isWatch ? '<span class="mk wch">WATCH</span>' : '';
     var paceMk = r._pace === 'front' ? '<span class="mk front">▶ FRONT</span>' : r._pace === 'closer' ? '<span class="mk closer">◀ CLOSER</span>' : '';
-    var trajMk = r._traj >= 1.04 ? '<span class="mk tip" style="background:rgba(0,230,118,.12)">▲ IN FORM</span>'
-               : r._traj <= 0.96 ? '<span class="mk" style="border-color:#ff5252;color:#ff5252;background:rgba(255,82,82,.08)">▼ OUT OF FORM</span>'
-               : '';
     var jClm = r.jockey.match(/(\d+)\)/), jn = r.jockey.replace(/\s*\(\d+\)/,'');
     var claim = jClm ? ' ('+jClm[1]+'lb)' : '';
     var d = document.createElement('div');
     d.className = 're'; if (r._nr) d.classList.add('nr');
     d.innerHTML = '<div class="sn">'+r.stall+'</div>'
       +'<div class="hh"><div class="hn">'+r.name+'</div>'
-      +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+trajMk+'</div>'
+      +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
       +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
       +'<div style="flex:1"><label>Decimal Odds</label>'
@@ -1817,9 +1613,8 @@ function addRunner() {
   if (!jock) { alert('Please enter a jockey name'); return; }
   var used=race.runners.map(function(r){return r.stall;});
   while (used.indexOf(stall)!==-1) stall++;
-  race.runners.push({ stall,draw:stall,name,jockey:jock,or:OR,age,wst:9,wlbs:0,daysSince:days,form:'',rf:{w:0,p:0,r:1},odds:0,isAdded:true,_pace:'mid',_traj:1.0 });
+  race.runners.push({ stall,draw:stall,name,jockey:jock,or:OR,age,wst:9,wlbs:0,daysSince:days,form:'',rf:{w:0,p:0,r:1},odds:0,isAdded:true,_pace:'mid' });
   renderPredict(race);
-  if (S.model) setTimeout(initAC, 0);  // re-attach AC listeners after DOM rebuild
   setTimeout(function(){ var el=document.getElementById('od_'+stall); if(el) el.closest('.re').scrollIntoView({behavior:'smooth',block:'center'}); },100);
   ['arHorse','arJockey','arStall','arOR','arAge','arDays'].forEach(function(id){ document.getElementById(id).value=''; });
   ['horseStatus','jockeyStatus'].forEach(function(id){ document.getElementById(id).innerHTML=''; });
@@ -1836,6 +1631,7 @@ function showPlacepotTab() {
   document.getElementById('pp-course').textContent = S.races[0]?S.races[0].course:'';
   if (S.model) document.getElementById('pp-going').value = S.model.surface==='aw'?'Standard':'Good';
   runPlacepot();
+  document.getElementById('pp-ai-wrap').style.display = 'block';
 }
 
 function scoreRunnerForPP(r, race, going, ctx) {
@@ -1925,7 +1721,249 @@ function runPlacepot() {
   document.getElementById('pp-cost').innerHTML=['1 line (banker): £'+nR+' for 1 line','2 lines: £'+(nR*2)+' total','4 lines (above): £'+(nR*4)+' total'].map(function(t){return'<div style="padding:2px 0;color:var(--mt)">'+t+'</div>';}).join('');
   sumEl.style.display='block';
 }
-</script>
+// ── AI Analysis (local — no API call needed) ──────────────
+function runAIAnalysis() {
+  var races = S.races;
+  if (!races || !races.length) return;
+  var btn   = document.getElementById('aiBtn');
+  var resEl = document.getElementById('pp-ai-result');
+  btn.disabled = true;
+  btn.innerHTML = 'Analysing...';
+  resEl.innerHTML = '';
+
+  var going    = document.getElementById('pp-going').value;
+  var ppRaces  = races.slice(0, 6);
+  var analysis = buildLocalAnalysis(ppRaces, going);
+  resEl.innerHTML  = renderAnalysis(analysis);
+  btn.disabled = false;
+  btn.innerHTML = '🔄 Refresh Analysis';
+}
+
+function buildLocalAnalysis(ppRaces, going) {
+  var raceAnalyses = [];
+  var napRace = null, napScore = -1;
+  var totalOddsEntered = 0;
+  var risks = [];
+  var bankers = [];
+
+  ppRaces.forEach(function(race, ri) {
+    var active = race.runners.filter(function(r){ return !r._nr; });
+    if (!active.length) return;
+
+    // Count odds
+    var oddsCount = active.filter(function(r){ return r.odds > 0; }).length;
+    totalOddsEntered += oddsCount;
+
+    // Score the field
+    var ctx      = buildFieldCtx(active);
+    var paceInfo = assessPace(active);
+    var rawArr   = active.map(function(r){
+      var raw = S.model
+        ? rawScoreMdl(Object.assign({}, r, {going: going}), race, ctx)
+        : rawScoreDef(Object.assign({}, r, {going: going}), race, ctx);
+      return raw * paceAdjust(r, paceInfo);
+    });
+    var probs  = powerScaleProbs(rawArr);
+    var scored = active.map(function(r, i){ return Object.assign({}, r, {prob: probs[i]}); });
+    scored.sort(function(a,b){ return b.prob - a.prob; });
+
+    var top  = scored[0];
+    var sec  = scored[1] || null;
+    var conf = Math.round(top.prob * 100);
+    var gap  = sec ? Math.round((top.prob - sec.prob) * 100) : conf;
+
+    // Market implied prob for top pick
+    var mktImplied = top.odds > 0 ? Math.round(100 / top.odds) : null;
+    var modelVsMarket = mktImplied ? conf - mktImplied : null;
+
+    // Detect steamers/drifters in field
+    var steamers = active.filter(function(r){ return r._mv === 'steam'; });
+    var drifters = active.filter(function(r){ return r._mv === 'drift'; });
+
+    // Banker quality: confident top pick with gap > 5% AND model agrees with market
+    var isBanker = gap >= 5 && conf >= 16 && (modelVsMarket === null || modelVsMarket > -5);
+    if (isBanker) bankers.push({race: race, runner: top, ri: ri});
+
+    // NAP: biggest gap between 1st and 2nd
+    if (gap > napScore) {
+      napScore = gap;
+      napRace  = {race: race, runner: top, ri: ri, gap: gap, conf: conf};
+    }
+
+    // Second opinion logic
+    var verdict, detail, cls;
+
+    // Case 1: Model and market agree
+    if (modelVsMarket !== null && Math.abs(modelVsMarket) <= 5) {
+      verdict = 'Agree';
+      cls     = 'agree';
+      detail  = top.name + ' is the model\'s top pick and the market agrees'
+        + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '')
+        + '. ' + (gap >= 6 ? 'Clear margin over second pick.' : 'Modest margin — not a banker.');
+    }
+    // Case 2: Model rates higher than market (potential value)
+    else if (modelVsMarket !== null && modelVsMarket >= 6) {
+      verdict = 'Value Flag';
+      cls     = 'differ';
+      detail  = top.name + ' rated ' + conf + '% by model vs ~' + mktImplied + '% market implied. '
+        + 'Model sees more chance than the market — worth noting'
+        + (top.odds > 0 ? ' at ' + top.odds.toFixed(1) : '') + '.';
+    }
+    // Case 3: Model rates lower than market (overbet favourite)
+    else if (modelVsMarket !== null && modelVsMarket <= -6) {
+      // Suggest second pick instead if market and model diverge
+      verdict = 'Caution';
+      cls     = 'differ';
+      var altName = sec ? sec.name : 'second pick';
+      var altOdds = sec && sec.odds > 0 ? ' (' + sec.odds.toFixed(1) + ')' : '';
+      detail  = top.name + ' is shorter than the model suggests (' + conf + '% model vs ~'
+        + mktImplied + '% market). Consider ' + altName + altOdds + ' as an alternative or double-up.';
+    }
+    else {
+      verdict = 'Agree';
+      cls     = 'agree';
+      detail  = top.name + (top.odds > 0 ? ' @ ' + top.odds.toFixed(1) : '') + ' — model and market broadly aligned.';
+    }
+
+    // Append pace/movement notes
+    var notes = [];
+    if (paceInfo.scenario === 'contested')
+      notes.push('Contested pace — closers may benefit');
+    else if (paceInfo.scenario === 'lone_front' && top._pace === 'front')
+      notes.push('Lone front-runner — good scenario for ' + top.name.split(' ')[0]);
+    else if (paceInfo.scenario === 'slow')
+      notes.push('No obvious front-runner — muddling pace likely');
+    if (steamers.length)
+      notes.push(steamers.map(function(r){return r.name.split(' ')[0];}).join(', ') + ' steaming in market');
+    if (drifters.length)
+      notes.push(drifters.map(function(r){return r.name.split(' ')[0];}).join(', ') + ' drifting — market concern');
+    if (oddsCount < active.length * 0.5)
+      notes.push('Few odds entered — analysis less reliable for this race');
+
+    // Risks
+    if (top.odds > 0 && top.odds < 3.0)
+      risks.push('R'+(ri+1)+': ' + top.name.split(' ')[0] + ' @ ' + top.odds.toFixed(1) + ' is a short-priced banker — must place or placepot is lost');
+    if (paceInfo.scenario === 'contested' && top._pace === 'front')
+      risks.push('R'+(ri+1)+': Contested pace may stop ' + top.name.split(' ')[0] + ' from leading');
+    if (active.length >= 14)
+      risks.push('R'+(ri+1)+': Large field (' + active.length + ' runners) increases placing risk');
+
+    raceAnalyses.push({
+      race: race, ri: ri, top: top, sec: sec,
+      conf: conf, gap: gap, verdict: verdict, detail: detail, cls: cls,
+      notes: notes, isBanker: isBanker, oddsCount: oddsCount,
+      fieldSize: active.length, paceInfo: paceInfo
+    });
+  });
+
+  // Overall assessment
+  var oddsQuality = totalOddsEntered > ppRaces.length * 3 ? 'good' : totalOddsEntered > 0 ? 'partial' : 'none';
+  var nBankers    = bankers.length;
+  var cautionRaces = raceAnalyses.filter(function(r){ return r.verdict === 'Caution'; }).length;
+  var valueFlagRaces = raceAnalyses.filter(function(r){ return r.verdict === 'Value Flag'; }).length;
+
+  return {
+    raceAnalyses: raceAnalyses,
+    napRace: napRace,
+    bankers: bankers,
+    risks: risks,
+    oddsQuality: oddsQuality,
+    nBankers: nBankers,
+    cautionRaces: cautionRaces,
+    valueFlagRaces: valueFlagRaces
+  };
+}
+
+function renderAnalysis(a) {
+  var h = '';
+
+  // Odds warning
+  if (a.oddsQuality === 'none') {
+    h += '<div class="ai-warn">No odds entered — analysis based on form and pace only. Enter decimal odds in the Predict tab for better results.</div>';
+  } else if (a.oddsQuality === 'partial') {
+    h += '<div class="ai-warn" style="background:rgba(255,193,7,.07);border-color:var(--gold);color:#ffe082">Odds partially entered — races without odds are less reliable.</div>';
+  }
+
+  // Overall
+  h += '<div class="ai-section"><div class="ai-section-title">Overall Assessment</div><div class="ai-text">';
+  if (a.nBankers >= 3) {
+    h += 'Strong placepot day — ' + a.nBankers + ' races where model and market agree clearly. ';
+  } else if (a.nBankers >= 1) {
+    h += a.nBankers + ' clear banker race' + (a.nBankers > 1 ? 's' : '') + ' identified. ';
+  } else {
+    h += 'No standout banker races — competitive card. Consider using two horses in at least one race. ';
+  }
+  if (a.cautionRaces > 0) {
+    h += a.cautionRaces + ' race' + (a.cautionRaces > 1 ? 's' : '') + ' where the top pick looks overbet by the market. Consider doubling up there. ';
+  }
+  if (a.valueFlagRaces > 0) {
+    h += a.valueFlagRaces + ' race' + (a.valueFlagRaces > 1 ? 's have' : ' has') + ' a potential value runner rated higher by the model than the market. ';
+  }
+  h += '</div></div>';
+
+  // Race by race
+  h += '<div class="ai-section"><div class="ai-section-title">Race by Race</div>';
+  a.raceAnalyses.forEach(function(ra) {
+    var tags = '';
+    if (ra.isBanker) {
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.3);margin-left:5px">BANKER</span>';
+    }
+    if (ra.verdict === 'Caution') {
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(255,193,7,.12);color:var(--gold);border:1px solid rgba(255,193,7,.3);margin-left:5px">CAUTION</span>';
+    } else if (ra.verdict === 'Value Flag') {
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.3);margin-left:5px">VALUE</span>';
+    }
+
+    h += '<div class="ai-pick ai-' + ra.cls + '" style="margin-bottom:6px;flex-wrap:wrap">'
+      + '<div class="ai-pick-rank">R' + (ra.ri + 1) + '</div>'
+      + '<div style="flex:1;min-width:0">'
+        + '<div class="ai-pick-name">' + ra.top.name + tags + '</div>'
+        + '<div class="ai-pick-reason">' + ra.detail + '</div>'
+        + (ra.notes.length ? '<div class="ai-pick-reason" style="margin-top:3px;color:var(--mt)">· ' + ra.notes.join(' · ') + '</div>' : '')
+      + '</div>'
+      + '</div>';
+  });
+  h += '</div>';
+
+  // Strategy
+  h += '<div class="ai-section"><div class="ai-section-title">Placepot Strategy</div><div class="ai-text">';
+  if (a.bankers.length >= 4) {
+    h += 'Use all ' + a.bankers.length + ' banker picks as singles. ';
+    var nonBankers = a.raceAnalyses.filter(function(r){ return !r.isBanker; });
+    if (nonBankers.length) {
+      h += 'In the remaining races (' + nonBankers.map(function(r){ return 'R' + (r.ri + 1); }).join(', ') + '), use two horses each for coverage. ';
+    }
+  } else if (a.bankers.length >= 2) {
+    h += 'Bank on ' + a.bankers.map(function(b){ return 'R' + (b.ri + 1) + ' (' + b.runner.name.split(' ')[0] + ')'; }).join(' and ') + '. ';
+    h += 'In the less clear races, use your top pick plus the second pick for safety. ';
+  } else {
+    h += 'Competitive card with no standout bankers — consider a two-horse line in at least two races for coverage. ';
+    h += 'A four-line combination (banker line + three alternate lines) is reasonable for this type of card. ';
+  }
+  if (a.napRace) {
+    h += a.napRace.runner.name + ' in R' + (a.napRace.ri + 1) + ' has the clearest model edge ('
+      + a.napRace.conf + '%, ' + a.napRace.gap + '% gap over second pick).';
+  }
+  h += '</div></div>';
+
+  // Risks
+  if (a.risks.length) {
+    h += '<div class="ai-section"><div class="ai-section-title">Risks</div><div class="ai-text">';
+    h += a.risks.map(function(r){ return '&bull; ' + r; }).join('<br>');
+    h += '</div></div>';
+  }
+
+  h += '<div class="ai-note" style="margin-top:10px">Analysis based on model scores, market odds, pace classification and movement flags. Enter odds in the Predict tab for each race to improve accuracy.</div>';
+
+  return '<div class="ai-card" style="margin-top:10px"><div class="ct">Second Opinion</div>' + h + '</div>';
+}
+!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🏇 Racecourse Predictor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 
 </body>
 </html>
