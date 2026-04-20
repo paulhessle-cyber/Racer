@@ -117,13 +117,13 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ba-nobet .ba-flag{background:#ff5252;color:#fff}
 .ba-rec{font-size:2rem;letter-spacing:1px;line-height:1;margin-bottom:8px}
 .ba-go .ba-rec{color:var(--g)}.ba-ew .ba-rec{color:var(--bl)}.ba-place .ba-rec{color:var(--closer)}.ba-nobet .ba-rec{color:#ff8a80;font-size:1.4rem}
-.ba-opts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
-.ba-opt{background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 6px;text-align:center}
+.ba-opts{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.ba-opt{background:#0a0f0d;border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
 .ba-opt.best{border-color:var(--g);background:rgba(0,230,118,.06)}
-.ba-opt-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:3px}
+.ba-opt-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px}
 .ba-opt-ev{font-size:1.1rem}
 .ba-opt-ev.pos{color:var(--g)}.ba-opt-ev.neg{color:#ff8a80}
-.ba-opt-roi{font-size:.6rem;color:var(--mt)}
+.ba-opt-roi{font-size:.65rem;color:var(--mt);line-height:1.4;margin-top:2px}
 .ba-stake{display:flex;align-items:center;gap:8px;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:10px}
 .ba-stake label{font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);white-space:nowrap}
 .ba-stake input{flex:1;background:transparent;border:none;color:var(--gold);font-size:1rem;font-weight:600;text-align:right;outline:none;width:60px}
@@ -930,9 +930,17 @@ function calcBetEV(winProb, winOdds, fieldSize, stake, placeFrac) {
   var placeEV = (placeProb * (placeOdds - 1) - (1 - placeProb)) * stake;
   var kelly   = (winProb * (winOdds - 1) - (1 - winProb)) / (winOdds - 1);
 
+  // Actual returns if successful (what the user gets back)
+  var winReturn   = winOdds * stake;                    // e.g. £43 for £10 at 4.3
+  var winProfit   = (winOdds - 1) * stake;              // e.g. £33 profit
+  var ewReturn    = winOdds * h + placeOdds * h;        // both legs win
+  var ewPlaceOnly = placeOdds * h;                      // only place leg wins
+  var placeReturn = placeOdds * stake;                  // place only bet wins
+
   return { winEV, ewEV, placeEV, placeProb, placeOdds, places, kelly, placeFrac,
            winROI: winEV/stake*100, ewROI: ewEV/stake*100, placeROI: placeEV/stake*100,
-           impliedProb: 1/winOdds };
+           impliedProb: 1/winOdds,
+           winReturn, winProfit, ewReturn, ewPlaceOnly, placeReturn };
 }
 
 function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
@@ -981,14 +989,26 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
     reason  = 'Win odds too short to justify win bet, but place at ' + ev.placeOdds.toFixed(2) + ' (' + fracLabel + ') with ~' + Math.round(ev.placeProb*100) + '% place probability offers positive EV.';
   }
 
-  var optGrid = options.map(function(o) {
+  // Build option grid with actual returns as primary, EV as secondary
+  var winReturnStr   = '£' + ev.winReturn.toFixed(2);
+  var ewReturnStr    = '£' + ev.ewReturn.toFixed(2) + ' (win) / £' + ev.ewPlaceOnly.toFixed(2) + ' (place only)';
+  var placeReturnStr = '£' + ev.placeReturn.toFixed(2);
+
+  var optData = [
+    { type: 'Win',      ev: ev.winEV,   roi: ev.winROI,   returnIf: 'If wins: returns ' + winReturnStr,   sub: 'profit £' + ev.winProfit.toFixed(2) },
+    { type: 'Each Way', ev: ev.ewEV,    roi: ev.ewROI,    returnIf: 'If wins: ' + '£' + ev.ewReturn.toFixed(2) + ' · If places: £' + ev.ewPlaceOnly.toFixed(2), sub: '£' + (stake/2).toFixed(2) + ' win + £' + (stake/2).toFixed(2) + ' place' },
+    { type: 'Place',    ev: ev.placeEV, roi: ev.placeROI, returnIf: 'If places: returns ' + placeReturnStr, sub: 'place odds ' + ev.placeOdds.toFixed(2) },
+  ];
+
+  var optGrid = optData.map(function(o) {
     var isBest = !noBet && o.type === best.type;
     var evCls  = o.ev >= 0 ? 'pos' : 'neg';
     var evSign = o.ev >= 0 ? '+' : '';
     return '<div class="ba-opt' + (isBest ? ' best' : '') + '">'
       + '<div class="ba-opt-lbl">' + o.type + '</div>'
-      + '<div class="ba-opt-ev ' + evCls + '">' + evSign + '£' + Math.abs(o.ev).toFixed(2) + '</div>'
-      + '<div class="ba-opt-roi">' + (o.roi >= 0 ? '+' : '') + o.roi.toFixed(1) + '% ROI</div>'
+      + '<div class="ba-opt-ev ' + evCls + '">' + evSign + '£' + Math.abs(o.ev).toFixed(2) + ' EV</div>'
+      + '<div class="ba-opt-roi">' + o.returnIf + '</div>'
+      + '<div class="ba-opt-roi" style="margin-top:2px;color:var(--mt)">' + o.sub + '</div>'
       + '</div>';
   }).join('');
 
