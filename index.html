@@ -633,11 +633,47 @@ function parseRunnerLine(line) {
            daysSince, rf: parseForm(fClean), odds: 0, _pace: classifyPace(fClean) };
 }
 
+// Convert ATR distance strings to furlongs
+// e.g. "1m2f", "2m3f110y", "5f", "1m6½f"
+function parseDist(d) {
+  if (!d) return 8;
+  var s = String(d).toLowerCase()
+    .replace(/½/g, '.5').replace(/¼/g, '.25').replace(/¾/g, '.75')
+    .replace(/1\/2/g, '.5').replace(/1\/4/g, '.25').replace(/3\/4/g, '.75');
+  var m = s.match(/(\d+)m[^0-9]*(\d+(?:\.\d+)?)f/);
+  if (m) return parseInt(m[1]) * 8 + parseFloat(m[2]);
+  m = s.match(/(\d+)m/);
+  if (m) return parseInt(m[1]) * 8;
+  m = s.match(/(\d+(?:\.\d+)?)f/);
+  if (m) return parseFloat(m[1]);
+  return 8;
+}
+
 function parseForm(f) {
   var chars = f.replace(/[-/]/g, '').split('').slice(-6);
   var w = 0, p = 0, r = 0;
   chars.forEach(function(c){ var n = parseInt(c); if (isNaN(n)) return; r++; if (n===1) w++; if (n<=3&&n>0) p++; });
-  return { w, p, r: Math.max(r, 1) };
+
+  // Recent form score: weight last 3 runs more heavily
+  // Returns 0.0 (all bad) to 1.0 (all wins in last 3)
+  var all = chars.filter(function(c){ return /[0-9]/.test(c); }).map(Number);
+  var last3 = all.slice(-3);
+  var recentScore = 0;
+  if (last3.length > 0) {
+    last3.forEach(function(n, i) {
+      var weight = i === last3.length - 1 ? 0.5   // most recent = 50%
+                 : i === last3.length - 2 ? 0.3   // second most = 30%
+                 : 0.2;                            // third most  = 20%
+      if (n === 1) recentScore += weight * 1.0;       // win
+      else if (n <= 3 && n > 0) recentScore += weight * 0.5; // place
+      else if (n <= 6 && n > 0) recentScore += weight * 0.15; // mid
+      // 7,8,9,0 = back of field = 0
+    });
+  } else {
+    recentScore = 0.3; // debutant / no recent form — neutral
+  }
+
+  return { w, p, r: Math.max(r, 1), recent: recentScore };
 }
 
 // ══════════════════════════════════════════════════════════
@@ -842,18 +878,60 @@ function rawScoreMdl(r, race, ctx) {
            + mktShr  * 0.28         // implied prob share — main signal
            + orRank  * 0.11;        // OR rank in field
 
+  // Recent form from parsed form string (last 3 runs weighted)
+  var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
+
+  // Long-distance bonus: boost horses with wins at 2m+ for staying races
+  var raceFurlongs = parseDist(race.dist);
+  var distBonus = 0;
+  if (raceFurlongs >= 16) {
+    var longDistWins = 0;
+    Object.keys(H.dw || {}).forEach(function(d) {
+      if (parseFloat(d) >= 16) longDistWins += H.dw[d];
+    });
+    distBonus = longDistWins > 0 ? Math.min(longDistWins / Math.max(H.w, 1), 0.3) * 0.10 : 0;
+  }
+
   var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  return base * mvMult;
+  return (base + recentScore * 0.08 + distBonus) * mvMult;
 }
 
 function rawScoreDef(r, race, ctx) {
-  var rf  = r.rf || {w:0,p:0,r:1};
-  var wr  = rf.w / rf.r, pr = rf.p / rf.r;
+  var rf  = r.rf || {w:0,p:0,r:1,recent:0.3};
+  var wr  = rf.w / rf.r;
+  var pr  = rf.p / rf.r;
+  var recentScore = rf.recent !== undefined ? rf.recent : 0.3;
+
   var mktShr = impliedShare(r.odds, ctx.odds);
   var orRank = r.or > 0 ? rankIn(r.or, ctx.ors, 'desc') : 0.45;
   var fr = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
+
+  // Distance suitability — does this horse's OR suggest distance aptitude?
+  // We use race distance as a simple stamina check:
+  // Over 2m (16f): penalise if OR < 90 (likely needs stamina rating)
+  // Under 6f: penalise if OR > 110 (classier horses often prefer further)
+  var raceFurlongs = parseDist(race.dist);
+  var distScore = 0.5; // neutral default
+  if (raceFurlongs >= 16) {
+    // Long distance (2m+): staying ability matters, use OR as proxy
+    // Horses with lower OR sometimes excel over extreme distances
+    distScore = r.or > 0 ? 0.4 + Math.min(r.or / 200, 0.5) : 0.4;
+  } else {
+    distScore = r.or > 0 ? Math.min(r.or / 130, 1) : 0.45;
+  }
+
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
-  var base = orRank*0.25 + wr*0.09 + pr*0.07 + mktShr*0.38 + fr*0.09 + (isTip ? 0.07 : 0);
+
+  // Weights: market is dominant signal, recent form now explicit
+  var base = orRank*0.20
+           + wr*0.06
+           + pr*0.05
+           + recentScore*0.10   // last 3 runs, weighted by recency
+           + mktShr*0.38
+           + fr*0.08
+           + distScore*0.08
+           + (isTip ? 0.05 : 0);
+
   var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
   return base * mvMult;
 }
