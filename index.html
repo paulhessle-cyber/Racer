@@ -1045,6 +1045,13 @@ function predict() {
   var paceInfo = assessPace(activeRunners);
   var ctx = buildFieldCtx(activeRunners);
 
+  // Check how many runners have odds entered
+  var oddsEntered = activeRunners.filter(function(r){ return r.odds > 0; }).length;
+  var oddsRatio   = oddsEntered / activeRunners.length;
+  // Flag for use in blending and display
+  var noOddsMode  = oddsEntered === 0;
+  var partialOdds = oddsEntered > 0 && oddsRatio < 0.5;
+
   // Step 1: compute form scores and store market probs on each runner
   var formArr = activeRunners.map(function(r) {
     var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
@@ -1055,11 +1062,13 @@ function predict() {
   var formTotal = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
   var formNorm  = formArr.map(function(f){ return f / formTotal; });
 
-  // Step 3: blend market (65%) + form (35%)
-  // Market already normalised in buildFieldCtx (mktProbs sum to 1)
-  var MKT_W  = 0.65, FORM_W = 0.35;
+  // Step 3: blend market + form
+  // If no odds: market is flat (all equal) so use form only — but warn user
+  // If partial odds: reduce market weight so missing odds don't distort
+  var MKT_W  = noOddsMode ? 0.0 : partialOdds ? 0.45 : 0.65;
+  var FORM_W = 1.0 - MKT_W;
   var blended = activeRunners.map(function(r, i) {
-    var mkt  = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
+    var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
     return mkt * MKT_W + formNorm[i] * FORM_W;
   });
 
@@ -1325,6 +1334,18 @@ function showResults(scored, val, race, paceInfo) {
   var h    = '';
 
   if (!S.model) h += '<div class="al ali">Using default weights — load a trained model in Setup for better accuracy.</div>';
+
+  // Odds quality warning
+  var oddsEnteredCount = scored.filter(function(r){ return r.odds > 0; }).length;
+  if (oddsEnteredCount === 0) {
+    h += '<div class="al alw">⚠ No odds entered — prediction is based on form figures, OR and jockey only. '
+      + 'The market is the strongest signal: enter decimal odds from your bookmaker for a meaningful prediction. '
+      + 'Without odds, this is little better than sorting by Official Rating.</div>';
+  } else if (oddsEnteredCount < scored.length) {
+    h += '<div class="al alw">⚠ Odds missing for ' + (scored.length - oddsEnteredCount) + ' runner'
+      + (scored.length - oddsEnteredCount > 1 ? 's' : '') + '. Market weight reduced. '
+      + 'For best results enter odds for all runners.</div>';
+  }
 
   // Pace banner
   h += paceBannerHTML(paceInfo);
