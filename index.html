@@ -822,6 +822,18 @@ function rankIn(val, arr, direction) {
   return sorted.length > 1 ? 1 - pos / (sorted.length - 1) : 0.5;
 }
 
+// Continuous OR score: normalises within the actual field range.
+// A 4-point OR gap in a tight field stays a small difference,
+// unlike rankIn which would give it a large positional gap.
+function orScore(orVal, allOrs) {
+  var valid = allOrs.filter(function(x){ return x > 0; });
+  if (!valid.length || orVal <= 0) return 0.45;
+  var mn = Math.min.apply(null, valid);
+  var mx = Math.max.apply(null, valid);
+  if (mx === mn) return 0.5;
+  return (orVal - mn) / (mx - mn);
+}
+
 // Implied probability share for a runner\'s odds within the field.
 // This captures REAL market separation — favourite at 4.0 gets ~25% share,
 // a 33/1 shot gets ~3% share. Pure rank would give them equally spaced slots.
@@ -836,7 +848,7 @@ function impliedShare(odds, allOdds) {
 // score^POWER / total amplifies differences between close scores,
 // giving meaningful spread without softmax's flattening effect.
 // POWER=2.0 tested as optimal: fav shows ~19%, big outsider ~3%.
-var SCORE_POWER = 2.0;
+var SCORE_POWER = 1.5;
 
 function powerScaleProbs(scores) {
   var powered = scores.map(function(s){ return Math.pow(Math.max(s, 0), SCORE_POWER); });
@@ -928,17 +940,23 @@ function rawScoreMdl(r, race, ctx) {
   var jwrRank = rankIn(jwr, ctx.jwrs, 'desc');
 
   var w = m.weights || [];
-  var base = wr      * (w[0]||0.08)
-           + pr      * (w[1]||0.06)
-           + jwrRank * 0.10
-           + twr     * (w[3]||0.05)
-           + db      * 0.05
-           + gMch    * (w[5]||0.07)
-           + dMch    * (w[6]||0.08)
-           + cMch    * 0.05
-           + fr      * (w[8]||0.07)
-           + mktShr  * 0.30         // implied prob share — dominant signal
-           + orRank  * 0.07;          // OR rank — informative but not dominant        // OR rank in field
+  // Use continuous OR score rather than rank position
+  var orsC = orScore(r.or, ctx.ors);
+
+  var base = wr      * (w[0]||0.07)
+           + pr      * (w[1]||0.05)
+           + jwrRank * 0.08
+           + twr     * (w[3]||0.04)
+           + db      * 0.04
+           + gMch    * (w[5]||0.06)
+           + dMch    * (w[6]||0.07)
+           + cMch    * 0.04
+           + fr      * (w[8]||0.06)
+           + mktShr  * 0.50         // market is the dominant anchor
+           + orsC    * 0.03;         // OR: continuous score, minor tiebreaker
+
+  // Hard cap: no horse scores more than 2.5x its market implied share
+  base = Math.min(base, mktShr * 2.5);        // OR rank in field
 
   // Recent form from parsed form string (last 3 runs weighted)
   var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
@@ -965,41 +983,39 @@ function rawScoreDef(r, race, ctx) {
   var pr  = rf.p / rf.r;
   var recentScore = rf.recent !== undefined ? rf.recent : 0.3;
 
+  // Market implied share — PRIMARY anchor (60% weight)
   var mktShr = impliedShare(r.odds, ctx.odds);
-  var orRank = r.or > 0 ? rankIn(r.or, ctx.ors, 'desc') : 0.45;
+
+  // OR as continuous score within field range — minor tiebreaker only
+  var ors = orScore(r.or, ctx.ors);
+
+  // Freshness
   var fr = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
 
-  // Distance suitability — does this horse's OR suggest distance aptitude?
-  // We use race distance as a simple stamina check:
-  // Over 2m (16f): penalise if OR < 90 (likely needs stamina rating)
-  // Under 6f: penalise if OR > 110 (classier horses often prefer further)
+  // Distance
   var raceFurlongs = parseDist(race.dist);
-  var distScore = 0.5; // neutral default
-  if (raceFurlongs >= 16) {
-    // Long distance (2m+): staying ability matters, use OR as proxy
-    // Horses with lower OR sometimes excel over extreme distances
-    distScore = r.or > 0 ? 0.4 + Math.min(r.or / 200, 0.5) : 0.4;
-  } else {
-    distScore = r.or > 0 ? Math.min(r.or / 130, 1) : 0.45;
-  }
+  var distAdj = 1.0;
+  if (raceFurlongs >= 16 && r.or > 0 && r.or < 85) distAdj = 1.05; // lower OR stayers may suit
 
   var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
 
-  // Weights: market is dominant signal, recent form now explicit
-  var base = orRank*0.20
-           + wr*0.06
-           + pr*0.05
-           + recentScore*0.10   // last 3 runs, weighted by recency
-           + mktShr*0.38
-           + fr*0.08
-           + distScore*0.08
-           + (isTip ? 0.05 : 0);
+  var base = mktShr    * 0.60   // market is the anchor
+           + ors       * 0.03   // OR: tiny tiebreaker, not a primary factor
+           + recentScore * 0.10  // last 3 runs weighted
+           + fr        * 0.08   // freshness
+           + wr        * 0.05   // career win rate
+           + pr        * 0.04   // career place rate
+           + (isTip ? 0.04 : 0);
 
-  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  return base * mvMult;
+  // Hard cap: no horse can score more than 2.5x its market implied share
+  // This prevents OR/form from wildly overriding a clear market signal
+  base = Math.min(base, mktShr * 2.5);
+
+  var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  var jkyMult = jockeyMultiplier(r.jockey);
+  return base * distAdj * mvMult * jkyMult;
 }
 
-// ── Main prediction entry point ────────────────────────────
 function predict() {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
