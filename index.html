@@ -862,15 +862,21 @@ function powerScaleProbs(scores) {
 
 // Build field-level context arrays (only active runners)
 function buildFieldCtx(runners) {
-  return {
-    ors:  runners.map(function(r){ return r.or || 0; }),
-    odds: runners.map(function(r){ return r.odds || 0; }),
-    jwrs: runners.map(function(r){
-      var j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
-      var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[j] : null;
-      return js ? js.w / Math.max(js.r, 1) : 0.12;
-    })
-  };
+  var ors  = runners.map(function(r){ return r.or || 0; });
+  var odds = runners.map(function(r){ return r.odds || 0; });
+  var jwrs = runners.map(function(r){
+    var j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
+    var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[j] : null;
+    return js ? js.w / Math.max(js.r, 1) : 0.12;
+  });
+
+  // Pre-compute normalised market implied probabilities
+  // (overround removed by normalising to sum to 1)
+  var rawImp = odds.map(function(o){ return o > 0 ? 1/o : 0.02; });
+  var impTotal = rawImp.reduce(function(a,b){ return a+b; }, 0) || 1;
+  var mktProbs = rawImp.map(function(p){ return p / impTotal; });
+
+  return { ors: ors, odds: odds, jwrs: jwrs, mktProbs: mktProbs };
 }
 
 
@@ -911,15 +917,15 @@ function jockeyMultiplier(jockeyName) {
 }
 
 function rawScoreMdl(r, race, ctx) {
-  var m = S.model;
+  var m  = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
   var hs = m.horseStats || {}, js = m.jockeyStats || {}, ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
-  var h = r.name.toLowerCase(), j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
-  var t = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
-  var dist = parseFloat(race.dist) || 10;
+  var h  = r.name.toLowerCase(), j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
+  var t  = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
+  var dist = parseDist(race.dist);
   var gs = gm[(r.going||'good').toLowerCase()] || 4;
-  var H = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
-  var J = js[j] || {r:1,w:0};
+  var H  = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
+  var J  = js[j] || {r:1,w:0};
   var T2 = ts[t] || {r:1,w:0};
 
   var wr   = H.w / Math.max(H.r, 1);
@@ -928,92 +934,94 @@ function rawScoreMdl(r, race, ctx) {
   var twr  = T2.w / Math.max(T2.r, 1);
   var dd   = (cd[c]||{})[r.stall] || {r:1,w:0};
   var db   = dd.r > 2 ? dd.w / dd.r : 0.05;
-  var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1, 1), 1);
-  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1, 1), 1);
-  var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1, 1), 1);
+  var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1,1), 1);
+  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1,1), 1);
+  var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1,1), 1);
   var fr   = r.daysSince < 14 ? 1 : r.daysSince < 28 ? 0.8 : r.daysSince < 60 ? 0.5 : 0.2;
-
-  // Market: implied probability share (real separation, not just rank position)
-  var mktShr  = impliedShare(r.odds, ctx.odds);
-  // OR and jockey still rank-based (avoids absolute number issues)
-  var orRank  = r.or > 0 ? rankIn(r.or, ctx.ors, 'desc') : 0.5;
+  var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
   var jwrRank = rankIn(jwr, ctx.jwrs, 'desc');
 
-  var w = m.weights || [];
-  // Use continuous OR score rather than rank position
-  var orsC = orScore(r.or, ctx.ors);
+  // OR: continuous score with credibility discount for big outsiders
+  var allOrs = ctx.ors;
+  var mnOr = Math.min.apply(null, allOrs.filter(function(x){return x>0;})) || 0;
+  var mxOr = Math.max.apply(null, allOrs.filter(function(x){return x>0;})) || 1;
+  var orsRaw = (r.or > 0 && mxOr > mnOr) ? (r.or - mnOr) / (mxOr - mnOr) : 0.45;
+  var orCredibility = r.odds <= 12 ? 1.0 : r.odds <= 25 ? 0.5 : 0.2;
+  var orsAdj = orsRaw * orCredibility;
 
-  var base = wr      * (w[0]||0.07)
-           + pr      * (w[1]||0.05)
-           + jwrRank * 0.08
-           + twr     * (w[3]||0.04)
-           + db      * 0.04
-           + gMch    * (w[5]||0.06)
-           + dMch    * (w[6]||0.07)
-           + cMch    * 0.04
-           + fr      * (w[8]||0.06)
-           + mktShr  * 0.50         // market is the dominant anchor
-           + orsC    * 0.03;         // OR: continuous score, minor tiebreaker
-
-  // Hard cap: no horse scores more than 2.5x its market implied share
-  base = Math.min(base, mktShr * 2.5);        // OR rank in field
-
-  // Recent form from parsed form string (last 3 runs weighted)
-  var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
-
-  // Long-distance bonus: boost horses with wins at 2m+ for staying races
-  var raceFurlongs = parseDist(race.dist);
+  // Long-distance bonus
   var distBonus = 0;
-  if (raceFurlongs >= 16) {
+  if (dist >= 16) {
     var longDistWins = 0;
-    Object.keys(H.dw || {}).forEach(function(d) {
-      if (parseFloat(d) >= 16) longDistWins += H.dw[d];
-    });
-    distBonus = longDistWins > 0 ? Math.min(longDistWins / Math.max(H.w, 1), 0.3) * 0.10 : 0;
+    Object.keys(H.dw || {}).forEach(function(d){ if (parseFloat(d) >= 16) longDistWins += H.dw[d]; });
+    distBonus = longDistWins > 0 ? Math.min(longDistWins / Math.max(H.w,1), 0.3) * 0.08 : 0;
   }
 
+  var w = m.weights || [];
+  // Form score from model-enhanced signals (no market signal here)
+  var formScore = wr      * (w[0]||0.08)
+               + pr      * (w[1]||0.06)
+               + jwrRank * 0.09
+               + twr     * (w[3]||0.05)
+               + db      * 0.04
+               + gMch    * (w[5]||0.07)
+               + dMch    * (w[6]||0.08)
+               + cMch    * 0.05
+               + fr      * (w[8]||0.07)
+               + recentScore * 0.08
+               + orsAdj  * 0.06
+               + distBonus;
+
   var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  var jkyMult  = jockeyMultiplier(r.jockey);
-  return (base + recentScore * 0.08 + distBonus) * mvMult * jkyMult;
+  var jkyMult = jockeyMultiplier(r.jockey);
+
+  // Store market prob for blending in predict()
+  var runnerIdx = ctx.odds.indexOf(r.odds);
+  r._mktProb   = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
+  r._formScore = formScore * mvMult * jkyMult;
+  return r._formScore;
 }
 
+
 function rawScoreDef(r, race, ctx) {
+  // ── Architecture: market anchor + bounded form adjustment ──
+  // Step 1: get this horse's normalised market implied probability
+  var runnerIdx = ctx.odds.indexOf(r.odds);
+  var mktProb = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
+
+  // Step 2: form score from non-market signals only
   var rf  = r.rf || {w:0,p:0,r:1,recent:0.3};
   var wr  = rf.w / rf.r;
   var pr  = rf.p / rf.r;
   var recentScore = rf.recent !== undefined ? rf.recent : 0.3;
+  var fr  = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
 
-  // Market implied share — PRIMARY anchor (60% weight)
-  var mktShr = impliedShare(r.odds, ctx.odds);
+  // OR continuous score — discounted for big outsiders (stale/irrelevant rating)
+  var allOrs = ctx.ors;
+  var mnOr = Math.min.apply(null, allOrs.filter(function(x){return x>0;})) || 0;
+  var mxOr = Math.max.apply(null, allOrs.filter(function(x){return x>0;})) || 1;
+  var orsRaw = (r.or > 0 && mxOr > mnOr) ? (r.or - mnOr) / (mxOr - mnOr) : 0.45;
+  var orCredibility = r.odds <= 12 ? 1.0 : r.odds <= 25 ? 0.5 : 0.2;
+  var orsAdj = orsRaw * orCredibility;
 
-  // OR as continuous score within field range — minor tiebreaker only
-  var ors = orScore(r.or, ctx.ors);
+  var jkyBonus = (jockeyMultiplier(r.jockey) - 1.0) * 3;
+  var isTip    = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
 
-  // Freshness
-  var fr = r.daysSince < 14 ? 0.85 : r.daysSince < 28 ? 1 : r.daysSince < 60 ? 0.75 : 0.4;
+  var formScore = orsAdj * 0.35 + recentScore * 0.45 + fr * 0.10 + wr * 0.05 + pr * 0.03 + jkyBonus * 0.10 + (isTip ? 0.02 : 0);
 
-  // Distance
-  var raceFurlongs = parseDist(race.dist);
-  var distAdj = 1.0;
-  if (raceFurlongs >= 16 && r.or > 0 && r.or < 85) distAdj = 1.05; // lower OR stayers may suit
+  // Step 3: return raw score as [mktProb, formScore] pair for later blending
+  // We can't blend here because we need all horses' form scores to normalise
+  // So return a composite that preserves the market anchor
+  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  var paceAdj = 1.0; // paceAdjust applied externally in predict()
 
-  var isTip = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
-
-  var base = mktShr    * 0.60   // market is the anchor
-           + ors       * 0.03   // OR: tiny tiebreaker, not a primary factor
-           + recentScore * 0.10  // last 3 runs weighted
-           + fr        * 0.08   // freshness
-           + wr        * 0.05   // career win rate
-           + pr        * 0.04   // career place rate
-           + (isTip ? 0.04 : 0);
-
-  // Hard cap: no horse can score more than 2.5x its market implied share
-  // This prevents OR/form from wildly overriding a clear market signal
-  base = Math.min(base, mktShr * 2.5);
-
-  var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  var jkyMult = jockeyMultiplier(r.jockey);
-  return base * distAdj * mvMult * jkyMult;
+  // Encode both signals in a single score:
+  // Market component: already normalised (sum=1 across field)
+  // Form component: 0-1 scale, will be normalised across field in predict()
+  // Return them combined so predict() can do the final blend
+  r._mktProb   = mktProb;
+  r._formScore = formScore * mvMult;
+  return formScore * mvMult; // predict() will blend with mktProb
 }
 
 function predict() {
@@ -1037,14 +1045,28 @@ function predict() {
   var paceInfo = assessPace(activeRunners);
   var ctx = buildFieldCtx(activeRunners);
 
-  // Raw scores with pace adjustment
-  var rawArr = activeRunners.map(function(r) {
-    var raw = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
-    return raw * paceAdjust(r, paceInfo);
+  // Step 1: compute form scores and store market probs on each runner
+  var formArr = activeRunners.map(function(r) {
+    var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
+    return fs * paceAdjust(r, paceInfo);
   });
 
-  // Power-curve probabilities (gives spread)
-  var finalProbs = powerScaleProbs(rawArr);
+  // Step 2: normalise form scores to sum to 1
+  var formTotal = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
+  var formNorm  = formArr.map(function(f){ return f / formTotal; });
+
+  // Step 3: blend market (65%) + form (35%)
+  // Market already normalised in buildFieldCtx (mktProbs sum to 1)
+  var MKT_W  = 0.65, FORM_W = 0.35;
+  var blended = activeRunners.map(function(r, i) {
+    var mkt  = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
+    return mkt * MKT_W + formNorm[i] * FORM_W;
+  });
+
+  // Step 4: normalise blended scores, then power-scale for spread
+  var blendTotal = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
+  var blendNorm  = blended.map(function(b){ return b / blendTotal; });
+  var finalProbs = powerScaleProbs(blendNorm);
 
   var scored = activeRunners.map(function(r, i) {
     return Object.assign({}, r, { score: finalProbs[i] });
@@ -1903,8 +1925,16 @@ function runPlacepot() {
     var ctx=buildFieldCtx(active);
     var paceInfo=assessPace(active);
 
-    var rawArr=active.map(function(r){ return scoreRunnerForPP(r,race,going,ctx)*paceAdjust(r,paceInfo); });
-    var finalProbs=powerScaleProbs(rawArr);
+    var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,going,ctx)*paceAdjust(r,paceInfo); });
+    var rawTotal = rawArr.reduce(function(a,b){return a+b;},0)||1;
+    var rawNorm  = rawArr.map(function(f){return f/rawTotal;});
+    var ppBlended = active.map(function(r,i){
+      var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds,ctx.odds);
+      return mkt*0.65 + rawNorm[i]*0.35;
+    });
+    var ppBlendTotal = ppBlended.reduce(function(a,b){return a+b;},0)||1;
+    var ppBlendNorm  = ppBlended.map(function(b){return b/ppBlendTotal;});
+    var finalProbs=powerScaleProbs(ppBlendNorm);
 
     var scored=active.map(function(r,i){ return Object.assign({},r,{score:finalProbs[i]}); });
     scored.sort(function(a,b){return b.score-a.score;});
