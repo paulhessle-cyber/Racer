@@ -730,18 +730,43 @@ function assessPace(runners) {
 // Given the pace scenario, return a score multiplier
 function paceAdjust(runner, paceInfo) {
   var s = paceInfo.scenario;
+  var n = paceInfo.fieldSize || 10;
+
+  // Base pace multiplier
+  var mult = 1.0;
   if (runner._pace === 'front') {
-    if (s === 'lone_front') return 1.12;    // lone leader: good boost
-    if (s === 'contested')  return 0.88;    // contested pace: penalise
-    return 1.0;
+    if (s === 'lone_front') mult = 1.12;
+    else if (s === 'contested') mult = 0.88;
+  } else if (runner._pace === 'closer') {
+    if (s === 'contested')  mult = 1.06;
+    else if (s === 'lone_front') mult = 0.96;
+    else if (s === 'slow')  mult = 0.94;
   }
-  if (runner._pace === 'closer') {
-    if (s === 'contested')  return 1.06;    // closers thrive when pace is hot
-    if (s === 'lone_front') return 0.96;    // hard to catch a lone leader
-    if (s === 'slow')       return 0.94;    // slow pace negates finishing kick
-    return 1.0;
+
+  // Draw + pace interaction
+  // Low draw (1-3) benefits front-runners and horses that race prominently
+  // High draw can be a problem for front-runners in large fields
+  // Closers are less affected by draw but high draw in small fields is fine
+  var draw = runner.stall || runner.draw || 0;
+  if (draw > 0 && n > 0) {
+    var drawPos = draw / n; // 0 = lowest draw, 1 = highest
+
+    if (runner._pace === 'front') {
+      // Front-runners: low draw is ideal, high draw in big field is a problem
+      if (drawPos <= 0.25 && n >= 8) mult *= 1.04;       // low draw, decent field
+      else if (drawPos >= 0.75 && n >= 10) mult *= 0.93; // high draw, big field
+    } else if (runner._pace === 'closer') {
+      // Closers: high draw can cause traffic issues in big fields
+      if (drawPos >= 0.85 && n >= 12) mult *= 0.96;
+      // But closers with a middle draw in big fields often get a clear run
+      else if (drawPos > 0.3 && drawPos < 0.7 && n >= 10) mult *= 1.02;
+    } else {
+      // Mid-pack: low draw slight advantage in most conditions
+      if (drawPos <= 0.2 && n >= 8) mult *= 1.02;
+    }
   }
-  return 1.0; // mid/unknown — no adjustment
+
+  return mult;
 }
 
 // ── Pace scenario banner text ──────────────────────────────
@@ -836,6 +861,43 @@ function buildFieldCtx(runners) {
   };
 }
 
+
+// ── Jockey tier multipliers ────────────────────────────────
+// Based on UK/Irish flat win rates. Tier 1 = elite (18%+ WR),
+// Tier 2 = very good (14-18%), Tier 3 = good (10-14%)
+// A late booking by a top jockey is already reflected in market odds,
+// but we give a small structural boost to account for execution quality.
+var JOCKEY_TIERS = {
+  // Tier 1 — elite (multiplier 1.12)
+  'ryan moore':1.12,'william buick':1.12,'frankie dettori':1.12,
+  'james doyle':1.11,'oisin murphy':1.11,'tom marquand':1.10,
+  'colin keane':1.11,'shane foley':1.10,'christophe soumillon':1.11,
+  'hollie doyle':1.09,'pat cosgrave':1.09,'andrea atzeni':1.09,
+  'adam kirby':1.09,'rossa ryan':1.09,'callum shepherd':1.08,
+  // Tier 2 — very good (multiplier 1.06)
+  'paul hanagan':1.07,'danny tudhope':1.07,'david probert':1.07,
+  'jason watson':1.06,'robert havlin':1.06,'hector crouch':1.06,
+  'sean levey':1.06,'jack mitchell':1.06,'neil callan':1.06,
+  'richard kingscote':1.06,'luke morris':1.06,'silvestre de sousa':1.07,
+  'p j mcdonald':1.06,'tom eaves':1.05,'martin harley':1.05,
+  // Irish elite
+  'seamie heffernan':1.10,'wayne lordan':1.09,'billy lee':1.08,
+  'chris hayes':1.08,'declan mcdowell':1.06,
+};
+
+function jockeyMultiplier(jockeyName) {
+  if (!jockeyName) return 1.0;
+  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
+  // Check full name first, then last name only
+  if (JOCKEY_TIERS[j]) return JOCKEY_TIERS[j];
+  var parts = j.split(' ');
+  var lastName = parts[parts.length - 1];
+  for (var k in JOCKEY_TIERS) {
+    if (k.indexOf(lastName) > -1) return JOCKEY_TIERS[k];
+  }
+  return 1.0;
+}
+
 function rawScoreMdl(r, race, ctx) {
   var m = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
@@ -875,8 +937,8 @@ function rawScoreMdl(r, race, ctx) {
            + dMch    * (w[6]||0.08)
            + cMch    * 0.05
            + fr      * (w[8]||0.07)
-           + mktShr  * 0.28         // implied prob share — main signal
-           + orRank  * 0.11;        // OR rank in field
+           + mktShr  * 0.30         // implied prob share — dominant signal
+           + orRank  * 0.07;          // OR rank — informative but not dominant        // OR rank in field
 
   // Recent form from parsed form string (last 3 runs weighted)
   var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
@@ -892,8 +954,10 @@ function rawScoreMdl(r, race, ctx) {
     distBonus = longDistWins > 0 ? Math.min(longDistWins / Math.max(H.w, 1), 0.3) * 0.10 : 0;
   }
 
-  var mvMult = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  return (base + recentScore * 0.08 + distBonus) * mvMult;
+  var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
+  var jkyMult  = jockeyMultiplier(r.jockey);
+  var geldBoost = r._gelding ? 1.06 : 1.0; // recently gelded = moderate positive
+  return (base + recentScore * 0.08 + distBonus) * mvMult * jkyMult * geldBoost;
 }
 
 function rawScoreDef(r, race, ctx) {
@@ -1302,7 +1366,7 @@ function lsSave() {
   if (!S.races||!S.races.length) return;
   try {
     var data = {};
-    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0}; }); });
+    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0,geld:r._gelding||false}; }); });
     localStorage.setItem(lsKey(S.races), JSON.stringify(data));
   } catch(e){}
 }
@@ -1311,7 +1375,7 @@ function lsRestore(races) {
     var raw = localStorage.getItem(lsKey(races));
     if (!raw) return;
     var data = JSON.parse(raw);
-    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv; if(d.open)r._openingOdds=d.open;} }); });
+    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv; if(d.open)r._openingOdds=d.open; if(d.geld)r._gelding=true;} }); });
   } catch(e){}
 }
 function lsPurgeOld() {
@@ -1437,8 +1501,21 @@ function renderPredict(race) {
       +'<span class="nr-badge">NON RUNNER</span></div>'
       +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+'" id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'
       +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
+      +'</button></div>'
+      +'<div style="padding-bottom:2px;"><button class="geld-btn'+(r._gelding?' active':'')+'" style="font-size:.58rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:4px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--bd);background:transparent;color:var(--mt);white-space:nowrap">'
+      +(r._gelding?'✂ Gelded':'✂ Geld?')
       +'</button></div></div>';
     d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseFloat(e.target.value)||0; lsSave(); }; })(r));
+    // Gelding toggle
+    var geldBtn = d.querySelector('.geld-btn');
+    if (geldBtn) {
+      geldBtn.addEventListener('click', (function(runner, btn){ return function(){
+        runner._gelding = !runner._gelding;
+        btn.classList.toggle('active', runner._gelding);
+        btn.textContent = runner._gelding ? '✂ Gelded' : '✂ Geld?';
+        lsSave();
+      }; })(r, geldBtn));
+    }
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
 }
