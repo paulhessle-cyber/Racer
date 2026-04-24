@@ -956,8 +956,7 @@ function rawScoreMdl(r, race, ctx) {
 
   var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
   var jkyMult  = jockeyMultiplier(r.jockey);
-  var geldBoost = r._gelding ? 1.06 : 1.0; // recently gelded = moderate positive
-  return (base + recentScore * 0.08 + distBonus) * mvMult * jkyMult * geldBoost;
+  return (base + recentScore * 0.08 + distBonus) * mvMult * jkyMult;
 }
 
 function rawScoreDef(r, race, ctx) {
@@ -1366,7 +1365,7 @@ function lsSave() {
   if (!S.races||!S.races.length) return;
   try {
     var data = {};
-    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0,geld:r._gelding||false}; }); });
+    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0}; }); });
     localStorage.setItem(lsKey(S.races), JSON.stringify(data));
   } catch(e){}
 }
@@ -1375,7 +1374,7 @@ function lsRestore(races) {
     var raw = localStorage.getItem(lsKey(races));
     if (!raw) return;
     var data = JSON.parse(raw);
-    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv; if(d.open)r._openingOdds=d.open; if(d.geld)r._gelding=true;} }); });
+    races.forEach(function(race,ri){ race.runners.forEach(function(r){ var d=data[ri+'_'+r.stall]; if(d){if(d.odds)r.odds=d.odds;if(d.nr)r._nr=true;if(d.mv&&d.mv!=='steady')r._mv=d.mv; if(d.open)r._openingOdds=d.open;} }); });
   } catch(e){}
 }
 function lsPurgeOld() {
@@ -1502,20 +1501,9 @@ function renderPredict(race) {
       +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+'" id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'
       +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
       +'</button></div>'
-      +'<div style="padding-bottom:2px;"><button class="geld-btn'+(r._gelding?' active':'')+'" style="font-size:.58rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:4px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--bd);background:transparent;color:var(--mt);white-space:nowrap">'
-      +(r._gelding?'✂ Gelded':'✂ Geld?')
       +'</button></div></div>';
     d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseFloat(e.target.value)||0; lsSave(); }; })(r));
-    // Gelding toggle
-    var geldBtn = d.querySelector('.geld-btn');
-    if (geldBtn) {
-      geldBtn.addEventListener('click', (function(runner, btn){ return function(){
-        runner._gelding = !runner._gelding;
-        btn.classList.toggle('active', runner._gelding);
-        btn.textContent = runner._gelding ? '✂ Gelded' : '✂ Geld?';
-        lsSave();
-      }; })(r, geldBtn));
-    }
+
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
 }
