@@ -1007,7 +1007,7 @@ function rawScoreDef(r, race, ctx) {
   var jkyBonus = (jockeyMultiplier(r.jockey) - 1.0) * 3;
   var isTip    = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
 
-  var formScore = orsAdj * 0.35 + recentScore * 0.45 + fr * 0.10 + wr * 0.05 + pr * 0.03 + jkyBonus * 0.10 + (isTip ? 0.02 : 0);
+  var formScore = orsAdj * 0.20 + recentScore * 0.55 + fr * 0.10 + wr * 0.05 + pr * 0.03 + jkyBonus * 0.12 + (isTip ? 0.02 : 0);  // recent form is primary non-market signal
 
   // Step 3: return raw score as [mktProb, formScore] pair for later blending
   // We can't blend here because we need all horses' form scores to normalise
@@ -1065,7 +1065,11 @@ function predict() {
   // Step 3: blend market + form
   // If no odds: market is flat (all equal) so use form only — but warn user
   // If partial odds: reduce market weight so missing odds don't distort
-  var MKT_W  = noOddsMode ? 0.0 : partialOdds ? 0.45 : 0.65;
+  // 40% market anchor, 60% form signals
+  // Market keeps horses from going wildly wrong; form provides real differentiation
+  // With no odds: pure form (still limited without model)
+  // With partial odds: reduce market weight proportionally
+  var MKT_W  = noOddsMode ? 0.0 : partialOdds ? 0.25 : 0.40;
   var FORM_W = 1.0 - MKT_W;
   var blended = activeRunners.map(function(r, i) {
     var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
@@ -1951,7 +1955,7 @@ function runPlacepot() {
     var rawNorm  = rawArr.map(function(f){return f/rawTotal;});
     var ppBlended = active.map(function(r,i){
       var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds,ctx.odds);
-      return mkt*0.65 + rawNorm[i]*0.35;
+      return mkt*0.40 + rawNorm[i]*0.60;
     });
     var ppBlendTotal = ppBlended.reduce(function(a,b){return a+b;},0)||1;
     var ppBlendNorm  = ppBlended.map(function(b){return b/ppBlendTotal;});
