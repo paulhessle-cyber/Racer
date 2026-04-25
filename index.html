@@ -2055,75 +2055,107 @@ function buildLocalAnalysis(ppRaces, going) {
     var oddsCount = active.filter(function(r){ return r.odds > 0; }).length;
     totalOddsEntered += oddsCount;
 
-    // Score the field
+    // Score using FORM-HEAVY emphasis (opposite to placepot's market anchor)
+    // This gives a genuine second opinion rather than copying the placepot
     var ctx      = buildFieldCtx(active);
     var paceInfo = assessPace(active);
-    var rawArr   = active.map(function(r){
+
+    // Form-only scores (no market blending) — pure non-market signals
+    var formArr = active.map(function(r){
       var raw = S.model
         ? rawScoreMdl(Object.assign({}, r, {going: going}), race, ctx)
         : rawScoreDef(Object.assign({}, r, {going: going}), race, ctx);
       return raw * paceAdjust(r, paceInfo);
     });
-    var probs  = powerScaleProbs(rawArr);
-    var scored = active.map(function(r, i){ return Object.assign({}, r, {prob: probs[i]}); });
-    scored.sort(function(a,b){ return b.prob - a.prob; });
+    var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
+    var formNorm  = formArr.map(function(f){return f/formTotal;});
+
+    // Also get the placepot's top pick for this race (market-blended)
+    // by re-running with market weight to see what placepot chose
+    var oddsAvail = active.filter(function(r){return r.odds>0;}).length;
+    var mktW = oddsAvail === 0 ? 0.0 : oddsAvail < active.length*0.5 ? 0.25 : 0.40;
+    var ppBlended = active.map(function(r,i){
+      var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
+      return mkt * mktW + formNorm[i] * (1.0 - mktW);
+    });
+    var ppBT    = ppBlended.reduce(function(a,b){return a+b;},0)||1;
+    var ppBNorm = ppBlended.map(function(b){return b/ppBT;});
+    var ppProbs = powerScaleProbs(ppBNorm);
+    var ppSorted = active.map(function(r,i){return Object.assign({},r,{prob:ppProbs[i]});});
+    ppSorted.sort(function(a,b){return b.prob-a.prob;});
+    var placepotPick = ppSorted[0]; // what the placepot tab is showing
+
+    // Form-only ranking (what a form analyst would say, ignoring market)
+    var formProbs = powerScaleProbs(formArr);
+    var scored    = active.map(function(r,i){return Object.assign({},r,{prob:formProbs[i]});});
+    scored.sort(function(a,b){return b.prob-a.prob;});
+    var formPick = scored[0]; // what pure form says
+
+    // Use placepot pick as the reference — second opinion critiques it
+    var top = placepotPick;
+    var sec = ppSorted[1] || null;
 
     var top  = scored[0];
     var sec  = scored[1] || null;
     var conf = Math.round(top.prob * 100);
     var gap  = sec ? Math.round((top.prob - sec.prob) * 100) : conf;
-
-    // Market implied prob for top pick
     var mktImplied = top.odds > 0 ? Math.round(100 / top.odds) : null;
-    var modelVsMarket = mktImplied ? conf - mktImplied : null;
 
-    // Detect steamers/drifters in field
+    // Do form analysis and placepot agree on the same horse?
+    var formAgrees   = formPick.name === placepotPick.name;
+    var formPickPos  = scored.findIndex(function(r){ return r.name === placepotPick.name; }) + 1;
+
+    // Detect steamers/drifters
     var steamers = active.filter(function(r){ return r._mv === 'steam'; });
     var drifters = active.filter(function(r){ return r._mv === 'drift'; });
 
-    // Banker quality: confident top pick with gap > 5% AND model agrees with market
-    var isBanker = gap >= 5 && conf >= 16 && (modelVsMarket === null || modelVsMarket > -5);
+    // Banker: form and market both agree on same horse with clear margin
+    var isBanker = formAgrees && gap >= 4 && conf >= 14;
     if (isBanker) bankers.push({race: race, runner: top, ri: ri});
 
-    // NAP: biggest gap between 1st and 2nd
-    if (gap > napScore) {
+    // NAP: strongest agreement with biggest margin
+    if (formAgrees && gap > napScore) {
       napScore = gap;
       napRace  = {race: race, runner: top, ri: ri, gap: gap, conf: conf};
     }
 
-    // Second opinion logic
+    // Verdict: critique the placepot pick using form analysis
     var verdict, detail, cls;
 
-    // Case 1: Model and market agree
-    if (modelVsMarket !== null && Math.abs(modelVsMarket) <= 5) {
-      verdict = 'Agree';
-      cls     = 'agree';
-      detail  = top.name + ' is the model\'s top pick and the market agrees'
-        + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '')
-        + '. ' + (gap >= 6 ? 'Clear margin over second pick.' : 'Modest margin — not a banker.');
-    }
-    // Case 2: Model rates higher than market (potential value)
-    else if (modelVsMarket !== null && modelVsMarket >= 6) {
-      verdict = 'Value Flag';
-      cls     = 'differ';
-      detail  = top.name + ' rated ' + conf + '% by model vs ~' + mktImplied + '% market implied. '
-        + 'Model sees more chance than the market — worth noting'
-        + (top.odds > 0 ? ' at ' + top.odds.toFixed(1) : '') + '.';
-    }
-    // Case 3: Model rates lower than market (overbet favourite)
-    else if (modelVsMarket !== null && modelVsMarket <= -6) {
-      // Suggest second pick instead if market and model diverge
-      verdict = 'Caution';
-      cls     = 'differ';
-      var altName = sec ? sec.name : 'second pick';
-      var altOdds = sec && sec.odds > 0 ? ' (' + sec.odds.toFixed(1) + ')' : '';
-      detail  = top.name + ' is shorter than the model suggests (' + conf + '% model vs ~'
-        + mktImplied + '% market). Consider ' + altName + altOdds + ' as an alternative or double-up.';
-    }
-    else {
-      verdict = 'Agree';
-      cls     = 'agree';
-      detail  = top.name + (top.odds > 0 ? ' @ ' + top.odds.toFixed(1) : '') + ' — model and market broadly aligned.';
+    if (formAgrees) {
+      cls = 'agree';
+      if (gap >= 6) {
+        verdict = 'Confirmed';
+        detail  = top.name + ' is backed by both market'
+          + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '')
+          + ' and form analysis. Clear margin over the field — strong banker candidate.';
+      } else {
+        verdict = 'Agree';
+        detail  = top.name + ' is the form pick too'
+          + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '')
+          + ', though the margin is modest. Reasonable selection but not a standout banker.';
+      }
+    } else {
+      cls = 'differ';
+      var formAlt     = formPick.name;
+      var formAltOdds = formPick.odds > 0 ? ' (' + formPick.odds.toFixed(1) + ')' : '';
+      var posLabel    = formPickPos === 2 ? '2nd' : formPickPos === 3 ? '3rd' : (formPickPos + 'th');
+
+      if (formPick.odds > 0 && top.odds > 0 && formPick.odds > top.odds * 1.4) {
+        verdict = 'Value Flag';
+        detail  = 'Form analysis prefers ' + formAlt + formAltOdds
+          + ' over placepot pick ' + top.name
+          + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '') + '. '
+          + top.name + ' ranks ' + posLabel + ' on form. '
+          + 'Consider using both for coverage — ' + formAlt + ' could be the value play.';
+      } else {
+        verdict = 'Caution';
+        detail  = 'Form analysis prefers ' + formAlt + formAltOdds
+          + ' over placepot pick ' + top.name
+          + (top.odds > 0 ? ' (' + top.odds.toFixed(1) + ')' : '') + '. '
+          + top.name + ' ranks ' + posLabel + ' on form. '
+          + 'Consider ' + formAlt + ' as an alternative or use both horses for safety.';
+      }
     }
 
     // Append pace/movement notes
