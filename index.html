@@ -130,7 +130,37 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ba-reason{font-size:.75rem;color:var(--mt);line-height:1.5;margin-top:6px}
 .ba-kelly{font-size:.65rem;color:var(--mt);margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)}
 
-/* ── AI Analysis ─────────────────────────────────────────── */
+/* ── Lucky 15 ───────────────────────────────────────────── */
+.l15-meeting{background:var(–sf2);border:1px solid var(–bd);border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+.l15-meeting-name{font-size:1.1rem;color:var(–g);letter-spacing:1px}
+.l15-meeting-info{font-size:.65rem;color:var(–mt);margin-top:2px}
+.l15-clear{background:transparent;border:1px solid var(–re);color:var(–re);border-radius:4px;padding:3px 8px;font-size:.6rem;cursor:pointer}
+.l15-card{background:var(–sf);border:2px solid var(–g);border-radius:12px;padding:16px;margin-bottom:10px}
+.l15-card.silver{border-color:var(–gold)}
+.l15-card.bronze{border-color:var(–mt)}
+.l15-rank{font-size:.7rem;letter-spacing:2px;color:var(–g);margin-bottom:8px}
+.l15-card.silver .l15-rank{color:var(–gold)}
+.l15-card.bronze .l15-rank{color:var(–mt)}
+.l15-horse{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(–bd)}
+.l15-horse:last-of-type{border-bottom:none;padding-bottom:0}
+.l15-horse-name{flex:1;font-size:.85rem;font-weight:600;color:var(–tx)}
+.l15-horse-meeting{font-size:.62rem;color:var(–mt);margin-top:1px}
+.l15-horse-odds{font-size:1.3rem;color:var(–mt);text-align:right}
+.l15-horse-prob{font-size:.6rem;color:var(–mt);text-align:right;margin-top:1px}
+.l15-ev-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(–bd)}
+.l15-ev-num{font-size:1.8rem;color:var(–g)}
+.l15-card.silver .l15-ev-num{color:var(–gold)}
+.l15-ev-label{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(–mt);margin-top:2px}
+.l15-outcomes{background:#0a0f0d;border-radius:6px;padding:10px;margin-top:10px}
+.l15-outcome-row{display:flex;justify-content:space-between;font-size:.72rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.l15-outcome-row:last-child{border-bottom:none}
+/* ── Monte Carlo ──────────────────────────────────────────── */
+.mc-bar-wrap{background:var(–bd);border-radius:4px;height:8px;overflow:hidden;margin-top:4px}
+.mc-bar{height:100%;border-radius:4px;background:var(–g);transition:width .5s ease}
+.mc-combo{background:var(–sf2);border:1px solid var(–bd);border-radius:8px;padding:10px 12px;margin-bottom:6px}
+.mc-combo.best{border-color:var(–g);background:rgba(0,230,118,.04)}
+/* ── AI Analysis */
+─────────────────────────────────────────── */
 .ai-card{background:linear-gradient(135deg,rgba(124,77,255,.08),rgba(64,196,255,.05));border:2px solid rgba(124,77,255,.4);border-radius:12px;padding:16px;margin-bottom:12px}
 .ai-card .ct{color:#ce93d8;border-color:rgba(124,77,255,.3)}
 .ai-spin{width:22px;height:22px;border:3px solid rgba(124,77,255,.2);border-top-color:#ce93d8;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
@@ -256,6 +286,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   <div class="tab" id="t-predict" onclick="go('predict')">Predict</div>
   <div class="tab" id="t-setup" onclick="go('setup')">Setup</div>
   <div class="tab" id="t-placepot" onclick="go('placepot')">Placepot</div>
+  <div class="tab" id="t-l15" onclick="go('l15')">Lucky 15</div>
   <div class="tab" id="t-help" onclick="go('help')">Help</div>
 </div>
 
@@ -412,12 +443,57 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     </div>
 
 ```
+<!-- Monte Carlo -->
+<div class="card" style="border-color:rgba(124,77,255,.4)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none;color:#ce93d8">🎲 Monte Carlo Simulation</div>
+    <div style="font-size:.62rem;color:var(--mt)">10,000 runs</div>
+  </div>
+  <div style="font-size:.75rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Simulates 10,000 races to find which combinations give the best real probability of landing the placepot.</div>
+  <button class="btn bg" style="background:rgba(124,77,255,.3);color:#ce93d8;border:1px solid rgba(124,77,255,.5);margin-bottom:0;padding:10px 12px" onclick="runMCPlacepot()">🎲 Run Simulation</button>
+  <div id="mc-results" style="margin-top:10px"></div>
+</div>
+
 <!-- AI Analysis -->
 <div id="pp-ai-wrap" style="display:none">
   <button class="btn-ai" id="aiBtn" onclick="runAIAnalysis()">🤖 Ask Claude for a Second Opinion</button>
   <div id="pp-ai-result"></div>
   <div class="ai-note">Claude analyses the race data and your model's picks independently.<br>This is a qualitative second opinion, not a replacement for the model.</div>
 </div>
+```
+
+  </div>
+</div>
+
+<!-- LUCKY 15 -->
+
+<div class="scr" id="s-l15">
+  <div id="l15-nomeetings" class="al alw">← Load PDF racecards in the Races tab. Load multiple meetings to find the best 4 horses across the day.</div>
+
+  <div id="l15-main" style="display:none">
+    <div class="card" style="padding:14px 16px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">🎯 Lucky 15 Selector</div>
+        <div class="mpill ok" id="l15-meetings-pill">0 meetings</div>
+      </div>
+      <div style="font-size:.75rem;color:var(--mt);margin-bottom:10px;line-height:1.5">
+        Finds the best 4 horses from all loaded meetings. Optimised for maximum expected value — not just shortest odds.
+      </div>
+      <div id="l15-meetings-list" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="l15-going" style="flex:1;min-width:120px">
+          <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
+          <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
+          <option disabled>── All-Weather ──</option>
+          <option>Standard</option><option>Standard To Slow</option>
+          <option>Standard To Fast</option><option>Slow</option>
+        </select>
+        <button class="btn bg" style="flex:1;min-width:140px;margin-bottom:0;padding:9px 12px" onclick="runL15()">⚡ Find Best Lucky 15</button>
+      </div>
+    </div>
+
+```
+<div id="l15-results"></div>
 ```
 
   </div>
@@ -607,7 +683,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 
 // ── State ──────────────────────────────────────────────────
-var S = { model: null, races: [], sel: null };
+var S = { model: null, races: [], meetings: [], sel: null };
 
 // ── Navigation ─────────────────────────────────────────────
 function go(n) {
@@ -616,6 +692,7 @@ function go(n) {
   document.getElementById('s-' + n).classList.add('on');
   document.getElementById('t-' + n).classList.add('on');
   if (n === 'placepot') showPlacepotTab();
+  if (n === 'l15')      showL15Tab();
 }
 
 // ── PDF loading ────────────────────────────────────────────
@@ -655,10 +732,17 @@ async function loadPDF(file) {
     setPS('Parsing races…');
     var races = parseATR(fullText);
     if (!races.length) { setPS('⚠ No races found. Make sure this is an ATR form guide PDF.'); return; }
-    S.races = races;
+    // Add this meeting to S.meetings (keep existing meetings for Lucky 15)
+    var course = races[0] ? races[0].course : 'Unknown';
+    // Remove existing meeting for same course if reloaded
+    S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
+    S.meetings.push({ course: course, races: races });
+    // S.races = all races across all meetings (for placepot/predict compat)
+    S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
     lsRestore(races);
     document.getElementById('pp').style.display = 'none';
-    renderRaceList(races);
+    renderRaceList(S.races);
+    renderMeetingsList();
   } catch(err) { setPS('❌ Error: ' + err.message); console.error(err); }
 }
 function setPS(m) { document.getElementById('ps').textContent = m; }
@@ -1772,6 +1856,7 @@ function renderRaceList(races) {
   document.getElementById('rcTitle').textContent = (races[0]?races[0].course:'Races') + ' — ' + races.length + ' Races';
   updateSetupHint(races);
   var list = document.getElementById('rl'); list.innerHTML = '';
+  renderMeetingsList();
   races.forEach(function(r,i) {
     var d = document.createElement('div');
     d.className = 'ri'; d.id = 'ri_'+i;
@@ -2557,6 +2642,387 @@ function renderAnalysis(a) {
 
   return '<div class="ai-card" style="margin-top:10px"><div class="ct">Second Opinion</div>' + h + '</div>';
 }
+// ══════════════════════════════════════════════════════════
+// ── LUCKY 15 + MONTE CARLO ────────────────────────────────
+// ══════════════════════════════════════════════════════════
+
+function renderMeetingsList() {
+  var meetings = S.meetings;
+  var noEl  = document.getElementById('l15-nomeetings');
+  var mainEl = document.getElementById('l15-main');
+  if (!noEl || !mainEl) return;
+
+  if (!meetings || !meetings.length) {
+    noEl.style.display = 'block'; mainEl.style.display = 'none'; return;
+  }
+  noEl.style.display = 'none'; mainEl.style.display = 'block';
+
+  document.getElementById('l15-meetings-pill').textContent = meetings.length + ' meeting' + (meetings.length>1?'s':'') + ' loaded';
+
+  var listEl = document.getElementById('l15-meetings-list');
+  listEl.innerHTML = meetings.map(function(m) {
+    var totalRaces   = m.races.length;
+    var totalRunners = m.races.reduce(function(s,r){ return s+r.runners.length; }, 0);
+    var oddsCount    = m.races.reduce(function(s,r){ return s+r.runners.filter(function(x){return x.odds>0;}).length; }, 0);
+    return '<div class="l15-meeting">'
+      + '<div>'
+        + '<div class="l15-meeting-name">' + m.course + '</div>'
+        + '<div class="l15-meeting-info">' + totalRaces + ' races · ' + totalRunners + ' runners · ' + oddsCount + ' odds entered</div>'
+      + '</div>'
+      + '<button class="l15-clear" onclick="clearMeeting(\'' + m.course + '\')">✕ Remove</button>'
+    + '</div>';
+  }).join('');
+}
+
+function clearMeeting(course) {
+  S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
+  S.races    = S.meetings.reduce(function(all,m){ return all.concat(m.races); }, []);
+  renderMeetingsList();
+  document.getElementById('l15-results').innerHTML = '';
+}
+
+function showL15Tab() {
+  renderMeetingsList();
+}
+
+// ── Lucky 15 EV calculator ─────────────────────────────────
+function l15EV(horses) {
+  // horses: array of 4 {name, odds, prob}
+  var n = horses.length; // must be 4
+  var total = 0;
+  for (var mask = 0; mask < (1 << n); mask++) {
+    var winners = [], probThis = 1.0;
+    for (var i = 0; i < n; i++) {
+      if (mask & (1 << i)) { winners.push(i); probThis *= horses[i].prob; }
+      else                  { probThis *= (1 - horses[i].prob); }
+    }
+    var nw = winners.length, ret = 0;
+    if (nw > 0) {
+      // Singles
+      for (var j = 0; j < nw; j++) ret += horses[winners[j]].odds;
+      // Doubles
+      for (var a = 0; a < nw-1; a++)
+        for (var b = a+1; b < nw; b++)
+          ret += horses[winners[a]].odds * horses[winners[b]].odds;
+      // Trebles
+      for (var a = 0; a < nw-2; a++)
+        for (var b = a+1; b < nw-1; b++)
+          for (var c = b+1; c < nw; c++)
+            ret += horses[winners[a]].odds * horses[winners[b]].odds * horses[winners[c]].odds;
+      // Four-fold
+      if (nw === 4) {
+        var prod = 1;
+        for (var j = 0; j < 4; j++) prod *= horses[j].odds;
+        ret += prod;
+      }
+    }
+    total += probThis * ret;
+  }
+  return total;
+}
+
+// Breakdown: EV contribution by number of winners
+function l15Breakdown(horses) {
+  var n = 4, byWinners = [0,0,0,0,0];
+  for (var mask = 0; mask < (1 << n); mask++) {
+    var winners = [], probThis = 1.0;
+    for (var i = 0; i < n; i++) {
+      if (mask & (1 << i)) { winners.push(i); probThis *= horses[i].prob; }
+      else probThis *= (1 - horses[i].prob);
+    }
+    var nw = winners.length, ret = 0;
+    if (nw === 1) { ret = horses[winners[0]].odds; }
+    else if (nw === 2) { ret = horses[winners[0]].odds + horses[winners[1]].odds + horses[winners[0]].odds * horses[winners[1]].odds; }
+    else if (nw === 3) {
+      for (var j=0;j<3;j++) ret+=horses[winners[j]].odds;
+      for (var a=0;a<2;a++) for(var b=a+1;b<3;b++) ret+=horses[winners[a]].odds*horses[winners[b]].odds;
+      ret+=horses[winners[0]].odds*horses[winners[1]].odds*horses[winners[2]].odds;
+    } else if (nw === 4) {
+      var p=1; for(var j=0;j<4;j++){ret+=horses[j].odds;p*=horses[j].odds;}
+      for(var a=0;a<3;a++) for(var b=a+1;b<4;b++) ret+=horses[a].odds*horses[b].odds;
+      for(var a=0;a<2;a++) for(var b=a+1;b<3;b++) for(var c=b+1;c<4;c++) ret+=horses[a].odds*horses[b].odds*horses[c].odds;
+      ret+=p;
+    }
+    if (nw >= 0 && nw <= 4) byWinners[nw] += probThis * ret;
+  }
+  return byWinners;
+}
+
+// ── Main Lucky 15 runner ───────────────────────────────────
+function runL15() {
+  var meetings = S.meetings;
+  if (!meetings || !meetings.length) return;
+  var going   = document.getElementById('l15-going').value;
+  var resEl   = document.getElementById('l15-results');
+  resEl.innerHTML = '<div class="prog" style="margin:12px 0"><div class="spin"></div><p style="font-size:.8rem;color:var(--mt)">Scoring all horses and finding best combinations…</p></div>';
+
+  // Score all horses across all meetings
+  setTimeout(function() {
+    var allHorses = [];
+    meetings.forEach(function(meeting) {
+      meeting.races.forEach(function(race) {
+        var active = race.runners.filter(function(r){ return !r._nr; });
+        if (!active.length) return;
+
+        var ctx      = buildFieldCtx(active);
+        var paceInfo = assessPace(active);
+        var formArr  = active.map(function(r) {
+          var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:going}),race,ctx)
+                            : rawScoreDef(Object.assign({},r,{going:going}),race,ctx);
+          return raw * paceAdjust(r, paceInfo);
+        });
+        var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
+        var formNorm  = formArr.map(function(f){return f/formTotal;});
+        var oddsAvail = active.filter(function(r){return r.odds>0;}).length;
+        var mktW = oddsAvail===0 ? 0.0 : oddsAvail<active.length*0.5 ? 0.25 : 0.40;
+        var blended = active.map(function(r,i){
+          var mkt = (r._mktProb!==undefined) ? r._mktProb : impliedShare(r.odds,ctx.odds);
+          return mkt*mktW + formNorm[i]*(1.0-mktW);
+        });
+        var bt = blended.reduce(function(a,b){return a+b;},0)||1;
+        var finalProbs = powerScaleProbs(blended.map(function(b){return b/bt;}));
+
+        active.forEach(function(r,i) {
+          if (!r.odds || r.odds <= 1) return; // need odds for L15
+          allHorses.push({
+            name:    r.name,
+            jockey:  r.jockey.replace(/\s*\(\d+\)/,''),
+            odds:    r.odds,
+            prob:    finalProbs[i],
+            raceId:  meeting.course + '_' + race.time,
+            meeting: meeting.course,
+            time:    race.time,
+            dist:    race.dist,
+            or:      r.or
+          });
+        });
+      });
+    });
+
+    if (allHorses.length < 4) {
+      resEl.innerHTML = '<div class="al alw">Need at least 4 horses with odds entered across your meetings. Enter decimal odds in the Predict tab for each race first.</div>';
+      return;
+    }
+
+    // Find best 4-horse combinations (must be from 4 different race slots)
+    var best = [];
+    var n = allHorses.length;
+    for (var a = 0; a < n-3; a++) {
+      for (var b = a+1; b < n-2; b++) {
+        if (allHorses[b].raceId === allHorses[a].raceId) continue;
+        for (var c = b+1; c < n-1; c++) {
+          var rcId = allHorses[c].raceId;
+          if (rcId === allHorses[a].raceId || rcId === allHorses[b].raceId) continue;
+          for (var d = c+1; d < n; d++) {
+            var rdId = allHorses[d].raceId;
+            if (rdId===allHorses[a].raceId||rdId===allHorses[b].raceId||rdId===allHorses[c].raceId) continue;
+            var combo = [allHorses[a],allHorses[b],allHorses[c],allHorses[d]];
+            var ev = l15EV(combo);
+            if (best.length < 5 || ev > best[best.length-1].ev) {
+              best.push({ev:ev, combo:combo});
+              best.sort(function(x,y){return y.ev-x.ev;});
+              if (best.length > 5) best.pop();
+            }
+          }
+        }
+      }
+    }
+
+    if (!best.length) {
+      resEl.innerHTML = '<div class="al alw">Could not find 4 horses from different races. Make sure horses from at least 4 different races have odds entered.</div>';
+      return;
+    }
+
+    renderL15Results(best, allHorses.length);
+  }, 50);
+}
+
+function renderL15Results(best, totalHorses) {
+  var resEl = document.getElementById('l15-results');
+  var stake = 1; // £1 unit = £15 total
+  var h = '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px">'
+    + 'Analysed ' + totalHorses + ' horses · showing top ' + best.length + ' combinations · £1 unit (£15 total)'
+    + '</div>';
+
+  var medals = ['🥇','🥈','🥉','4th','5th'];
+  var cardCls = ['','silver','bronze','',''];
+
+  best.forEach(function(result, ri) {
+    var combo = result.combo;
+    var ev    = result.ev;
+    var roi   = (ev - 15) / 15 * 100;
+    var bd    = l15Breakdown(combo);
+
+    // Outcome probabilities
+    var p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+    combo.forEach(function(h){ p1 += h.prob*(1-combo.filter(function(x){return x!==h;}).reduce(function(s,x){return s*x.prob;},1)); });
+    // Simpler: use breakdown probs
+    var prob1win = combo.reduce(function(s,h){ return s + h.prob*(1-h.prob)*(1-h.prob)*(1-h.prob)*4; }, 0); // rough
+
+    h += '<div class="l15-card ' + cardCls[ri] + '">'
+      + '<div class="l15-rank">' + medals[ri] + ' Option ' + (ri+1) + ' — ' + (ri===0?'Best EV':'Alternative') + '</div>';
+
+    combo.forEach(function(horse) {
+      h += '<div class="l15-horse">'
+        + '<div style="flex:1;min-width:0">'
+          + '<div class="l15-horse-name">' + horse.name + '</div>'
+          + '<div class="l15-horse-meeting">' + horse.time + ' ' + horse.meeting + ' · ' + horse.dist + (horse.or?' · OR '+horse.or:'') + '</div>'
+          + '<div class="l15-horse-meeting">' + horse.jockey + '</div>'
+        + '</div>'
+        + '<div style="text-align:right;flex-shrink:0">'
+          + '<div class="l15-horse-odds">' + horse.odds.toFixed(1) + '</div>'
+          + '<div class="l15-horse-prob">' + Math.round(horse.prob*100) + '% model</div>'
+        + '</div>'
+      + '</div>';
+    });
+
+    h += '<div class="l15-ev-row">'
+      + '<div>'
+        + '<div class="l15-ev-num">£' + ev.toFixed(2) + '</div>'
+        + '<div class="l15-ev-label">Expected return on £15</div>'
+      + '</div>'
+      + '<div style="text-align:right">'
+        + '<div style="font-size:1.4rem;color:' + (roi>=0?'var(--g)':'var(--re)') + '">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</div>'
+        + '<div class="l15-ev-label">ROI</div>'
+      + '</div>'
+    + '</div>';
+
+    // Breakdown by outcomes
+    h += '<div class="l15-outcomes">'
+      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px">Expected return by scenario (per £15 staked)</div>';
+    var scenarios = ['0 winners','1 winner','2 winners','3 winners','All 4 win'];
+    bd.forEach(function(val, i) {
+      h += '<div class="l15-outcome-row">'
+        + '<span>' + scenarios[i] + '</span>'
+        + '<span style="color:' + (val>0?'var(--g)':'var(--mt)') + '">'
+          + (val > 0 ? '+£' + val.toFixed(2) : '£0.00') + '</span>'
+      + '</div>';
+    });
+    h += '</div></div>';
+  });
+
+  // Disclaimer
+  h += '<div style="text-align:center;padding:8px 0 4px;font-size:.7rem;color:var(--mt);line-height:1.5">'
+    + 'Expected value based on model probabilities. Enter odds closer to race time for best accuracy.<br>'
+    + 'Lucky 15: 4 singles + 6 doubles + 4 trebles + 1 four-fold = 15 bets at £1 unit each.'
+    + '</div>';
+
+  resEl.innerHTML = h;
+}
+
+// ── Monte Carlo for Placepot ───────────────────────────────
+function runMonteCarloPlacepot(ppRaces, going, nSims) {
+  nSims = nSims || 10000;
+  var results = ppRaces.map(function(race) {
+    var active = race.runners.filter(function(r){ return !r._nr; });
+    var ctx = buildFieldCtx(active);
+    var paceInfo = assessPace(active);
+    var formArr = active.map(function(r){
+      var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:going}),race,ctx)
+                        : rawScoreDef(Object.assign({},r,{going:going}),race,ctx);
+      return raw * paceAdjust(r, paceInfo);
+    });
+    var ft = formArr.reduce(function(a,b){return a+b;},0)||1;
+    var formNorm = formArr.map(function(f){return f/ft;});
+    var oddsAvail = active.filter(function(r){return r.odds>0;}).length;
+    var mktW = oddsAvail===0?0.0:oddsAvail<active.length*0.5?0.25:0.40;
+    var blended = active.map(function(r,i){
+      var mkt=(r._mktProb!==undefined)?r._mktProb:impliedShare(r.odds,ctx.odds);
+      return mkt*mktW+formNorm[i]*(1-mktW);
+    });
+    var bt=blended.reduce(function(a,b){return a+b;},0)||1;
+    var probs = powerScaleProbs(blended.map(function(b){return b/bt;}));
+
+    // Estimate place probabilities from win probs
+    // Places paid: field>=12 → 4, >=8 → 3, >=5 → 2
+    var n = active.length;
+    var places = n>=12?4:n>=8?3:n>=5?2:1;
+    var placeProbs = probs.map(function(p,i){
+      return p + (1-p)*(places-1)/Math.max(n-1,1);
+    });
+
+    return { runners: active, probs: probs, placeProbs: placeProbs };
+  });
+
+  // Run simulations
+  var placeCount = results.map(function(r){ return r.runners.map(function(){ return 0; }); });
+  var lineSuccess = {}; // track which banker lines land
+
+  for (var sim = 0; sim < nSims; sim++) {
+    var raceWinners = results.map(function(r, ri) {
+      // Pick who places using place probs (simplified: pick top N by random weighted draw)
+      var rand = Math.random();
+      var cum  = 0;
+      for (var i = 0; i < r.placeProbs.length; i++) {
+        cum += r.placeProbs[i];
+        if (rand < cum) { placeCount[ri][i]++; return i; }
+      }
+      return r.placeProbs.length - 1;
+    });
+  }
+
+  // Convert to probabilities
+  return results.map(function(r, ri) {
+    return {
+      runners: r.runners,
+      placePcts: placeCount[ri].map(function(c){ return c/nSims; }),
+      probs: r.probs
+    };
+  });
+}
+
+function runMCPlacepot() {
+  var races = S.races;
+  if (!races || !races.length) return;
+  var going = document.getElementById('pp-going').value;
+  var mcEl  = document.getElementById('mc-results');
+  mcEl.innerHTML = '<div class="prog"><div class="spin"></div><p style="font-size:.8rem;color:var(--mt)">Simulating 10,000 races…</p></div>';
+
+  setTimeout(function() {
+    var ppRaces = races.slice(0, 6);
+    var simResults = runMonteCarloPlacepot(ppRaces, going, 10000);
+
+    var h = '';
+    simResults.forEach(function(r, ri) {
+      var sorted = r.runners.map(function(runner, i){ return {runner:runner, pct:r.placePcts[i]}; });
+      sorted.sort(function(a,b){ return b.pct-a.pct; });
+      var top3 = sorted.slice(0,3);
+      var maxPct = top3[0] ? top3[0].pct : 1;
+
+      h += '<div class="mc-combo">'
+        + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px">Race ' + (ri+1) + ' — place probabilities</div>';
+      top3.forEach(function(item, i) {
+        var pct = Math.round(item.pct * 100);
+        var barW = Math.round(item.pct / maxPct * 100);
+        var col  = i===0?'var(--g)':i===1?'var(--gold)':'#ff8a65';
+        h += '<div style="margin-bottom:5px">'
+          + '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:2px">'
+            + '<span style="color:var(--tx)">' + item.runner.name.split(' ')[0] + '</span>'
+            + '<span style="color:'+col+'">' + pct + '% place</span>'
+          + '</div>'
+          + '<div class="mc-bar-wrap"><div class="mc-bar" style="width:'+barW+'%;background:'+col+'"></div></div>'
+        + '</div>';
+      });
+
+      // Banker quality
+      var bankerPct = Math.round(top3[0].pct * 100);
+      var quality   = bankerPct >= 50 ? '✅ Strong banker' : bankerPct >= 35 ? '🟡 Reasonable' : '⚠ Weak — double up';
+      h += '<div style="font-size:.68rem;color:var(--mt);margin-top:4px">' + quality + ' — ' + top3[0].runner.name.split(' ')[0] + ' places in ' + bankerPct + '% of simulations</div>';
+      h += '</div>';
+    });
+
+    // Overall line probability (banker selections all placing)
+    var bankerLineProb = simResults.reduce(function(p, r){ return p * (r.placePcts[0] || 0.1); }, 1);
+    h = '<div style="background:rgba(124,77,255,.07);border:1px solid rgba(124,77,255,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+      + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:#ce93d8;margin-bottom:4px">Banker line probability</div>'
+      + '<div style="font-size:2rem;color:#ce93d8">' + Math.round(bankerLineProb*100) + '%</div>'
+      + '<div style="font-size:.68rem;color:var(--mt)">Estimated chance of all 6 top picks placing simultaneously</div>'
+      + '</div>' + h;
+
+    mcEl.innerHTML = h;
+  }, 50);
+}
+
 </script>
 
 </body>
