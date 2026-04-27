@@ -455,64 +455,151 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
   <div style="padding-bottom:4px">
-    <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">1</div><div class="h-sec-ttl">What does it do?</div></div>
-      <p class="h-p">The Predictor scores every horse in a race and ranks them in order of predicted finishing position. Scores are based on a trained model but are calibrated to stay realistic — even clear favourites rarely exceed 25–28% in a competitive field.</p>
-      <div class="h-card-row">
-        <div class="h-card"><div class="h-card-ttl">🐎 The horse</div><p>Win rate, going and distance preference, course record — ranked relative to the field.</p></div>
-        <div class="h-card"><div class="h-card-ttl">🧑 Jockey &amp; trainer</div><p>Individual win rates from thousands of rides, ranked within the field.</p></div>
-        <div class="h-card"><div class="h-card-ttl">📊 Market odds</div><p>SP is a strong signal — given more weight than in older versions.</p></div>
-        <div class="h-card"><div class="h-card-ttl">🏃 Pace shape</div><p>Front-runner detection from form figures. Lone leaders get a boost; contested pace penalises all speed horses.</p></div>
-      </div>
-      <div class="h-callout h-warn"><span class="ci">⚠️</span><div><strong>This is a tool, not a guarantee.</strong> Racing is unpredictable. Use it to inform your thinking, not replace it. Gamble responsibly.</div></div>
-    </div>
-    <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">2</div><div class="h-sec-ttl">Pace analysis</div></div>
-      <p class="h-p">The app analyses each runner's form figures to classify their likely running style and then assesses the pace shape of the whole race.</p>
-      <div class="h-card-row">
-        <div class="h-card"><div class="h-card-ttl">🟠 Front-runner</div><p>Shows a "1" or "2" early in most recent form figures. Gets a bonus if it will be the lone leader.</p></div>
-        <div class="h-card"><div class="h-card-ttl">🟣 Closer</div><p>Typically finishes strongly from behind. Gets a slight bonus when the pace scenario is hot/contested.</p></div>
-      </div>
-      <div class="h-callout h-gold"><span class="ci">💡</span><div>Pace analysis is based only on finishing positions in the form string. It's a signal, not a certainty — horses can be ridden differently on the day.</div></div>
-    </div>
-    <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Making a prediction</div></div>
-      <ol class="h-steps">
-        <li>Go to attheraces.com, find your race, and download the form guide PDF.</li>
-        <li>Tap the <strong>Races</strong> tab, then load the PDF. All runners are extracted automatically.</li>
-        <li>Tap the race you want to predict, then tap <strong>Predict</strong>.</li>
-        <li>Enter <strong>decimal odds</strong> for each runner, set the going, then tap <strong>Predict This Race</strong>.</li>
-      </ol>
-      <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Enter as close to race time as possible.</div></div>
-    </div>
-    <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">4</div><div class="h-sec-ttl">Setting the going</div></div>
-      <table class="h-going">
-        <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
-        <tbody>
-          <tr><td colspan="2" style="background:#1a6b3a;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
-          <tr><td>Firm</td><td>Very fast, hard ground.</td></tr>
-          <tr><td>Good To Firm</td><td>Fast with a little give. Common in summer.</td></tr>
-          <tr><td>Good</td><td>Standard balanced ground.</td></tr>
-          <tr><td>Good To Soft</td><td>Some give underfoot. Favours stayers.</td></tr>
-          <tr><td>Soft</td><td>Wet and testing. Stamina horses thrive.</td></tr>
-          <tr><td>Heavy</td><td>Very wet, energy-sapping.</td></tr>
-          <tr><td colspan="2" style="background:#3b6fd4;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
-          <tr><td>Standard</td><td>Normal AW conditions.</td></tr>
-          <tr><td>Standard To Fast</td><td>Quicker surface.</td></tr>
-          <tr><td>Standard To Slow</td><td>Slightly slower surface.</td></tr>
-          <tr><td>Slow</td><td>Tiring AW conditions.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">5</div><div class="h-sec-ttl">Common questions</div></div>
-      <div class="h-faq"><div class="h-faq-q">❓ PDF loaded but no runners appeared</div><div class="h-faq-a">The app reads At The Races form guide PDFs only.</div></div>
-      <div class="h-faq"><div class="h-faq-q">❓ All horses show the same score</div><div class="h-faq-a">Odds haven't been entered yet — they're a big part of the scoring. Enter decimal odds and the scores will spread out.</div></div>
-      <div class="h-faq"><div class="h-faq-q">❓ Why doesn't the top horse show 40–50% confidence?</div><div class="h-faq-a">By design. Even the clearest standout in UK racing wins ~25–30% of the time. The model is temperature-scaled to stay realistic.</div></div>
-      <div class="h-faq"><div class="h-faq-q">❓ Does it work for jump racing?</div><div class="h-faq-a">The model was trained on UK and Irish flat turf only. It can rank runners but accuracy will be lower for jumps.</div></div>
-    </div>
-    <div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:#888">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
+
+```
+<!-- What it does -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">1</div><div class="h-sec-ttl">What does it do?</div></div>
+  <p class="h-p">RaceIQ scores every horse using 12+ signals and ranks them by predicted finishing position. It uses the market as an anchor and adjusts based on form, pace, jockey, trainer, and race dynamics.</p>
+  <div class="h-card-row">
+    <div class="h-card"><div class="h-card-ttl">📊 Market anchor</div><p>True implied probability (overround removed) anchors every prediction. 40% weight — the dominant signal.</p></div>
+    <div class="h-card"><div class="h-card-ttl">📈 Recent form</div><p>Last 3 runs weighted by recency: most recent 50%, second 30%, third 20%.</p></div>
+    <div class="h-card"><div class="h-card-ttl">🧑 Jockey + Trainer</div><p>35+ elite jockeys and trainers carry multipliers. 15 specific jockey-trainer pairings get combo bonuses.</p></div>
+    <div class="h-card"><div class="h-card-ttl">🏃 Pace & draw</div><p>Front-runner vs closer detection. Draw position interacts with field size and pace scenario.</p></div>
+  </div>
+  <div class="h-callout h-warn"><span class="ci">⚠️</span><div><strong>This is a tool, not a guarantee.</strong> Racing is unpredictable. Gamble responsibly.</div></div>
+</div>
+
+<!-- Making a prediction -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">2</div><div class="h-sec-ttl">Making a prediction</div></div>
+  <ol class="h-steps">
+    <li>Download the free form guide PDF from <strong>attheraces.com</strong> for your meeting.</li>
+    <li>Tap <strong>Races</strong>, load the PDF — all runners extract automatically.</li>
+    <li>Tap the race, then go to <strong>Predict</strong>.</li>
+    <li>Enter decimal odds for each runner (or paste them — see section 3).</li>
+    <li>Set the going, tap <strong>Predict This Race</strong>.</li>
+  </ol>
+  <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Enter as close to race time as possible.</div></div>
+  <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>No odds entered?</strong> The app will warn you and switch to form-only mode. Without odds it is little better than sorting by Official Rating.</div></div>
+</div>
+
+<!-- Pasting odds -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Pasting odds from ATR</div></div>
+  <p class="h-p">Instead of typing odds one by one, copy the entire runners section from the <strong>attheraces.com</strong> race page and paste it in one go.</p>
+  <ol class="h-steps">
+    <li>On ATR, select all the runner text for the race and copy it.</li>
+    <li>In the Predict tab, tap <strong>📋 Paste Odds</strong> at the top of the Runners card.</li>
+    <li>Paste the text and tap <strong>✓ Apply Odds</strong>.</li>
+  </ol>
+  <div class="h-callout h-tip"><span class="ci">💡</span><div><strong>Steam & Drift detection:</strong> Paste odds a second time nearer the off and the app automatically detects which horses have shortened (▲ Steam) or drifted (▽ Drift) by 10%+. Steamers and drifters feed directly into the scoring.</div></div>
+</div>
+
+<!-- Reading results -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">4</div><div class="h-sec-ttl">Reading the results</div></div>
+  <div class="h-card-row">
+    <div class="h-card"><div class="h-card-ttl">🏆 Predicted Winner</div><p>Top-scoring horse with confidence % relative to the field.</p></div>
+    <div class="h-card"><div class="h-card-ttl">💰 Value Bet</div><p>A top-3 pick at 9.0 or longer — model rates it worth a look at those odds.</p></div>
+    <div class="h-card"><div class="h-card-ttl">📊 Model vs Market</div><p>Bar chart showing your model % vs market implied % for each horse. Green ▲ VALUE = model rates higher. Red ▼ AVOID = market rates higher.</p></div>
+    <div class="h-card"><div class="h-card-ttl">💡 Score breakdown</div><p>Under each horse in the order: "Market 18% · Jockey +9% · Combo +7%" shows what drove the score.</p></div>
+  </div>
+  <div class="h-callout h-gold"><span class="ci">🎯</span><div>The ▲ VALUE flag means the model rates that horse meaningfully above what its price implies. It is a prompt to look closer, not an instruction to back it.</div></div>
+</div>
+
+<!-- Bet Advisor -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">5</div><div class="h-sec-ttl">Bet Advisor & Dutching</div></div>
+  <p class="h-p">After predicting, the Bet Advisor shows the expected value (EV) for Win, Each Way, and Place bets at your chosen stake — and recommends which is best.</p>
+  <div class="h-card-row">
+    <div class="h-card"><div class="h-card-ttl">💰 Dutching</div><p>If 2–3 horses score above 8%, the app shows exact stakes to split your money so any one of them winning returns the same profit.</p></div>
+    <div class="h-card"><div class="h-card-ttl">1/4 vs 1/5</div><p>Toggle place terms to match your bookmaker. All EV figures update instantly.</p></div>
+  </div>
+  <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>EV explained:</strong> Expected value is what you would make on average over many identical bets. Negative EV = losing bet long term even if it wins today.</div></div>
+</div>
+
+<!-- Pace -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">6</div><div class="h-sec-ttl">Pace analysis</div></div>
+  <p class="h-p">The app reads form figures to classify each horse's running style, then assesses the whole race.</p>
+  <div class="h-card-row">
+    <div class="h-card"><div class="h-card-ttl">🟠 Front-runner</div><p>Shows 1 or 2 early in recent form. Gets a bonus as lone leader; penalised in contested pace.</p></div>
+    <div class="h-card"><div class="h-card-ttl">🟣 Closer</div><p>Finishes strongly from behind. Benefits when pace is contested; penalised in slow-run races.</p></div>
+  </div>
+  <div class="h-callout h-gold"><span class="ci">💡</span><div>Draw position interacts with pace style. A low draw suits front-runners in big fields; a high draw can cause traffic problems for closers.</div></div>
+</div>
+
+<!-- Jockey & Trainer -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">7</div><div class="h-sec-ttl">Jockey & Trainer Intelligence</div></div>
+  <p class="h-p">35+ elite UK and Irish jockeys carry win-rate multipliers. 35+ top trainers carry separate multipliers. When a top jockey rides for a top trainer, an additional combo bonus applies on top of both.</p>
+  <div class="h-callout h-tip"><span class="ci">💡</span><div>Examples of combo bonuses: Buick/Appleby, Moore/O'Brien, Dettori/Gosden, Murphy/Balding. These pairings historically outperform their individual win rates.</div></div>
+  <div class="h-callout h-info"><span class="ci">ℹ️</span><div>Trainer names are not in the ATR PDF so trainer bonuses only apply when using a trained model that has trainer data from your CSV.</div></div>
+</div>
+
+<!-- Placepot -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">8</div><div class="h-sec-ttl">Placepot</div></div>
+  <p class="h-p">The Placepot tab analyses all six races and suggests banker picks, alternative selections, and line combinations.</p>
+  <ol class="h-steps">
+    <li>Load your PDF and enter odds in the Predict tab for each race first.</li>
+    <li>Tap <strong>Placepot</strong> — picks generate automatically.</li>
+    <li>Tap <strong>⚡ Generate Picks</strong> to refresh after changing the going.</li>
+    <li>Tap <strong>🤖 Second Opinion</strong> for a form-only critique of each pick.</li>
+  </ol>
+  <div class="h-callout h-gold"><span class="ci">🎯</span><div><strong>Second Opinion:</strong> Runs a separate form-only analysis (no market) and compares it against the placepot picks. Where both agree: Confirmed banker. Where they differ: Caution or Value Flag with the alternative horse named.</div></div>
+</div>
+
+<!-- Going -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">9</div><div class="h-sec-ttl">Setting the going</div></div>
+  <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website. Going can change between morning and race time. Your going selection is remembered between races and is not reset when you switch races.</p>
+  <table class="h-going">
+    <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
+    <tbody>
+      <tr><td colspan="2" style="background:#1a6b3a;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
+      <tr><td>Firm</td><td>Very fast, hard ground. Rare on British turf.</td></tr>
+      <tr><td>Good To Firm</td><td>Fast with a little give. Common in summer.</td></tr>
+      <tr><td>Good</td><td>Standard balanced ground. Most horses handle it.</td></tr>
+      <tr><td>Good To Soft</td><td>Some give underfoot. Favours stayers.</td></tr>
+      <tr><td>Soft</td><td>Wet and testing. Stamina horses thrive.</td></tr>
+      <tr><td>Heavy</td><td>Very wet, energy-sapping.</td></tr>
+      <tr><td colspan="2" style="background:#3b6fd4;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
+      <tr><td>Standard</td><td>Normal AW conditions.</td></tr>
+      <tr><td>Standard To Fast</td><td>Quicker surface.</td></tr>
+      <tr><td>Standard To Slow</td><td>Slightly slower surface.</td></tr>
+      <tr><td>Slow</td><td>Tiring AW conditions.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Setup -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">10</div><div class="h-sec-ttl">Setup & trained model</div></div>
+  <p class="h-p">The app works without a model using default weights. Load a trained <strong>racing_model.json</strong> for significantly better accuracy — it adds horse win rates, course records, going preferences, jockey and trainer stats from your historical data.</p>
+  <ol class="h-steps">
+    <li>Use the desktop Trainer app to build a model from your CSV race history.</li>
+    <li>Transfer <strong>racing_model.json</strong> to your phone via AirDrop, WhatsApp, or email.</li>
+    <li>Tap <strong>Setup</strong>, then load the file. Green confirmation appears when loaded.</li>
+  </ol>
+  <div class="h-callout h-info"><span class="ci">ℹ️</span><div>Once you load a PDF, the Setup tab shows the racecourse and detected surface (Turf/AW/Jumps) and tells you whether your loaded model matches.</div></div>
+</div>
+
+<!-- FAQ -->
+<div class="h-sec">
+  <div class="h-sec-hdr"><div class="h-sec-num">11</div><div class="h-sec-ttl">Common questions</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ PDF loaded but no runners appeared</div><div class="h-faq-a">The app reads At The Races form guide PDFs only. PDFs from Racing Post or bookmakers use different formats.</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ All horses show the same percentage</div><div class="h-faq-a">Odds have not been entered. The market is the dominant signal — without odds all horses get equal market weight and results are unreliable.</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ Why doesn't the top horse show 40–50% confidence?</div><div class="h-faq-a">By design. Even the clearest favourite in UK racing wins 25–30% of the time. Scores above that are misleading.</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ The prediction looks like odds order</div><div class="h-faq-a">When form signals are similar across the field, the market is the best available guide and the model will largely agree with it. Meaningful divergence happens when recent form, pace scenario, jockey-trainer combos, or steam/drift create a genuine edge.</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ Does it work for jump racing?</div><div class="h-faq-a">The model was trained on UK and Irish flat turf only. It can rank jump runners but accuracy will be lower.</div></div>
+  <div class="h-faq"><div class="h-faq-q">❓ Is my data private?</div><div class="h-faq-a">Yes — everything runs locally on your phone. No server, no account, no data sent anywhere. localStorage only.</div></div>
+</div>
+
+<div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:#888">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
+```
+
   </div>
 </div>
 
@@ -1038,8 +1125,10 @@ function rawScoreMdl(r, race, ctx) {
   var trnMult  = trainerMultiplier(r.trainer || t);
   var cboBonus = comboBonus(r.jockey, r.trainer || t);
   // Store score components for explanation card
+  var runnerIdx = ctx.odds.indexOf(r.odds);
+  var mktProbMdl = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
   r._scoreComponents = {
-    market:  Math.round(mktShr * 100),
+    market:  Math.round(mktProbMdl * 100),
     form:    Math.round(recentScore * 100),
     or:      Math.round(orsAdj * 100),
     jockey:  Math.round((jkyMult - 1.0) * 100),
@@ -1047,9 +1136,7 @@ function rawScoreMdl(r, race, ctx) {
     combo:   Math.round(cboBonus * 100),
     pace:    0
   };
-  // Store market prob for blending in predict()
-  var runnerIdx = ctx.odds.indexOf(r.odds);
-  r._mktProb   = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
+  r._mktProb = mktProbMdl;
   r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus);
   return r._formScore;
 }
@@ -1403,8 +1490,9 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
       + '</div>';
   }
 
-  // Dutching: find top value horses (model prob > market implied, top 3)
-  var dutchCandidates = scored
+  // Dutching: use S._lastScored (scored is out of scope here)
+  var dutchSource = (typeof scored !== 'undefined') ? scored : (S._lastScored || []);
+  var dutchCandidates = dutchSource
     .filter(function(r){ return r.odds > 1.5 && r.score > 0.08; })
     .slice(0, 3);
   var dutchHtml = dutchCandidates.length >= 2 ? dutchHTML(
