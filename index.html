@@ -880,6 +880,66 @@ function buildFieldCtx(runners) {
 }
 
 
+// ── Trainer tier multipliers ─────────────────────────────
+// Based on UK/Irish flat win rates and course specialisms
+// Applied in addition to jockey tier for combo boost
+var TRAINER_TIERS = {
+  // Elite (1.10+)
+  'john gosden':1.12,'william haggas':1.12,'charlie appleby':1.11,
+  'aidan obrien':1.12,'joseph obrien':1.09,'andrew balding':1.09,
+  'roger varian':1.10,'ralph beckett':1.09,'simon crisford':1.09,
+  'charlie hills':1.08,'richard hannon':1.08,'hugo palmer':1.08,
+  'clive cox':1.08,'david simcock':1.08,'james fanshawe':1.07,
+  'mark johnston':1.08,'kevin ryan':1.07,'tim easterby':1.07,
+  'michael bell':1.07,'roger charlton':1.08,'eve johnson houghton':1.07,
+  'ed walker':1.08,'james tate':1.08,'michael stoute':1.10,
+  // Irish elite
+  'dermot weld':1.10,'jessica harrington':1.09,'willie mullins':1.08,
+  'gordon elliott':1.08,'gavin cromwell':1.07,
+  // Good (1.04-1.06)
+  'tom dascombe':1.05,'ian williams':1.05,'paul midgley':1.05,
+  'tony carroll':1.05,'david o meara':1.06,'mick channon':1.05,
+  'alan king':1.05,'john quinn':1.05,'richard fahey':1.06,
+};
+
+// Jockey-trainer combo bonuses — some pairings outperform individual rates
+var COMBO_BONUSES = {
+  'william buick|charlie appleby': 0.08,
+  'ryan moore|aidan obrien':       0.08,
+  'frankie dettori|john gosden':   0.07,
+  'oisin murphy|andrew balding':   0.07,
+  'james doyle|roger varian':      0.07,
+  'tom marquand|william haggas':   0.07,
+  'hollie doyle|ed walker':        0.06,
+  'andrea atzeni|roger varian':    0.06,
+  'pat cosgrave|william haggas':   0.06,
+  'adam kirby|clive cox':          0.06,
+  'rossa ryan|michael bell':       0.06,
+  'seamie heffernan|aidan obrien': 0.07,
+  'colin keane|dermot weld':       0.07,
+};
+
+function trainerMultiplier(trainerName) {
+  if (!trainerName) return 1.0;
+  var t = trainerName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
+  if (TRAINER_TIERS[t]) return TRAINER_TIERS[t];
+  // Partial match on last name
+  var parts = t.split(' ');
+  var last = parts[parts.length-1];
+  for (var k in TRAINER_TIERS) {
+    if (k.indexOf(last) > -1 && last.length > 3) return TRAINER_TIERS[k];
+  }
+  return 1.0;
+}
+
+function comboBonus(jockeyName, trainerName) {
+  if (!jockeyName || !trainerName) return 0;
+  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
+  var t = trainerName.toLowerCase().trim();
+  var key = j + '|' + t;
+  return COMBO_BONUSES[key] || 0;
+}
+
 // ── Jockey tier multipliers ────────────────────────────────
 // Based on UK/Irish flat win rates. Tier 1 = elite (18%+ WR),
 // Tier 2 = very good (14-18%), Tier 3 = good (10-14%)
@@ -975,10 +1035,22 @@ function rawScoreMdl(r, race, ctx) {
   var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
   var jkyMult = jockeyMultiplier(r.jockey);
 
+  var trnMult  = trainerMultiplier(r.trainer || t);
+  var cboBonus = comboBonus(r.jockey, r.trainer || t);
+  // Store score components for explanation card
+  r._scoreComponents = {
+    market:  Math.round(mktShr * 100),
+    form:    Math.round(recentScore * 100),
+    or:      Math.round(orsAdj * 100),
+    jockey:  Math.round((jkyMult - 1.0) * 100),
+    trainer: Math.round((trnMult - 1.0) * 100),
+    combo:   Math.round(cboBonus * 100),
+    pace:    0
+  };
   // Store market prob for blending in predict()
   var runnerIdx = ctx.odds.indexOf(r.odds);
   r._mktProb   = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
-  r._formScore = formScore * mvMult * jkyMult;
+  r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus);
   return r._formScore;
 }
 
@@ -1133,6 +1205,45 @@ function calcBetEV(winProb, winOdds, fieldSize, stake, placeFrac) {
            winROI: winEV/stake*100, ewROI: ewEV/stake*100, placeROI: placeEV/stake*100,
            impliedProb: 1/winOdds,
            winReturn, winProfit, ewReturn, ewPlaceOnly, placeReturn };
+}
+
+// ── Dutching calculator ────────────────────────────────────
+// Given an array of {name, odds} and a total stake,
+// calculate how to split the stake so any winner returns the same profit.
+// Dutch stake for horse i = totalStake / (odds_i * sum(1/odds_j))
+function dutchStakes(horses, totalStake) {
+  var validHorses = horses.filter(function(h){ return h.odds > 1; });
+  if (validHorses.length < 2) return [];
+  var invSum = validHorses.reduce(function(s, h){ return s + 1/h.odds; }, 0);
+  if (invSum >= 1) return []; // no profit possible (overround > 100%)
+  var targetReturn = totalStake / invSum;
+  var profit       = targetReturn - totalStake;
+  return validHorses.map(function(h) {
+    return {
+      name:   h.name,
+      odds:   h.odds,
+      stake:  Math.round((totalStake / (h.odds * invSum)) * 100) / 100,
+      profit: Math.round(profit * 100) / 100
+    };
+  });
+}
+
+function dutchHTML(candidates, totalStake) {
+  if (!candidates || candidates.length < 2) return '';
+  var results = dutchStakes(candidates, totalStake);
+  if (!results.length) return '';
+  var h = '<div class="dutch-card">'
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Dutching — Split £' + totalStake + ' across ' + results.length + ' runners</div>';
+  results.forEach(function(r) {
+    h += '<div class="dutch-row">'
+      + '<span>' + r.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + r.odds.toFixed(1) + '</span></span>'
+      + '<span class="dutch-stake">£' + r.stake.toFixed(2) + '</span>'
+      + '</div>';
+  });
+  h += '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,193,7,.2)">'
+    + 'Any winner returns £' + (results[0].profit + totalStake).toFixed(2) + ' — profit £' + results[0].profit.toFixed(2)
+    + '</div></div>';
+  return h;
 }
 
 function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
@@ -1292,6 +1403,15 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
       + '</div>';
   }
 
+  // Dutching: find top value horses (model prob > market implied, top 3)
+  var dutchCandidates = scored
+    .filter(function(r){ return r.odds > 1.5 && r.score > 0.08; })
+    .slice(0, 3);
+  var dutchHtml = dutchCandidates.length >= 2 ? dutchHTML(
+    dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }),
+    stake
+  ) : '';
+
   return '<div class="ba-card ' + cardCls + '" style="padding-top:22px">'
     + '<div class="ba-flag">' + flagTxt + '</div>'
     + '<div class="ba-rec">' + recTxt + '</div>'
@@ -1305,6 +1425,7 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
     + (ev.places > 1 ? '<div style="font-size:.68rem;color:var(--mt);margin-top:5px">Place terms: ' + ev.places + ' places · ' + fracLabel + ' odds · place odds ' + ev.placeOdds.toFixed(2) + ' · est. place prob ' + Math.round(ev.placeProb*100) + '%</div>' : '')
     + '<div class="ba-kelly">' + kellyTxt + '</div>'
     + compHtml
+    + dutchHtml
     + '</div>';
 }
 
@@ -1400,17 +1521,75 @@ function showResults(scored, val, race, paceInfo) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
     var paceLbl = r._pace === 'front' ? ' <span class="mk front">▶</span>' : r._pace === 'closer' ? ' <span class="mk closer">◀</span>' : '';
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
+    // Build explainer from stored score components
+    var sc = r._scoreComponents || {};
+    var explainParts = [];
+    if (r.odds > 0) explainParts.push('Market ' + (sc.market||0) + '%');
+    if (sc.form > 30) explainParts.push('Form ▲');
+    else if (sc.form < 20) explainParts.push('Form ▼');
+    if (sc.jockey > 0) explainParts.push('Jockey +' + sc.jockey + '%');
+    if (sc.trainer > 0) explainParts.push('Trainer +' + sc.trainer + '%');
+    if (sc.combo > 0) explainParts.push('Combo +' + sc.combo + '%');
+    if (r._pace === 'front' && r._mv === 'steam') explainParts.push('Steam + Front ↑↑');
+    else if (r._mv === 'steam') explainParts.push('Steaming ↑');
+    else if (r._mv === 'drift') explainParts.push('Drifting ↓');
+    var explainStr = explainParts.slice(0,4).join(' · ');
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
         + '<div class="rn2">' + r.name + paceLbl + mvLbl + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
+        + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
       + '<div class="rr">'
         + '<div class="ro2">' + (r.odds > 0 ? r.odds.toFixed(1) : '—') + '</div>'
         + '<div class="rsc">' + Math.round(r.score * 100) + '%</div>'
       + '</div></div>';
   });
+  h += '</div>';
+
+  // ── Probability vs Odds visual ──────────────────────────
+  // Show model probability vs market implied for each runner
+  // Overlays (model > market) = green, Underlays = red
+  h += '<div style="margin-bottom:12px">'
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:8px;padding:0 2px">📊 Model vs Market — where the value is</div>';
+
+  var allHaveOdds = scored.filter(function(r){ return r.odds > 0; }).length === scored.length;
+  if (!allHaveOdds) {
+    h += '<div style="font-size:.73rem;color:var(--mt);padding:8px;background:var(--sf2);border-radius:6px;border:1px solid var(--bd)">Enter odds for all runners to see the value chart.</div>';
+  } else {
+    var chartRunners = scored.slice().sort(function(a,b){ return b.score - a.score; }).slice(0,8);
+    chartRunners.forEach(function(r) {
+      var modelPct  = Math.round(r.score * 100);
+      var mktPct    = r.odds > 0 ? Math.round(100 / r.odds / scored.reduce(function(s,x){ return s+(x.odds>0?1/x.odds:0); },0) * 100) : 0;
+      var isOverlay = modelPct > mktPct;
+      var isUnder   = modelPct < mktPct - 3;
+      var barCol    = isOverlay ? 'var(--g)'   : isUnder ? 'var(--re)' : 'var(--mt)';
+      var mktCol    = '#1c3024';
+      var label     = isOverlay ? '▲ VALUE' : isUnder ? '▼ AVOID' : '';
+      var labelCol  = isOverlay ? 'var(--g)' : 'var(--re)';
+      var maxPct    = Math.max(modelPct, mktPct, 5);
+      h += '<div style="margin-bottom:8px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'
+          + '<span style="font-size:.72rem;color:var(--tx);font-weight:600">' + r.name.split(' ')[0] + '</span>'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+            + (label ? '<span style="font-size:.55rem;font-weight:600;color:'+labelCol+'">' + label + '</span>' : '')
+            + '<span style="font-size:.65rem;color:var(--g)">Model '+modelPct+'%</span>'
+            + '<span style="font-size:.65rem;color:var(--mt)">Mkt '+mktPct+'%</span>'
+          + '</div>'
+        + '</div>'
+        + '<div style="position:relative;height:16px;background:var(--sf2);border-radius:3px;overflow:visible">'
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.round(modelPct/maxPct*100)+'%;background:'+barCol+';border-radius:3px;opacity:0.8"></div>'
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.round(mktPct/maxPct*100)+'%;border:1px solid rgba(255,255,255,0.15);border-radius:3px;background:transparent"></div>'
+        + '</div>'
+      + '</div>';
+    });
+    h += '<div style="display:flex;gap:14px;margin-top:6px;font-size:.6rem;color:var(--mt)">'
+      + '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:3px;background:var(--g);border-radius:2px"></span>Model probability</span>'
+      + '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:3px;background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:2px"></span>Market implied</span>'
+      + '<span>▲ VALUE = model rates higher than market</span>'
+      + '</div>';
+  }
   h += '</div>';
 
   var el = document.getElementById('pres');
