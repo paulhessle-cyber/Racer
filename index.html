@@ -1561,7 +1561,7 @@ function showResults(scored, val, race, paceInfo) {
     var chartRunners = scored.slice().sort(function(a,b){ return b.score - a.score; }).slice(0,8);
     chartRunners.forEach(function(r) {
       var modelPct  = Math.round(r.score * 100);
-      var mktPct    = r.odds > 0 ? Math.round(100 / r.odds / scored.reduce(function(s,x){ return s+(x.odds>0?1/x.odds:0); },0) * 100) : 0;
+      var mktPct    = r._mktProb !== undefined ? Math.round(r._mktProb * 100) : (r.odds > 0 ? Math.round(1/r.odds / scored.reduce(function(s,x){ return s+(x.odds>0?1/x.odds:0.02); },0) * 100) : 0);
       var isOverlay = modelPct > mktPct;
       var isUnder   = modelPct < mktPct - 3;
       var barCol    = isOverlay ? 'var(--g)'   : isUnder ? 'var(--re)' : 'var(--mt)';
