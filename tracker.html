@@ -108,6 +108,7 @@ canvas{width:100%!important;height:100%!important}
   <div class="sg3" id="statsTop"></div>
   <div class="sg2" id="statsBot"></div>
   <div id="trendWrap" style="margin-bottom:10px"></div>
+  <div id="clvSection"></div>
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Running P/L</div>
@@ -152,6 +153,16 @@ canvas{width:100%!important;height:100%!important}
       <div>
         <div class="fl">Returned £</div>
         <input class="fi gold" type="number" id="fWon" min="0" step="0.01" placeholder="0.00" inputmode="decimal">
+      </div>
+    </div>
+    <div class="fi-row" style="margin-bottom:0">
+      <div>
+        <div class="fl">Odds Taken</div>
+        <input class="fi gold" type="number" id="fOdds" min="1" step="0.1" placeholder="e.g. 4.5" inputmode="decimal">
+      </div>
+      <div>
+        <div class="fl">Starting Price (SP)</div>
+        <input class="fi gold" type="number" id="fSP" min="1" step="0.1" placeholder="e.g. 4.0" inputmode="decimal">
       </div>
     </div>
     <div class="fl">Notes</div>
@@ -246,15 +257,42 @@ function calc(data){
   var net=won-spent;
   var last5=data.slice(-5).reduce(function(s,r){return s+(r.won-r.spent);},0);
   var uniqueDays=Object.keys(data.reduce(function(m,r){m[r.date]=1;return m;},{})).length;
+
+  // Closing Line Value: % of bets where your odds > SP
+  var clvBets   = data.filter(function(r){ return r.odds>0 && r.sp>0; });
+  var clvBeaten = clvBets.filter(function(r){ return r.odds >= r.sp; }).length;
+  var clvPct    = clvBets.length > 0 ? Math.round(clvBeaten/clvBets.length*100) : null;
+  var avgEdge   = clvBets.length > 0
+    ? Math.round(clvBets.reduce(function(s,r){ return s+((r.odds-r.sp)/r.sp*100); },0) / clvBets.length * 10) / 10
+    : null;
+
+  // Drawdown: max peak-to-trough, current drawdown from peak
+  var peak = 0, maxDD = 0, curDD = 0;
+  running.forEach(function(v){
+    if (v > peak) peak = v;
+    var dd = peak - v;
+    if (dd > maxDD) maxDD = dd;
+  });
+  curDD = peak - (running[running.length-1]||0);
+
+  // Losing streak
+  var maxLoseStreak = 0, curStreak = 0;
+  data.forEach(function(r){ var pl=r.won-r.spent; if(pl<=0){curStreak++;if(curStreak>maxLoseStreak)maxLoseStreak=curStreak;}else{curStreak=0;} });
+
+  var uniqueDays2=Object.keys(data.reduce(function(m,r){m[r.date]=1;return m;},{})).length;
   return{
-    days:data.length,uniqueDays:uniqueDays,
-    spent:Math.round(spent*100)/100,won:Math.round(won*100)/100,
-    net:Math.round(net*100)/100,roi:Math.round(net/spent*10000)/100,
-    winDays,lossDays,running,
-    best:Math.round(best*100)/100,worst:Math.round(worst*100)/100,
+    days:data.length, uniqueDays:uniqueDays2,
+    spent:Math.round(spent*100)/100, won:Math.round(won*100)/100,
+    net:Math.round(net*100)/100, roi:Math.round(net/spent*10000)/100,
+    winDays, lossDays, running,
+    best:Math.round(best*100)/100, worst:Math.round(worst*100)/100,
     last5:Math.round(last5*100)/100,
     avgStake:Math.round(spent/data.length*100)/100,
-    avgReturn:Math.round(won/data.length*100)/100
+    avgReturn:Math.round(won/data.length*100)/100,
+    clvPct, avgEdge, clvCount:clvBets.length,
+    maxDD:Math.round(maxDD*100)/100,
+    curDD:Math.round(curDD*100)/100,
+    maxLoseStreak
   };
 }
 
@@ -280,6 +318,55 @@ function render(){
   document.getElementById('statsBot').innerHTML=
     sbox('+£'+s.best.toFixed(2),'Best Day','pos')+
     sbox('£'+s.worst.toFixed(2),'Worst Day','neg');
+
+  // CLV section
+  var clvEl = document.getElementById('clvSection');
+  if (clvEl) {
+    if (s.clvCount >= 3) {
+      var clvColor = s.clvPct >= 50 ? 'var(--g)' : 'var(--re)';
+      var edgeColor = s.avgEdge >= 0 ? 'var(--g)' : 'var(--re)';
+      clvEl.innerHTML =
+        '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">'
+        + '<div style="font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">📈 Closing Line Value — beating the market</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:'+clvColor+';line-height:1">' + s.clvPct + '%</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">CLV Rate</div>'
+          + '</div>'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:'+edgeColor+';line-height:1">' + (s.avgEdge>=0?'+':'') + s.avgEdge + '%</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Avg Edge</div>'
+          + '</div>'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:var(--mt);line-height:1">' + s.clvCount + '</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Tracked</div>'
+          + '</div>'
+        + '</div>'
+        + '<div style="font-size:.68rem;color:var(--mt);margin-top:8px;line-height:1.5">'
+          + (s.clvPct >= 55 ? '✅ Beating the market consistently — strong long-term indicator.' :
+             s.clvPct >= 45 ? '🟡 Roughly matching the market. Aim to beat SP on 55%+ of bets.' :
+             '🔴 Losing to the market on most bets. Shop around for better odds earlier.')
+        + '</div></div>'
+        + '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">'
+        + '<div style="font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">📉 Drawdown & Risk</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:var(--re);line-height:1">£' + s.maxDD.toFixed(0) + '</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Max Drawdown</div>'
+          + '</div>'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:'+(s.curDD>10?'var(--re)':'var(--mt)')+';line-height:1">£' + s.curDD.toFixed(0) + '</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Current DD</div>'
+          + '</div>'
+          + '<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center">'
+            + '<div style="font-size:1.8rem;font-weight:700;color:'+(s.maxLoseStreak>=5?'var(--re)':'var(--mt)')+';line-height:1">' + s.maxLoseStreak + '</div>'
+            + '<div style="font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Worst Streak</div>'
+          + '</div>'
+        + '</div></div>';
+    } else {
+      clvEl.innerHTML = '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px;font-size:.78rem;color:var(--mt)">📈 Add your taken odds and SP when logging bets to unlock CLV tracking and drawdown analysis (' + s.clvCount + '/3 needed).</div>';
+    }
+  }
 
   var tEl=document.getElementById('trendWrap');
   if(s.days>=3){
@@ -489,13 +576,17 @@ function addEntry(){
   var won=parseFloat(document.getElementById('fWon').value)||0;
   var notes=document.getElementById('fNotes').value.trim();
   var retrain=document.getElementById('fRetrain').checked;
+  var oddsIn=parseFloat(document.getElementById('fOdds').value)||0;
+  var spIn=parseFloat(document.getElementById('fSP').value)||0;
   if(!date){showStatus('⚠ Select a date.','warn');return;}
   if(isNaN(spent)||spent<=0){showStatus('⚠ Enter your stake.','warn');return;}
-  DATA.push({date:date,type:curType,spent:spent,won:won,notes:notes,retrain:retrain});
+  DATA.push({date:date,type:curType,spent:spent,won:won,notes:notes,retrain:retrain,odds:oddsIn,sp:spIn});
   save();
   document.getElementById('fSpent').value='';
   document.getElementById('fWon').value='';
   document.getElementById('fNotes').value='';
+  document.getElementById('fOdds').value='';
+  document.getElementById('fSP').value='';
   document.getElementById('fRetrain').checked=false;
   var pl=won-spent;
   showStatus('✓ '+(pl>=0?'+':'')+'£'+Math.abs(pl).toFixed(2)+' logged','ok');
