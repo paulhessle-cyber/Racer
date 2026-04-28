@@ -180,6 +180,17 @@ canvas{width:100%!important;height:100%!important}
   </div>
 </div>
 
+<!-- ACCURACY TAB -->
+
+<div class="scr" id="s-accuracy">
+  <div style="font-size:1.2rem;color:var(--g);letter-spacing:2px;margin-bottom:12px;font-weight:bold">🎯 Prediction Accuracy</div>
+  <div id="acc-content">
+    <div style="color:var(--mt);font-size:.85rem;padding:20px;text-align:center;line-height:1.6">
+      No race results logged yet.<br>After predicting a race, use the<br><strong style="color:var(--tx)">📋 Log the Result</strong> panel<br>in the Predict tab to record outcomes.
+    </div>
+  </div>
+</div>
+
 <!-- Nav -->
 
 <div class="bnav">
@@ -191,6 +202,9 @@ canvas{width:100%!important;height:100%!important}
   </button>
   <button class="bnav-tab" id="nav-add" onclick="goTab('add')">
     <span class="ico">➕</span>Add
+  </button>
+  <button class="bnav-tab" id="nav-accuracy" onclick="goTab('accuracy')">
+    <span class="ico">🎯</span>Accuracy
   </button>
 </div>
 
@@ -226,11 +240,12 @@ function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(DATA));}catch(e){
 function sortedData(){return DATA.slice().sort(function(a,b){return a.date<b.date?-1:1;});}
 
 function goTab(t){
-  ['overview','log','add'].forEach(function(id){
+  ['overview','log','add','accuracy'].forEach(function(id){
     document.getElementById('s-'+id).classList.toggle('on',id===t);
     document.getElementById('nav-'+id).classList.toggle('on',id===t);
   });
   if(t==='log')renderLog();
+  if(t==='accuracy')renderAccuracy();
 }
 
 var curType='Lucky 15';
@@ -625,6 +640,128 @@ document.getElementById('fRetrain').addEventListener('change',function(){
   if(track)track.style.background=checked?'var(--bl)':'var(--bd)';
   if(thumb)thumb.style.left=checked?'21px':'3px';
 });
+// ── Prediction Accuracy ────────────────────────────────────
+var PRED_LOG_KEY = 'rq_pred_log_v1';
+
+function getPredLog() {
+  try { return JSON.parse(localStorage.getItem(PRED_LOG_KEY) || '[]'); } catch(e) { return []; }
+}
+
+function sbox(v,l,c){return '<div class="sbox"><div class="sval '+c+'">'+v+'</div><div class="slbl">'+l+'</div></div>';}
+
+function renderAccuracy() {
+  var log = getPredLog();
+  var el  = document.getElementById('acc-content');
+  if (!log.length) {
+    el.innerHTML = '<div style="color:var(--mt);font-size:.85rem;padding:20px;text-align:center;line-height:1.6">No race results logged yet.<br>After predicting a race, use the<br><strong style="color:var(--tx)">📋 Log the Result</strong> panel<br>in the Predict tab to record outcomes.</div>';
+    return;
+  }
+
+  // Calc overall metrics
+  var total        = log.length;
+  var topWon       = log.filter(function(e){ return e.topPickWon; }).length;
+  var topPlaced    = log.filter(function(e){ return e.topPickPlaced; }).length;
+  var anyTop3      = log.filter(function(e){ return e.anyTop3Placed > 0; }).length;
+  var winnerInTop3 = log.filter(function(e){ return e.winnerRank > 0 && e.winnerRank <= 3; }).length;
+  var avgWinRank   = log.filter(function(e){ return e.winnerRank > 0; })
+                       .reduce(function(s,e){ return s+e.winnerRank; }, 0) /
+                     Math.max(log.filter(function(e){ return e.winnerRank > 0; }).length, 1);
+
+  var winPct    = Math.round(topWon/total*100);
+  var placePct  = Math.round(topPlaced/total*100);
+  var top3Pct   = Math.round(winnerInTop3/total*100);
+
+  // Calibration: group by confidence bands
+  var bands = [
+    {label:'5-10%', min:5,  max:10,  correct:0, total:0},
+    {label:'11-15%',min:11, max:15,  correct:0, total:0},
+    {label:'16-20%',min:16, max:20,  correct:0, total:0},
+    {label:'21-25%',min:21, max:25,  correct:0, total:0},
+    {label:'26%+',  min:26, max:100, correct:0, total:0},
+  ];
+  log.forEach(function(e) {
+    var conf = e.topPickConf || 0;
+    bands.forEach(function(b) {
+      if (conf >= b.min && conf <= b.max) {
+        b.total++;
+        if (e.topPickWon) b.correct++;
+      }
+    });
+  });
+
+  var h = '';
+
+  // Summary stats
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    + sbox(winPct+'%', 'Top Pick Win Rate', winPct >= 20 ? 'pos' : winPct >= 10 ? 'neu' : 'neg')
+    + sbox(placePct+'%', 'Top Pick Place Rate', placePct >= 35 ? 'pos' : 'neu')
+    + sbox(top3Pct+'%', 'Winner in Top 3', top3Pct >= 40 ? 'pos' : 'neu')
+    + sbox(avgWinRank.toFixed(1), 'Avg Winner Rank', avgWinRank <= 2.5 ? 'pos' : 'neu')
+    + '</div>';
+
+  // Context
+  h += '<div class="insight '+(winPct>=20?'ig':winPct>=12?'iw':'ir')+'" style="margin-bottom:10px">';
+  if (winPct >= 20) {
+    h += '✅ Top pick winning ' + winPct + '% of races — above the random benchmark of ~10%. Model is adding value.';
+  } else if (winPct >= 12) {
+    h += '🟡 Top pick winning ' + winPct + '% — ahead of random but below target. More data needed for a clear picture.';
+  } else {
+    h += '🔴 Top pick winning ' + winPct + '% — below expected. Check if odds are being entered before predicting, and whether the model surface matches the races.';
+  }
+  h += '</div>';
+
+  // Calibration chart
+  var activeBands = bands.filter(function(b){ return b.total > 0; });
+  if (activeBands.length >= 2) {
+    h += '<div class="card" style="margin-bottom:10px">';
+    h += '<div style="font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">Calibration — confidence vs actual win rate</div>';
+    activeBands.forEach(function(b) {
+      var actual = b.total > 0 ? Math.round(b.correct/b.total*100) : 0;
+      var mid    = Math.round((b.min+b.max)/2);
+      var diff   = actual - mid;
+      var barCol = diff >= -3 ? 'var(--g)' : 'var(--re)';
+      h += '<div style="margin-bottom:8px">'
+        + '<div style="display:flex;justify-content:space-between;font-size:.7rem;margin-bottom:3px">'
+          + '<span style="color:var(--mt)">' + b.label + ' confidence</span>'
+          + '<span style="color:var(--tx)">' + actual + '% actual'
+          + '<span style="color:var(--mt)"> (' + b.total + ' races)</span></span>'
+        + '</div>'
+        + '<div style="position:relative;height:10px;background:var(--sf2);border-radius:3px">'
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.min(actual,100)+'%;background:'+barCol+';border-radius:3px;opacity:.8"></div>'
+          + '<div style="position:absolute;top:-1px;height:12px;width:2px;background:rgba(255,255,255,.3);left:'+mid+'%"></div>'
+        + '</div>'
+      + '</div>';
+    });
+    h += '<div style="font-size:.6rem;color:var(--mt);margin-top:4px">White line = expected win rate for that confidence band</div>';
+    h += '</div>';
+  }
+
+  // Recent race log
+  h += '<div style="font-size:1rem;color:var(--g);letter-spacing:2px;margin-bottom:8px;font-weight:bold">Recent Races</div>';
+  var recent = log.slice().reverse().slice(0, 15);
+  recent.forEach(function(e) {
+    var icon = e.topPickWon ? '🥇' : e.topPickPlaced ? '🏅' : e.anyTop3Placed > 0 ? '📍' : '❌';
+    var topName = e.predictions && e.predictions[0] ? e.predictions[0].name.split(' ')[0] : '?';
+    var winner  = e.actual && e.actual[0] ? e.actual[0].split(' ')[0] : '?';
+    var conf    = e.topPickConf || 0;
+    h += '<div class="day-card '+(e.topPickWon?'win':'loss')+'" style="margin-bottom:6px">'
+      + '<div style="flex:1;min-width:0">'
+        + '<div class="day-date">' + e.date + ' · ' + (e.time||'') + ' ' + (e.course||'') + '</div>'
+        + '<div style="font-size:.72rem;color:var(--tx);margin-top:2px">' + icon + ' Picked: <strong>' + topName + '</strong> (' + conf + '%)</div>'
+        + '<div style="font-size:.68rem;color:var(--mt);margin-top:1px">Winner: ' + winner
+          + (e.winnerRank > 0 ? ' (was ranked #' + e.winnerRank + ')' : '') + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0;font-size:.7rem;color:var(--mt)">'
+        + (e.going||'') + '<br>' + (e.dist||'')
+      + '</div>'
+    + '</div>';
+  });
+
+  h += '<div style="font-size:.65rem;color:var(--mt);text-align:center;padding:8px 0">Based on ' + total + ' logged races · Log results in the Predict tab after each race</div>';
+
+  el.innerHTML = h;
+}
+
 </script>
 
 </body>
