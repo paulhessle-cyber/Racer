@@ -330,7 +330,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div style="font-size:.7rem;color:var(--mt);margin-top:3px" id="rdst"></div>
       </div>
       <div style="flex-shrink:0">
-        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going</div>
+        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going <span id="surface-badge" style="font-size:.58rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.2);margin-left:4px"></span></div>
         <select id="gsel">
           <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
           <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
@@ -418,13 +418,23 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <div id="pp-odds-notice" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(64,196,255,.06);border-left:3px solid var(--bl);border-radius:0 4px 4px 0;display:none">💡 Odds entered in Predict tab are being used to improve accuracy.</div>
       <div id="pp-odds-notice-none" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(255,193,7,.06);border-left:3px solid var(--gold);border-radius:0 4px 4px 0">💡 Enter decimal odds in the Predict tab for each race to improve placepot accuracy.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-        <select id="pp-going" style="flex:1;min-width:120px">
-          <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
-          <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
-          <option disabled>── All-Weather ──</option>
-          <option>Standard</option><option>Standard To Slow</option>
-          <option>Standard To Fast</option><option>Slow</option>
-        </select>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <div style="flex:1;min-width:130px">
+            <div style="font-size:.58rem;color:var(--g);margin-bottom:2px">🌿 Turf going</div>
+            <select id="pp-going-turf" style="width:100%">
+              <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
+              <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:130px">
+            <div style="font-size:.58rem;color:var(--bl);margin-bottom:2px">🏟 AW going</div>
+            <select id="pp-going-aw" style="width:100%">
+              <option selected>Standard</option><option>Standard To Slow</option>
+              <option>Standard To Fast</option><option>Slow</option>
+            </select>
+          </div>
+        </div>
+        <input type="hidden" id="pp-going" value="Good">
         <button class="btn bg" style="flex:1;min-width:120px;margin-bottom:0;padding:8px 12px" onclick="runPlacepot()">⚡ Generate Picks</button>
       </div>
     </div>
@@ -481,13 +491,22 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       </div>
       <div id="l15-meetings-list" style="margin-bottom:10px"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="l15-going" style="flex:1;min-width:120px">
-          <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
-          <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
-          <option disabled>── All-Weather ──</option>
-          <option>Standard</option><option>Standard To Slow</option>
-          <option>Standard To Fast</option><option>Slow</option>
-        </select>
+        <div style="display:flex;gap:6px;flex:1;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px">
+            <div style="font-size:.58rem;color:var(--g);margin-bottom:2px">🌿 Turf</div>
+            <select id="l15-going-turf" style="width:100%">
+              <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
+              <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <div style="font-size:.58rem;color:var(--bl);margin-bottom:2px">🏟 AW</div>
+            <select id="l15-going-aw" style="width:100%">
+              <option selected>Standard</option><option>Standard To Slow</option>
+              <option>Standard To Fast</option><option>Slow</option>
+            </select>
+          </div>
+        </div>
         <button class="btn bg" style="flex:1;min-width:140px;margin-bottom:0;padding:9px 12px" onclick="runL15()">⚡ Find Best Lucky 15</button>
       </div>
     </div>
@@ -764,7 +783,14 @@ function parseATR(txt) {
     var runners = extractRunners(block);
     var tipM = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
     var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
+    // Detect surface from course name
+    var cName = h[3].trim().toLowerCase();
+    var awCourses = ['southwell','wolverhampton','kempton','lingfield','chelmsford','newcastle','dundalk'];
+    var isAWrace  = awCourses.some(function(c){ return cName.indexOf(c) > -1; })
+                 || cName.indexOf('(a.w)') > -1 || cName.indexOf('(aw)') > -1;
+    var raceSurface = isAWrace ? 'aw' : 'turf';
     races.push({ rnum: parseInt(h[1]), time: h[2], course: h[3].trim(), dist: h[4].trim(),
+      surface: raceSurface,
       title: titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '',
       cls: clsM ? parseInt(clsM[1]) : 0, runners: runners,
       topTip: tipM ? tipM[1].trim() : '', watchFor: watchM ? watchM[1].trim() : '' });
@@ -1861,9 +1887,12 @@ function renderRaceList(races) {
     var d = document.createElement('div');
     d.className = 'ri'; d.id = 'ri_'+i;
     var tip = r.topTip ? '<div class="tbadge">Tip: '+r.topTip.substring(0,22)+'</div>' : '';
+    var surfTag = (r.surface === 'aw')
+      ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.2);margin-left:5px;vertical-align:middle">AW</span>'
+      : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,.08);color:var(--g);border:1px solid rgba(0,230,118,.15);margin-left:5px;vertical-align:middle">Turf</span>';
     d.innerHTML = '<div><div class="tm">'+r.time+'</div>'
       +'<div class="nm">'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
-      +'<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">'+r.dist+'</div>'
+      +'<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">'+r.dist+surfTag+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--mt)">'+r.runners.length+' runners</div></div>';
     d.onclick = (function(idx){ return function(){ selRace(idx); }; })(i);
     list.appendChild(d);
@@ -1876,10 +1905,32 @@ function selRace(i) {
   S.sel = S.races[i];
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
-  // Only auto-set going if it hasn't been changed from the default yet
+  // Auto-set going based on the race surface (AW vs Turf)
   var gsel = document.getElementById('gsel');
-  if (!S._goingChosen) {
-    if (S.model) { gsel.value = S.model.surface==='aw' ? 'Standard' : 'Good'; }
+  var raceSurf = (S.sel && S.sel.surface) ? S.sel.surface : null;
+  if (raceSurf === 'aw') {
+    // AW race: always set to Standard unless user has manually set an AW going
+    if (!S._goingChosenAW) gsel.value = 'Standard';
+  } else {
+    // Turf race: set to Good unless user has manually set a turf going
+    if (!S._goingChosenTurf) gsel.value = 'Good';
+  }
+  // Track which surface's going has been user-chosen
+  S._currentSurface = raceSurf;
+  // Update surface badge
+  var badge = document.getElementById('surface-badge');
+  if (badge) {
+    if (raceSurf === 'aw') {
+      badge.textContent = 'All-Weather';
+      badge.style.background = 'rgba(64,196,255,.1)';
+      badge.style.color = 'var(--bl)';
+      badge.style.borderColor = 'rgba(64,196,255,.2)';
+    } else {
+      badge.textContent = 'Turf';
+      badge.style.background = 'rgba(0,230,118,.1)';
+      badge.style.color = 'var(--g)';
+      badge.style.borderColor = 'rgba(0,230,118,.2)';
+    }
   }
   go('predict');
 }
@@ -1959,7 +2010,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (pdfInEl) pdfInEl.addEventListener('change', function(e){ var f=e.target.files[0]; if(f) loadPDF(f); });
   // Track when user manually changes going so we don't override their choice
   var gselEl = document.getElementById('gsel');
-  if (gselEl) gselEl.addEventListener('change', function(){ S._goingChosen = true; });
+  if (gselEl) gselEl.addEventListener('change', function(){
+    // Track which surface the user has manually set going for
+    if (S._currentSurface === 'aw') S._goingChosenAW = true;
+    else S._goingChosenTurf = true;
+  });
   var ppGoingEl = document.getElementById('pp-going');
   if (ppGoingEl) ppGoingEl.addEventListener('change', function(){ S._ppGoingChosen = true; });
   var pd = document.getElementById('pdfDrop');
@@ -2274,7 +2329,15 @@ function showPlacepotTab() {
   norace.style.display='none'; main.style.display='block';
   if (nomod) nomod.style.display = S.model?'none':'block';
   document.getElementById('pp-course').textContent = S.races[0]?S.races[0].course:'';
-  if (S.model && !S._ppGoingChosen) document.getElementById('pp-going').value = S.model.surface==='aw'?'Standard':'Good';
+  // Sync hidden pp-going from the visible selectors (used by scoring)
+  // pp-going hidden field is updated on predict - we now use per-race surface
+  var turfGoing = document.getElementById('pp-going-turf');
+  var awGoing   = document.getElementById('pp-going-aw');
+  if (turfGoing && awGoing) {
+    // Update listeners to keep hidden field in sync
+    turfGoing.onchange = awGoing.onchange = function(){ updatePPGoing(); };
+  }
+  updatePPGoing();
   runPlacepot();
   document.getElementById('pp-ai-wrap').style.display = 'block';
 }
@@ -2302,7 +2365,8 @@ function runPlacepot() {
     var ctx=buildFieldCtx(active);
     var paceInfo=assessPace(active);
 
-    var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,going,ctx)*paceAdjust(r,paceInfo); });
+    var raceGoing = (typeof getGoingForRace === 'function') ? getGoingForRace(race) : going;
+    var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,raceGoing,ctx)*paceAdjust(r,paceInfo); });
     var rawTotal = rawArr.reduce(function(a,b){return a+b;},0)||1;
     var rawNorm  = rawArr.map(function(f){return f/rawTotal;});
     var ppBlended = active.map(function(r,i){
@@ -2752,7 +2816,11 @@ function l15Breakdown(horses) {
 function runL15() {
   var meetings = S.meetings;
   if (!meetings || !meetings.length) return;
-  var going   = document.getElementById('l15-going').value;
+  var l15TurfGoing = (document.getElementById('l15-going-turf')||{}).value || 'Good';
+  var l15AWGoing   = (document.getElementById('l15-going-aw')||{}).value   || 'Standard';
+  function getL15Going(race) {
+    return (race.surface === 'aw') ? l15AWGoing : l15TurfGoing;
+  }
   var resEl   = document.getElementById('l15-results');
   resEl.innerHTML = '<div class="prog" style="margin:12px 0"><div class="spin"></div><p style="font-size:.8rem;color:var(--mt)">Scoring all horses and finding best combinations…</p></div>';
 
@@ -2766,9 +2834,11 @@ function runL15() {
 
         var ctx      = buildFieldCtx(active);
         var paceInfo = assessPace(active);
+        var rGoing = (typeof getGoingForRace === 'function') ? getGoingForRace(race) : going;
         var formArr  = active.map(function(r) {
-          var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:going}),race,ctx)
-                            : rawScoreDef(Object.assign({},r,{going:going}),race,ctx);
+          var l15Going = getL15Going(race);
+          var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:l15Going}),race,ctx)
+                            : rawScoreDef(Object.assign({},r,{going:l15Going}),race,ctx);
           return raw * paceAdjust(r, paceInfo);
         });
         var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
