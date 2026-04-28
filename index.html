@@ -702,7 +702,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 
 // ── State ──────────────────────────────────────────────────
-var S = { model: null, races: [], meetings: [], sel: null };
+var S = { model: null, races: [], meetings: [], currentRaces: [], sel: null };
 
 // ── Navigation ─────────────────────────────────────────────
 function go(n) {
@@ -756,11 +756,13 @@ async function loadPDF(file) {
     // Remove existing meeting for same course if reloaded
     S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
     S.meetings.push({ course: course, races: races });
-    // S.races = all races across all meetings (for placepot/predict compat)
+    // S.currentRaces = this meeting only (for Predict + Placepot)
+    S.currentRaces = races;
+    // S.races = all races across all meetings (for Lucky 15)
     S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
     lsRestore(races);
     document.getElementById('pp').style.display = 'none';
-    renderRaceList(S.races);
+    renderRaceList(S.currentRaces);
     renderMeetingsList();
   } catch(err) { setPS('❌ Error: ' + err.message); console.error(err); }
 }
@@ -1902,7 +1904,8 @@ function renderRaceList(races) {
 function selRace(i) {
   document.querySelectorAll('.ri').forEach(function(e){ e.classList.remove('sel'); });
   var el = document.getElementById('ri_'+i); if (el) el.classList.add('sel');
-  S.sel = S.races[i];
+  var raceList = S.currentRaces || S.races;
+  S.sel = raceList[i];
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
   // Auto-set going based on the race surface (AW vs Turf)
@@ -2325,10 +2328,11 @@ function addRunner() {
 // ── Placepot ───────────────────────────────────────────────
 function showPlacepotTab() {
   var norace=document.getElementById('pp-norace'), main=document.getElementById('pp-main'), nomod=document.getElementById('pp-nomodel');
-  if (!S.races||!S.races.length) { norace.style.display='block'; main.style.display='none'; return; }
+  var ppRaces = S.currentRaces || S.races;
+  if (!ppRaces||!ppRaces.length) { norace.style.display='block'; main.style.display='none'; return; }
   norace.style.display='none'; main.style.display='block';
   if (nomod) nomod.style.display = S.model?'none':'block';
-  document.getElementById('pp-course').textContent = S.races[0]?S.races[0].course:'';
+  document.getElementById('pp-course').textContent = ppRaces[0]?ppRaces[0].course:'';
   // Sync hidden pp-going from the visible selectors (used by scoring)
   // pp-going hidden field is updated on predict - we now use per-race surface
   var turfGoing = document.getElementById('pp-going-turf');
@@ -2349,7 +2353,7 @@ function scoreRunnerForPP(r, race, going, ctx) {
 }
 
 function runPlacepot() {
-  var races=S.races; if (!races||!races.length) return;
+  var races=S.currentRaces||S.races; if (!races||!races.length) return;
   var going=document.getElementById('pp-going').value;
   var resEl=document.getElementById('pp-results'), sumEl=document.getElementById('pp-summary');
   resEl.innerHTML=''; sumEl.style.display='none';
@@ -2440,7 +2444,7 @@ function runPlacepot() {
 }
 // ── AI Analysis (local — no API call needed) ──────────────
 function runAIAnalysis() {
-  var races = S.races;
+  var races = S.currentRaces || S.races;
   if (!races || !races.length) return;
   var btn   = document.getElementById('aiBtn');
   var resEl = document.getElementById('pp-ai-result');
@@ -2741,6 +2745,12 @@ function renderMeetingsList() {
 function clearMeeting(course) {
   S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
   S.races    = S.meetings.reduce(function(all,m){ return all.concat(m.races); }, []);
+  // If we removed the current meeting, switch to the last remaining one
+  if (S.currentRaces && S.currentRaces.length && S.currentRaces[0].course === course) {
+    var last = S.meetings[S.meetings.length - 1];
+    S.currentRaces = last ? last.races : [];
+    if (S.currentRaces.length) renderRaceList(S.currentRaces);
+  }
   renderMeetingsList();
   document.getElementById('l15-results').innerHTML = '';
 }
@@ -3042,7 +3052,7 @@ function runMonteCarloPlacepot(ppRaces, going, nSims) {
 }
 
 function runMCPlacepot() {
-  var races = S.races;
+  var races = S.currentRaces || S.races;
   if (!races || !races.length) return;
   var going = document.getElementById('pp-going').value;
   var mcEl  = document.getElementById('mc-results');
