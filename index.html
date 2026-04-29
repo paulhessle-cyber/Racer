@@ -745,20 +745,26 @@ function loadPDF(file) {
         setPS('Page ' + n + ' of ' + total + '…');
         pdf.getPage(n).then(function(pg) {
           pg.getTextContent().then(function(ct) {
+            // Group text items into lines using Y coordinate
+            // Threshold of 4px matches original ATR PDF extraction
             var items = ct.items.filter(function(x){ return x.str && x.str.trim(); });
-            items.sort(function(a,b){
+            items.sort(function(a, b) {
               var dy = Math.round(b.transform[5]) - Math.round(a.transform[5]);
-              return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+              if (Math.abs(dy) > 4) return dy;
+              return a.transform[4] - b.transform[4];
             });
             var lines = [], curLine = [], curY = null;
-            items.forEach(function(it){
-              var y = Math.round(it.transform[5]);
-              if (curY === null) curY = y;
-              if (Math.abs(y - curY) > 3) {
+            for (var j = 0; j < items.length; j++) {
+              var item = items[j];
+              var y = Math.round(item.transform[5]);
+              if (curY === null || Math.abs(y - curY) > 4) {
                 if (curLine.length) lines.push(curLine.join(' '));
-                curLine = [it.str]; curY = y;
-              } else { curLine.push(it.str); }
-            });
+                curLine = [item.str];
+                curY = y;
+              } else {
+                curLine.push(item.str);
+              }
+            }
             if (curLine.length) lines.push(curLine.join(' '));
             pages.push(lines.join('\n'));
             loadPage(n + 1);
