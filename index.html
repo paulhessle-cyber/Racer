@@ -1734,6 +1734,16 @@ function showResults(scored, val, race, paceInfo) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
     var paceLbl = r._pace === 'front' ? ' <span class="mk front">▶</span>' : r._pace === 'closer' ? ' <span class="mk closer">◀</span>' : '';
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
+    // Long travel alert
+    var travelAlert = '';
+    if (S.model && S.model.trainerCourses && race && race.course) {
+      var trav = checkLongTravel(r.jockey, race.course); // Note: jockey used as proxy — trainer not in PDF
+      // Actually check trainer if available
+      if (r.trainer) trav = checkLongTravel(r.trainer, race.course);
+      if (trav) {
+        travelAlert = ' <span class="mk" style="background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.3)">✈ ' + trav.miles + 'mi trip</span>';
+      }
+    }
     // Build explainer from stored score components
     var sc = r._scoreComponents || {};
     var explainParts = [];
@@ -1750,7 +1760,7 @@ function showResults(scored, val, race, paceInfo) {
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + travelAlert + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
@@ -3229,6 +3239,109 @@ function saveRaceResult(raceKey) {
     savedEl.textContent = msg;
     savedEl.style.color = topPickWon ? 'var(--g)' : topPickPlaced ? 'var(--gold)' : 'var(--mt)';
   }
+}
+
+// ── Long Travel Alert ─────────────────────────────────────
+// Uses trainerCourses from the model to find each trainer's
+// home courses, then flags if they're running far from home.
+// A trainer sending a single horse 150+ miles is a meaningful intent signal.
+
+// Known course locations (lat/lng) for distance calculation
+var COURSE_COORDS = {
+  'newmarket': [52.245, 0.407], 'ascot': [51.408, -0.683],
+  'goodwood': [50.900, -0.753], 'epsom': [51.330, -0.268],
+  'sandown': [51.366, -0.349], 'kempton': [51.412, -0.368],
+  'windsor': [51.471, -0.616], 'newbury': [51.397, -1.322],
+  'leicester': [52.621, -1.141], 'nottingham': [52.948, -1.131],
+  'wolverhampton': [52.571, -2.131], 'chester': [53.187, -2.879],
+  'haydock': [53.473, -2.642], 'york': [53.997, -1.047],
+  'thirsk': [54.236, -1.351], 'catterick': [54.381, -1.623],
+  'ripon': [54.139, -1.524], 'beverley': [53.852, -0.416],
+  'carlisle': [54.889, -2.979], 'musselburgh': [55.943, -3.051],
+  'hamilton': [55.773, -4.058], 'ayr': [55.466, -4.629],
+  'perth': [56.395, -3.439], 'cheltenham': [51.900, -2.066],
+  'lingfield': [51.175, -0.006], 'brighton': [50.826, -0.140],
+  'salisbury': [51.092, -1.814], 'bath': [51.387, -2.321],
+  'chepstow': [51.640, -2.672], 'worcester': [52.189, -2.222],
+  'warwick': [52.276, -1.580], 'stratford': [52.191, -1.708],
+  'uttoxeter': [52.908, -1.868], 'southwell': [53.075, -0.960],
+  'doncaster': [53.522, -1.119], 'pontefract': [53.693, -1.305],
+  'redcar': [54.614, -1.068], 'newcastle': [54.978, -1.615],
+  'chelmsford': [51.734, 0.468], 'yarmouth': [52.610, 1.733],
+  'folkestone': [51.097, 1.139], 'exeter': [50.727, -3.527],
+  'taunton': [51.024, -3.128], 'wincanton': [51.058, -2.401],
+  'plumpton': [50.930, -0.079], 'hereford': [52.063, -2.722],
+  'ffos las': [51.745, -4.173], 'bangor': [53.202, -4.131],
+  'market rasen': [53.384, -0.336], 'huntingdon': [52.344, -0.192],
+  'fakenham': [52.831, 0.847], 'sedgefield': [54.660, -1.557],
+  'hexham': [54.974, -2.098], 'kelso': [55.600, -2.437],
+};
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  var R = 6371;
+  var dLat = (lat2-lat1) * Math.PI/180;
+  var dLng = (lng2-lng1) * Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2)
+        + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)
+        * Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function kmToMiles(km) { return km * 0.621371; }
+
+function getTrainerHomeCourses(trainerName) {
+  // Returns top 3 courses by run count from model's trainerCourses
+  if (!S.model || !S.model.trainerCourses) return null;
+  var t = (trainerName || '').toLowerCase().trim();
+  var courses = S.model.trainerCourses[t];
+  if (!courses) return null;
+  // Sort by run count descending
+  return Object.keys(courses)
+    .map(function(c){ return {course: c, runs: courses[c]}; })
+    .sort(function(a,b){ return b.runs - a.runs; })
+    .slice(0, 3);
+}
+
+function checkLongTravel(trainerName, raceCourse) {
+  // Returns null if no alert, or {miles, homeCourse, runs} if long trip
+  var homes = getTrainerHomeCourses(trainerName);
+  if (!homes || !homes.length) return null;
+
+  var raceKey = raceCourse.toLowerCase()
+    .replace(/\s*\([^)]+\)/g,'') // remove (A.W.) etc
+    .replace(/park|racecourse/g,'')
+    .trim();
+
+  // Find race course coords
+  var raceCoords = null;
+  for (var k in COURSE_COORDS) {
+    if (raceKey.indexOf(k) > -1 || k.indexOf(raceKey) > -1) {
+      raceCoords = COURSE_COORDS[k]; break;
+    }
+  }
+  if (!raceCoords) return null;
+
+  // Find closest home course
+  var minDist = 9999, closestHome = null;
+  homes.forEach(function(h) {
+    var hCoords = COURSE_COORDS[h.course];
+    if (!hCoords) return;
+    var dist = kmToMiles(haversineKm(raceCoords[0], raceCoords[1], hCoords[0], hCoords[1]));
+    if (dist < minDist) { minDist = dist; closestHome = h; }
+  });
+
+  if (!closestHome) return null;
+  // Flag if more than 100 miles from nearest home course AND
+  // this course is not already a known home course
+  var isHomeCourse = homes.some(function(h){ return h.course === raceKey || raceKey.indexOf(h.course) > -1; });
+  if (!isHomeCourse && minDist >= 100) {
+    return {
+      miles: Math.round(minDist),
+      homeCourse: closestHome.course,
+      homeRuns: closestHome.runs
+    };
+  }
+  return null;
 }
 
 </script>
