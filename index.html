@@ -728,41 +728,55 @@ function go(n) {
 }
 
 // ── PDF loading ────────────────────────────────────────────
-async function loadPDF(file) {
+function loadPDF(file) {
   document.getElementById('pp').style.display = 'block';
   document.getElementById('hint').style.display = 'none';
   document.getElementById('rls').style.display = 'none';
   setPS('Reading PDF…');
-  try {
-    if (typeof pdfjsLib === 'undefined') { setPS('❌ PDF.js not loaded.'); return; }
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    var ab = await file.arrayBuffer();
-    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    var pages = [];
-    for (var i = 1; i <= pdf.numPages; i++) {
-      setPS('Page ' + i + ' of ' + pdf.numPages + '…');
-      var pg = await pdf.getPage(i);
-      var ct = await pg.getTextContent();
-      var items = ct.items.filter(function(x){ return x.str && x.str.trim(); });
-      items.sort(function(a, b) {
-        var dy = Math.round(b.transform[5]) - Math.round(a.transform[5]);
-        if (Math.abs(dy) > 4) return dy;
-        return a.transform[4] - b.transform[4];
-      });
-      var lines = [], curY = null, curLine = [];
-      for (var j = 0; j < items.length; j++) {
-        var it = items[j], y = Math.round(it.transform[5]);
-        if (curY === null || Math.abs(y - curY) > 4) {
-          if (curLine.length) lines.push(curLine.join(' '));
-          curLine = [it.str]; curY = y;
-        } else { curLine.push(it.str); }
+  if (typeof pdfjsLib === 'undefined') { setPS('❌ PDF.js not loaded.'); return; }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  var fileReader = new FileReader();
+  fileReader.onload = function(evt) {
+    var ab = evt.target.result;
+    pdfjsLib.getDocument({ data: ab }).promise.then(function(pdf) {
+      var pages = [], total = pdf.numPages;
+      function loadPage(n) {
+        if (n > total) { processPages(pages); return; }
+        setPS('Page ' + n + ' of ' + total + '…');
+        pdf.getPage(n).then(function(pg) {
+          pg.getTextContent().then(function(ct) {
+            var items = ct.items.filter(function(x){ return x.str && x.str.trim(); });
+            items.sort(function(a,b){
+              var dy = Math.round(b.transform[5]) - Math.round(a.transform[5]);
+              return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+            });
+            var lines = [], curLine = [], curY = null;
+            items.forEach(function(it){
+              var y = Math.round(it.transform[5]);
+              if (curY === null) curY = y;
+              if (Math.abs(y - curY) > 3) {
+                if (curLine.length) lines.push(curLine.join(' '));
+                curLine = [it.str]; curY = y;
+              } else { curLine.push(it.str); }
+            });
+            if (curLine.length) lines.push(curLine.join(' '));
+            pages.push(lines.join('\n'));
+            loadPage(n + 1);
+          });
+        }).catch(function(e){ setPS('❌ Error on page ' + n + ': ' + (e.message||e)); });
       }
-      if (curLine.length) lines.push(curLine.join(' '));
-      pages.push(lines.join('\n'));
-    }
-    var fullText = pages.join('\n');
-    setPS('Parsing races…');
-    var races = parseATR(fullText);
+      loadPage(1);
+    }).catch(function(e){ setPS('❌ Could not load PDF: ' + (e.message||e)); });
+  };
+  fileReader.onerror = function(){ setPS('❌ Could not read file.'); };
+  fileReader.readAsArrayBuffer(file);
+}
+
+function processPages(pages) {
+  try {
+  var fullText = pages.join('\n');
+  setPS('Parsing races…');
+  var races = parseATR(fullText);
     if (!races.length) { setPS('⚠ No races found. Make sure this is an ATR form guide PDF.'); return; }
     // Add this meeting to S.meetings (keep existing meetings for Lucky 15)
     var course = races[0] ? races[0].course : 'Unknown';
@@ -779,6 +793,7 @@ async function loadPDF(file) {
     renderMeetingsList();
   } catch(err) { setPS('❌ Error: ' + err.message); console.error(err); }
 }
+
 function setPS(m) { document.getElementById('ps').textContent = m; }
 
 // ── ATR PDF Parser ─────────────────────────────────────────
