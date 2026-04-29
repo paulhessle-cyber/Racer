@@ -2943,9 +2943,8 @@ function runL15() {
 
         var ctx      = buildFieldCtx(active);
         var paceInfo = assessPace(active);
-        var rGoing = (typeof getGoingForRace === 'function') ? getGoingForRace(race) : going;
+        var l15Going = getL15Going(race);
         var formArr  = active.map(function(r) {
-          var l15Going = getL15Going(race);
           var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:l15Going}),race,ctx)
                             : rawScoreDef(Object.assign({},r,{going:l15Going}),race,ctx);
           return raw * paceAdjust(r, paceInfo);
