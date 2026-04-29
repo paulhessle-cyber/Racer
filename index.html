@@ -735,9 +735,9 @@ function loadPDF(file) {
   setPS('Reading PDF…');
   if (typeof pdfjsLib === 'undefined') { setPS('❌ PDF.js not loaded.'); return; }
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-  var fileReader = new FileReader();
-  fileReader.onload = function(evt) {
-    var ab = evt.target.result;
+  // Use file.arrayBuffer() promise directly - cleaner than FileReader
+  // and avoids timing issues with Safari's fake pdf.js worker
+  file.arrayBuffer().then(function(ab) {
     pdfjsLib.getDocument({ data: ab }).promise.then(function(pdf) {
       var pages = [], total = pdf.numPages;
       function loadPage(n) {
@@ -773,9 +773,7 @@ function loadPDF(file) {
       }
       loadPage(1);
     }).catch(function(e){ setPS('❌ Could not load PDF: ' + (e.message||e)); });
-  };
-  fileReader.onerror = function(){ setPS('❌ Could not read file.'); };
-  fileReader.readAsArrayBuffer(file);
+  }).catch(function(e){ setPS('❌ Could not read file: ' + (e.message||e)); });
 }
 
 function processPages(pages) {
