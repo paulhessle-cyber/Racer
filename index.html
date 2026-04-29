@@ -1868,13 +1868,18 @@ function lsKey(races) {
 }
 function lsSave() {
   // Save odds per meeting so multiple meetings don't overwrite each other
-  if (!S.meetings || !S.meetings.length) return;
+  var meetingsToSave = (S.meetings && S.meetings.length)
+    ? S.meetings
+    : (S.currentRaces && S.currentRaces.length)
+      ? [{course: S.currentRaces[0].course, races: S.currentRaces}]
+      : [];
+  if (!meetingsToSave.length) return;
   try {
-    S.meetings.forEach(function(meeting) {
+    meetingsToSave.forEach(function(meeting) {
       var data = {};
       meeting.races.forEach(function(race, ri) {
         race.runners.forEach(function(r) {
-          data[ri+'_'+r.stall] = {odds:r.odds||0, nr:r._nr||false, mv:r._mv||'steady', open:r._openingOdds||0, geld:r._gelding||false};
+          data[ri+'_'+r.stall] = {odds:r.odds||0, nr:r._nr||false, mv:r._mv||'steady', open:r._openingOdds||0};
         });
       });
       localStorage.setItem(lsKey(meeting.races), JSON.stringify(data));
@@ -3028,13 +3033,14 @@ function runL15() {
       return;
     }
 
-    renderL15Results(best, allHorses.length);
+    renderL15Results(best, allHorses.length, allHorses);
   }, 50);
 }
 
-function renderL15Results(best, totalHorses) {
+function renderL15Results(best, totalHorses, allHorses) {
   var resEl = document.getElementById('l15-results');
   var stake = 1; // £1 unit = £15 total
+  allHorses = allHorses || [];
   var totalRaces = Object.keys(
     allHorses.reduce(function(m,h){ m[h.raceId]=1; return m; }, {})
   ).length;
