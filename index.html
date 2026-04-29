@@ -1867,11 +1867,18 @@ function lsKey(races) {
   return 'rp_odds_' + today + '_' + c;
 }
 function lsSave() {
-  if (!S.races||!S.races.length) return;
+  // Save odds per meeting so multiple meetings don't overwrite each other
+  if (!S.meetings || !S.meetings.length) return;
   try {
-    var data = {};
-    S.races.forEach(function(race,ri){ race.runners.forEach(function(r){ data[ri+'_'+r.stall]={odds:r.odds||0,nr:r._nr||false,mv:r._mv||'steady',open:r._openingOdds||0}; }); });
-    localStorage.setItem(lsKey(S.races), JSON.stringify(data));
+    S.meetings.forEach(function(meeting) {
+      var data = {};
+      meeting.races.forEach(function(race, ri) {
+        race.runners.forEach(function(r) {
+          data[ri+'_'+r.stall] = {odds:r.odds||0, nr:r._nr||false, mv:r._mv||'steady', open:r._openingOdds||0, geld:r._gelding||false};
+        });
+      });
+      localStorage.setItem(lsKey(meeting.races), JSON.stringify(data));
+    });
   } catch(e){}
 }
 function lsRestore(races) {
@@ -2795,10 +2802,15 @@ function renderMeetingsList() {
     var totalRaces   = m.races.length;
     var totalRunners = m.races.reduce(function(s,r){ return s+r.runners.length; }, 0);
     var oddsCount    = m.races.reduce(function(s,r){ return s+r.runners.filter(function(x){return x.odds>0;}).length; }, 0);
-    return '<div class="l15-meeting">'
+    var noOdds       = oddsCount === 0;
+    var oddsColor    = noOdds ? 'var(--re)' : 'var(--g)';
+    var oddsLabel    = noOdds ? '⚠ No odds — enter in Predict tab first' : oddsCount + ' odds entered ✓';
+    var borderStyle  = noOdds ? 'border-color:rgba(255,82,82,.35)' : '';
+    return '<div class="l15-meeting" style="' + borderStyle + '">'
       + '<div>'
         + '<div class="l15-meeting-name">' + m.course + '</div>'
-        + '<div class="l15-meeting-info">' + totalRaces + ' races · ' + totalRunners + ' runners · ' + oddsCount + ' odds entered</div>'
+        + '<div class="l15-meeting-info">' + totalRaces + ' races · ' + totalRunners + ' runners</div>'
+        + '<div class="l15-meeting-info" style="color:' + oddsColor + ';margin-top:2px;font-weight:600">' + oddsLabel + '</div>'
       + '</div>'
       + '<button class="l15-clear" onclick="clearMeeting(\'' + m.course + '\')">✕ Remove</button>'
     + '</div>';
@@ -2942,10 +2954,22 @@ function runL15() {
       });
     });
 
-    if (allHorses.length < 4 || Object.keys(
-          allHorses.reduce(function(m,h){ m[h.raceId]=1; return m; }, {})
-        ).length < 4) {
-      resEl.innerHTML = '<div class="al alw">Need horses from at least 4 different races with odds entered. Enter decimal odds in the Predict tab for each race first.</div>';
+    // Check which meetings have odds
+    var meetingsWithOdds = meetings.filter(function(m) {
+      return m.races.some(function(race) {
+        return race.runners.some(function(r) { return !r._nr && r.odds > 1; });
+      });
+    });
+    var uniqueRacesWithHorses = Object.keys(
+      allHorses.reduce(function(m,h){ m[h.raceId]=1; return m; }, {})
+    ).length;
+
+    if (uniqueRacesWithHorses < 4) {
+      var missing = meetings.length - meetingsWithOdds.length;
+      var msg = missing > 0
+        ? missing + ' meeting' + (missing>1?'s have':' has') + ' no odds entered (shown as 0 odds). Enter decimal odds in the Predict tab for those meetings first.'
+        : 'Need horses from at least 4 different races with odds entered.';
+      resEl.innerHTML = '<div class="al alw">⚠ ' + msg + '</div>';
       return;
     }
 
