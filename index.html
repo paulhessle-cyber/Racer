@@ -291,7 +291,41 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 <body>
 
 <div class="hdr">
-  <h1>🏇 Predictor</h1>
+  <div style="display:flex;align-items:center;gap:6px">
+    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="margin-right:8px;display:inline-block;vertical-align:middle">
+  <!-- Horse head silhouette in dark green -->
+  <g transform="translate(5,8)">
+    <!-- Horse head outline -->
+    <path d="M 12 2 Q 15 0 18 2 L 20 5 Q 20 8 18 10 L 15 12 Q 12 13 10 12 L 8 10 Q 7 8 8 5 Z" fill="#1b5e3d" stroke="none"/>
+    <!-- Mane -->
+    <path d="M 14 2 Q 15 0 16 2 M 15 2 Q 16 0 17 2 M 16 2 Q 17 0 18 2" stroke="#1b5e3d" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Data circuit pattern (green circles + lines) -->
+
+  <g stroke="#4CAF50" stroke-width="0.8" fill="none" opacity="0.7">
+    <circle cx="18" cy="10" r="1"/>
+    <circle cx="22" cy="8" r="1"/>
+    <circle cx="20" cy="14" r="1"/>
+    <line x1="18" y1="10" x2="22" y2="8"/>
+    <line x1="22" y1="8" x2="20" y2="14"/>
+    <line x1="20" y1="14" x2="18" y2="10"/>
+  </g>
+
+  <!-- Upward trend chart (green bars) -->
+
+  <g fill="#4CAF50" opacity="0.8">
+    <rect x="16" y="22" width="2" height="5"/>
+    <rect x="19" y="19" width="2" height="8"/>
+    <rect x="22" y="16" width="2" height="11"/>
+  </g>
+
+  <!-- Upward arrow -->
+
+  <path d="M 26 20 L 28 18 L 26 16" stroke="#1b5e3d" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+    <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
+  </div>
   <div class="mpill" id="mpill">NO MODEL</div>
 </div>
 <div class="nav">
