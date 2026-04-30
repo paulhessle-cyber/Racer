@@ -520,7 +520,11 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
             </select>
           </div>
         </div>
-        <button class="btn bg" style="flex:1;min-width:140px;margin-bottom:0;padding:9px 12px" onclick="runL15()">⚡ Find Best Lucky 15</button>
+        <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('mixed')">⚡ Mixed (EV Best)</button>
+          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(33,150,243,.7);border:none" onclick="runL15('likely')">🎯 Likely (Most Confident)</button>
+          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(255,193,7,.7);border:none;color:#000" onclick="runL15('value')">💎 Value (Best Overlays)</button>
+        </div>
       </div>
     </div>
 
@@ -2922,7 +2926,8 @@ function l15Breakdown(horses) {
 }
 
 // ── Main Lucky 15 runner ───────────────────────────────────
-function runL15() {
+function runL15(strategy) {
+  strategy = strategy || 'mixed';
   var meetings = S.meetings;
   if (!meetings || !meetings.length) return;
   var l15TurfGoing = (document.getElementById('l15-going-turf')||{}).value || 'Good';
@@ -2996,24 +3001,53 @@ function runL15() {
       return;
     }
 
-    // ── Fast search: pre-filter to top 3 per race ──────────────
-    // This reduces combinations from ~400M to ~1.6M (263x faster)
-    // while still finding the EV-optimal selection in almost all cases
+    // ── Pre-filter to top 5 per race for search ─────────────────
     var byRace = {};
     allHorses.forEach(function(h) {
       if (!byRace[h.raceId]) byRace[h.raceId] = [];
       byRace[h.raceId].push(h);
     });
-    // Sort each race by model probability, keep top 3
+
+    // For each strategy, sort candidates differently
     var TOP_N = 3;
     var filteredByRace = {};
     Object.keys(byRace).forEach(function(raceId) {
-      filteredByRace[raceId] = byRace[raceId]
-        .slice().sort(function(a,b){ return b.prob - a.prob; })
-        .slice(0, TOP_N);
+      var horses = byRace[raceId].slice();
+      if (strategy === 'likely') {
+        // Sort by model probability descending
+        horses.sort(function(a,b){ return b.prob - a.prob; });
+      } else if (strategy === 'value') {
+        // Sort by overlay (model prob - market implied) descending
+        horses.sort(function(a,b){
+          var ovA = a.prob - (a.odds>0 ? 1/a.odds : 0);
+          var ovB = b.prob - (b.odds>0 ? 1/b.odds : 0);
+          return ovB - ovA;
+        });
+      } else {
+        // Mixed: sort by EV contribution proxy = prob * odds
+        horses.sort(function(a,b){ return (b.prob*b.odds) - (a.prob*a.odds); });
+      }
+      filteredByRace[raceId] = horses.slice(0, TOP_N);
     });
-    var raceIds   = Object.keys(filteredByRace);
-    var nRaces    = raceIds.length;
+
+    var raceIds = Object.keys(filteredByRace);
+    var nRaces  = raceIds.length;
+
+    // Scoring function varies by strategy
+    function scoreCombo(combo) {
+      if (strategy === 'likely') {
+        // Minimise EV but maximise probability all 4 win
+        return combo.reduce(function(s,h){ return s * h.prob; }, 1);
+      } else if (strategy === 'value') {
+        // Sum of overlays: model prob minus implied market prob
+        return combo.reduce(function(s,h){
+          return s + (h.prob - (h.odds>0 ? 1/h.odds : 0));
+        }, 0);
+      } else {
+        // Mixed: full Lucky 15 expected value
+        return l15EV(combo);
+      }
+    }
 
     // Find best 4-horse combinations across different races
     var best = [];
@@ -3025,16 +3059,15 @@ function runL15() {
           var horsesC = filteredByRace[raceIds[rk]];
           for (var rl = rk+1; rl < nRaces; rl++) {
             var horsesD = filteredByRace[raceIds[rl]];
-            // Try all TOP_N^4 horse combinations for these 4 races
             for (var ai = 0; ai < horsesA.length; ai++) {
               for (var bi = 0; bi < horsesB.length; bi++) {
                 for (var ci = 0; ci < horsesC.length; ci++) {
                   for (var di = 0; di < horsesD.length; di++) {
                     var combo = [horsesA[ai], horsesB[bi], horsesC[ci], horsesD[di]];
-                    var ev = l15EV(combo);
-                    if (best.length < 5 || ev > best[best.length-1].ev) {
-                      best.push({ev:ev, combo:combo});
-                      best.sort(function(x,y){ return y.ev-x.ev; });
+                    var score = scoreCombo(combo);
+                    if (best.length < 5 || score > best[best.length-1].score) {
+                      best.push({ev: l15EV(combo), score: score, combo: combo});
+                      best.sort(function(x,y){ return y.score - x.score; });
                       if (best.length > 5) best.pop();
                     }
                   }
@@ -3051,11 +3084,12 @@ function runL15() {
       return;
     }
 
-    renderL15Results(best, allHorses.length, allHorses);
+    renderL15Results(best, allHorses.length, allHorses, strategy);
   }, 50);
 }
 
-function renderL15Results(best, totalHorses, allHorses) {
+function renderL15Results(best, totalHorses, allHorses, strategy) {
+  strategy = strategy || 'mixed';
   var resEl = document.getElementById('l15-results');
   var stake = 1; // £1 unit = £15 total
   allHorses = allHorses || [];
@@ -3069,14 +3103,28 @@ function renderL15Results(best, totalHorses, allHorses) {
     var c = n*(n-1)*(n-2)*(n-3)/24;
     return c * Math.pow(3, 4);  // TOP_N=3
   })();
-  var h = '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px">'
-    + 'Analysed ' + totalHorses + ' horses across ' + totalRaces + ' races'
-    + ' · ' + combosChecked.toLocaleString() + ' combinations checked'
-    + ' · £1 unit (£15 total)'
-    + '</div>';
+  var stratLabel = strategy === 'likely' ? '🎯 Most Confident'
+    : strategy === 'value' ? '💎 Best Value Overlays'
+    : '⚡ EV Optimised Mix';
+  var stratDesc  = strategy === 'likely'
+    ? 'Highest model probability — best chance of any winners'
+    : strategy === 'value'
+    ? 'Biggest gap between model and market — true overlays'
+    : 'Maximises expected return across all 15 bets';
+  var h = '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
+    + '<div style="font-size:.75rem;font-weight:600;color:var(--g);margin-bottom:2px">' + stratLabel + '</div>'
+    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:4px">' + stratDesc + '</div>'
+    + '<div style="font-size:.62rem;color:var(--mt)">'
+    + totalHorses + ' horses · ' + totalRaces + ' races · ' + combosChecked.toLocaleString() + ' combos · £1 unit (£15 total)'
+    + '</div></div>';
 
   var medals = ['🥇','🥈','🥉','4th','5th'];
   var cardCls = ['','silver','bronze','',''];
+  var rankLabel = strategy === 'likely'
+    ? ['Most Likely','2nd Most Likely','3rd','4th','5th']
+    : strategy === 'value'
+    ? ['Best Value','2nd Value','3rd','4th','5th']
+    : ['Best EV','2nd','3rd','4th','5th'];
 
   best.forEach(function(result, ri) {
     var combo = result.combo;
@@ -3091,7 +3139,7 @@ function renderL15Results(best, totalHorses, allHorses) {
     var prob1win = combo.reduce(function(s,h){ return s + h.prob*(1-h.prob)*(1-h.prob)*(1-h.prob)*4; }, 0); // rough
 
     h += '<div class="l15-card ' + cardCls[ri] + '">'
-      + '<div class="l15-rank">' + medals[ri] + ' Option ' + (ri+1) + ' — ' + (ri===0?'Best EV':'Alternative') + '</div>';
+      + '<div class="l15-rank">' + medals[ri] + ' ' + (rankLabel[ri]||'Option '+(ri+1)) + '</div>';
 
     combo.forEach(function(horse) {
       h += '<div class="l15-horse">'
