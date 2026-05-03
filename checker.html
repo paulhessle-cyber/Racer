@@ -413,7 +413,18 @@ color: var(–red);
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">Loading...</div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px"><button onclick="debugStorage()" style="font-family:var(--mono);font-size:.55rem;padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--mt);cursor:pointer;text-transform:uppercase;letter-spacing:1px">Debug</button><div style="font-size:1.6rem">📊</div></div>
+  <div style="font-size:1.6rem">📊</div>
+</div>
+
+<!-- Prominent debug banner - always visible -->
+
+<div style="margin:12px 16px;padding:12px 14px;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+  <div style="font-family:var(--mono);font-size:.65rem;color:var(--gold);line-height:1.5">
+    ⚠ If no results show, tap to diagnose
+  </div>
+  <button onclick="debugStorage()" style="font-family:var(--mono);font-size:.65rem;padding:8px 16px;border-radius:6px;border:1px solid rgba(255,193,7,.5);background:rgba(255,193,7,.15);color:var(--gold);cursor:pointer;white-space:nowrap;font-weight:600">
+    🔍 Check Storage
+  </button>
 </div>
 
 <div id="app"></div>
