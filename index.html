@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>🏇 Racecourse Predictor</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" crossorigin="anonymous"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 :root{--g:#00e676;--gold:#ffc107;--bg:#07100a;--sf:#0e1a11;--sf2:#132017;--bd:#1c3024;--tx:#c8ddd0;--mt:#4a6a55;--bl:#40c4ff;--re:#ff5252;--pace:#ff6d00;--closer:#7c4dff}
@@ -751,6 +751,20 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 <script>
 
+window.onerror = function(msg, src, line, col, err) {
+  // Show errors visibly on mobile instead of silent "Script error"
+  var el = document.getElementById('pp') || document.body;
+  if (el) {
+    var div = document.createElement('div');
+    div.style.cssText = 'background:red;color:white;padding:10px;font-size:12px;position:fixed;top:0;left:0;right:0;z-index:9999';
+    div.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+    document.body.appendChild(div);
+  }
+  return false;
+};
+
+
+
 
 // ── State ──────────────────────────────────────────────────
 var S = { model: null, races: [], meetings: [], currentRaces: [], sel: null };
@@ -772,7 +786,7 @@ function loadPDF(file) {
   document.getElementById('rls').style.display = 'none';
   setPS('Reading PDF…');
   if (typeof pdfjsLib === 'undefined') { setPS('❌ PDF.js not loaded.'); return; }
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = ''; // Use in-thread fake worker — avoids cross-origin worker issues on GitHub Pages
   // Use file.arrayBuffer() promise directly - cleaner than FileReader
   // and avoids timing issues with Safari's fake pdf.js worker
   file.arrayBuffer().then(function(ab) {
