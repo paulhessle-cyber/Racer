@@ -2070,6 +2070,20 @@ function selRace(i) {
   go('predict');
 }
 
+
+// ── Odds parser — handles decimals AND fractions (e.g. 9/2, 11/4, Evens) ──
+function parseOdds(val) {
+  if (!val && val !== 0) return 0;
+  var s = String(val).trim().toUpperCase().replace(/[F\s]/g, '');
+  if (!s) return 0;
+  if (s === 'EVENS' || s === 'EVS' || s === 'EV') return 2;
+  // Fractional: 9/2, 11/4, 100/30
+  var frac = s.match(/^(\d+(?:\.\d+)?)\/( \d+(?:\.\d+)?)$/);
+  if (frac) return parseFloat(frac[1]) / parseFloat(frac[2]) + 1;
+  // Decimal: 4.5, 10.0
+  var dec = parseFloat(s);
+  return isNaN(dec) ? 0 : dec;
+}
 function renderPredict(race) {
   document.getElementById('nosel').style.display = 'none';
   document.getElementById('rdet').style.display = 'block';
@@ -2094,8 +2108,8 @@ function renderPredict(race) {
       +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
       +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
-      +'<div style="flex:1"><label>Decimal Odds</label>'
-      +'<input type="number" id="od_'+r.stall+'" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"'
+      +'<div style="flex:1"><label>Odds</label>'
+      +'<input type="text" id="od_'+r.stall+'" placeholder="4.5 or 9/2" inputmode="decimal"'
       +(r.odds>0?' value="'+r.odds+'"':'')+(r._nr?' disabled':'')+'></div>'
       +'<div style="padding-bottom:2px;"><button class="nr-btn" id="nr_'+r.stall+'" onclick="toggleNR(\''+r.stall+'\')">NR</button>'
       +'<span class="nr-badge">NON RUNNER</span></div>'
@@ -2103,7 +2117,7 @@ function renderPredict(race) {
       +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
       +'</button></div>'
       +'</button></div></div>';
-    d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseFloat(e.target.value)||0; lsSave(); }; })(r));
+    d.querySelector('input[type=text]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseOdds(e.target.value)||0; lsSave(); }; })(r));
 
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
