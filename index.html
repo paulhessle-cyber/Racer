@@ -1881,9 +1881,10 @@ function showResults(scored, val, race, paceInfo) {
   h += '<div class="res-log-card" id="resLogCard">'
     + '<div class="res-log-title">📋 Log the Result</div>'
     + '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Enter the actual finishing positions after the race to track prediction accuracy.</div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p1">1</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p2">2</div><select class="res-pos-sel" id="res2">'+options+'</select></div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p3">3</div><select class="res-pos-sel" id="res3">'+options+'</select></div>'
+    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:8px">' + (runners.length <= 4 ? '🏇 ' + runners.length + ' runners — win only' : runners.length <= 7 ? '🏇 ' + runners.length + ' runners — 2 places' : '🏇 ' + runners.length + ' runners — 3 places') + '</div>'
+    + '<div class="res-pos-row"><div class="res-pos-num p1">1st</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
+    + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
+    + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
     + '<button class="res-save-btn" onclick="saveRaceResult(\'' + raceKey + '\')">✓ Save Result</button>'
     + '<button class="res-save-btn" onclick="exportPredLog()" style="margin-top:6px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.3);color:var(--green)">⬇ Export Results JSON</button>'
     + '<div class="res-saved" id="resSaved"></div>'
