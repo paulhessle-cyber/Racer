@@ -2311,7 +2311,21 @@ function applyPastedOdds() {
   var matched = 0, skipped = 0, steamers = [], drifters = [];
 
   parsed.forEach(function(p) {
-    var runner = race.runners.find(function(r){ return r.stall === p.stall; });
+    // Match by name first (robust to draw/stall ordering differences)
+    // then fall back to stall number
+    var runner = null;
+    if (p.name) {
+      runner = race.runners.find(function(r) {
+        // Strip country code (IRE/GB/FR etc) from PDF name before comparing
+        var rn = r.name.toLowerCase()
+          .replace(/\s+\d{1,3}$/, '')
+          .replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
+        return rn === p.name || rn.indexOf(p.name) === 0 || p.name.indexOf(rn) === 0;
+      });
+    }
+    if (!runner) {
+      runner = race.runners.find(function(r){ return r.stall === p.stall; });
+    }
     if (!runner) { skipped++; return; }
 
     var prevOdds = runner.odds || 0;
@@ -2411,8 +2425,7 @@ function parseATROdds(text) {
   var results = [];
   var stallIdx = [];
 
-  // Find stall header lines — a 1 or 2 digit number, optionally followed by draw in parens
-  // Must be followed within 2 lines by something with letters (horse name / jockey)
+  // Find stall header lines — 1 or 2 digit number, optionally with draw in parens
   for (var i = 0; i < lines.length; i++) {
     if (/^\d{1,2}(?:\s*\(\d+\))?$/.test(lines[i])) {
       var found = false;
@@ -2431,21 +2444,42 @@ function parseATROdds(text) {
     var blockEnd = (stallIdx[pos + 1] !== undefined) ? stallIdx[pos + 1] : lines.length;
     var block = lines.slice(si + 1, blockEnd);
 
+    // Extract horse name — first line with letters that isn't just a jockey name
+    // Horse name lines typically contain uppercase words, may have (IRE)/(GB) etc
+    var horseName = '';
+    for (var j = 0; j < block.length; j++) {
+      var l = block[j];
+      // Skip draw lines like (3) and pure number lines
+      if (/^\(\d+\)$/.test(l) || /^\d+$/.test(l)) continue;
+      // Skip fractional odds lines
+      if (/^\d+\/\d+$/.test(l) || /^\d+\.\d+$/.test(l)) continue;
+      // Skip lines that are clearly jockey names (no digits, relatively short)
+      // Horse name: starts with capital, has letters, may have country suffix or RPR number
+      if (/^[A-Z][a-zA-Z'\-\s]+/.test(l)) {
+        // Strip trailing RPR rating number and country code
+        var candidate = l.replace(/\s+\d{1,3}$/, '').replace(/\s*\([A-Za-z]{2,3}\)\s*$/, '').trim();
+        // Valid if at least 2 chars and starts with capital
+        if (candidate.length >= 2 && /^[A-Z]/.test(candidate)) {
+          horseName = candidate;
+          break;
+        }
+      }
+    }
+
     var oddsVal = 0;
 
-    // Priority 1: look for a fractional odds line e.g. 16/1, 10/3, 100/30, Evens
+    // Priority 1: fractional odds line e.g. 9/1, 7/2
     for (var j = 0; j < block.length; j++) {
       var fl = block[j].toUpperCase().trim();
       if (/^(EVENS|EVS)$/.test(fl)) { oddsVal = 2; break; }
       if (/^\d+\/\d+$/.test(fl)) {
         var parts = fl.split('/');
-        var converted = parseFloat(parts[0]) / parseFloat(parts[1]) + 1;
-        if (converted >= 1.1 && converted < 500) { oddsVal = converted; break; }
+        var c = parseFloat(parts[0]) / parseFloat(parts[1]) + 1;
+        if (c >= 1.1 && c < 500) { oddsVal = c; break; }
       }
     }
 
-    // Priority 2: look for a decimal odds line e.g. 4.50, 17.0
-    // Must have a decimal point (bare integers are RPR/ratings, not odds)
+    // Priority 2: decimal with decimal point e.g. 4.5
     if (!oddsVal) {
       for (var j = 0; j < block.length; j++) {
         if (/^\d+\.\d+$/.test(block[j].trim())) {
@@ -2456,12 +2490,17 @@ function parseATROdds(text) {
     }
 
     if (oddsVal >= 1.1) {
-      results.push({ stall: stall, odds: Math.round(oddsVal * 100) / 100 });
+      results.push({
+        stall: stall,
+        name:  horseName.toLowerCase(),
+        odds:  Math.round(oddsVal * 100) / 100
+      });
     }
   });
 
   return results;
 }
+
 
 function showPasteStatus(msg, type) {
   var el = document.getElementById('pasteStatus');
