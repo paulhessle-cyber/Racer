@@ -1525,11 +1525,13 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
   var ev = calcBetEV(winProb, w.odds, fieldSize, stake, placeFrac);
   var edge = winProb - ev.impliedProb;
 
-  var options = [
-    { type: 'Win',      ev: ev.winEV,   roi: ev.winROI   },
-    { type: 'Each Way', ev: ev.ewEV,    roi: ev.ewROI    },
-    { type: 'Place',    ev: ev.placeEV, roi: ev.placeROI },
-  ];
+  // Only show EW/Place when field is large enough to have place terms
+  // Standard place terms: 4 runners = Win only, 5-7 = 2 places, 8+ = 3 places
+  var options = [ { type: 'Win', ev: ev.winEV, roi: ev.winROI } ];
+  if (fieldSize >= 5) {
+    options.push({ type: 'Each Way', ev: ev.ewEV,    roi: ev.ewROI    });
+    options.push({ type: 'Place',    ev: ev.placeEV, roi: ev.placeROI });
+  }
   options.sort(function(a,b){ return b.ev - a.ev; });
   var best = options[0];
 
@@ -1881,9 +1883,9 @@ function showResults(scored, val, race, paceInfo) {
   h += '<div class="res-log-card" id="resLogCard">'
     + '<div class="res-log-title">📋 Log the Result</div>'
     + '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Enter the actual finishing positions after the race to track prediction accuracy.</div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p1">1</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p2">2</div><select class="res-pos-sel" id="res2">'+options+'</select></div>'
-    + '<div class="res-pos-row"><div class="res-pos-num p3">3</div><select class="res-pos-sel" id="res3">'+options+'</select></div>'
+    + '<div class="res-pos-row"><div class="res-pos-num p1">1st</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
+    + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
+    + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
     + '<button class="res-save-btn" onclick="saveRaceResult(\'' + raceKey + '\')">✓ Save Result</button>'
     + '<div class="res-saved" id="resSaved"></div>'
     + '</div>';
@@ -2074,13 +2076,13 @@ function selRace(i) {
 // ── Odds parser — handles decimals AND fractions (e.g. 9/2, 11/4, Evens) ──
 function parseOdds(val) {
   if (!val && val !== 0) return 0;
-  var s = String(val).trim().toUpperCase().replace(/[F\s]/g, '');
+  var s = String(val).trim().toUpperCase().replace(/F$/g, '').trim();
   if (!s) return 0;
   if (s === 'EVENS' || s === 'EVS' || s === 'EV') return 2;
-  // Fractional: 9/2, 11/4, 100/30
-  var frac = s.match(/^(\d+(?:\.\d+)?)\/( \d+(?:\.\d+)?)$/);
+  // Fractional: 9/2, 11/4, 100/30 — no space in regex
+  var frac = s.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
   if (frac) return parseFloat(frac[1]) / parseFloat(frac[2]) + 1;
-  // Decimal: 4.5, 10.0
+  // Decimal: 4.5, 10.0, or plain integer
   var dec = parseFloat(s);
   return isNaN(dec) ? 0 : dec;
 }
@@ -2108,17 +2110,16 @@ function renderPredict(race) {
       +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
       +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
-      +'<div style="flex:1"><label>Odds</label>'
-      +'<input type="text" id="od_'+r.stall+'" placeholder="4.5 or 9/2" inputmode="decimal"'
-      +(r.odds>0?' value="'+r.odds+'"':'')+(r._nr?' disabled':'')+'></div>'
-      +'<div style="padding-bottom:2px;"><button class="nr-btn" id="nr_'+r.stall+'" onclick="toggleNR(\''+r.stall+'\')">NR</button>'
+      +'<div style="flex:1">'
+        +'<label>Odds (decimal)</label>'
+        +'<input type="number" step="0.01" min="1.01" id="od_'+r.stall+'" placeholder="e.g. 4.5" inputmode="decimal"'
+        +(r.odds>0?' value="'+r.odds+'"':'')+(r._nr?' disabled':'')+'>'  
+      +'</div>'
+      +'<div style="padding-bottom:2px;"><button class="nr-btn" id="nr_'+r.stall+'" onclick="toggleNR(\''+r.stall+'\')" >NR</button>'
       +'<span class="nr-badge">NON RUNNER</span></div>'
-      +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+'" id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'
-      +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
-      +'</button></div>'
-      +'</button></div></div>';
+      +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+' id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'+(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')+'</button></div>'
+      +'</div>';
     d.querySelector('input[type=text]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseOdds(e.target.value)||0; lsSave(); }; })(r));
-
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
 }
@@ -2142,19 +2143,7 @@ function toggleMV(stall) {
   btn.textContent = next==='steam'?'▲ Steam':next==='drift'?'▽ Drift':'~ Steady';
   lsSave();
 }
-
-// ── Model loading ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-  var mInEl = document.getElementById('mIn');
-  if (mInEl) mInEl.addEventListener('change', function(e) {
-    var f = e.target.files[0]; if (!f) return;
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      try { var m = JSON.parse(ev.target.result); S.model = m; onModelLoaded(m); }
-      catch(err) { document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: '+err.message+'</div>'; }
-    };
-    reader.readAsText(f);
-  });
   var pdfInEl = document.getElementById('pdfIn');
   if (pdfInEl) pdfInEl.addEventListener('change', function(e){ var f=e.target.files[0]; if(f) loadPDF(f); });
   // Track when user manually changes going so we don't override their choice
@@ -2407,33 +2396,56 @@ function parseATROdds(text) {
   var lines = text.split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l.length > 0; });
   var results = [];
   var stallIdx = [];
-  for (var i = 0; i < lines.length - 1; i++) {
-    if (/^(\d{1,2})(?:\s*\(\d+\))?$/.test(lines[i])) {
-      var next = lines[i + 1];
-      // Stall headers are always followed by a silks line (long, contains letters)
-      if (next && next.length > 20 && /[a-zA-Z]/.test(next)) {
-        stallIdx.push(i);
+
+  // Find stall header lines — a 1 or 2 digit number, optionally followed by draw in parens
+  // Must be followed within 2 lines by something with letters (horse name / jockey)
+  for (var i = 0; i < lines.length; i++) {
+    if (/^\d{1,2}(?:\s*\(\d+\))?$/.test(lines[i])) {
+      var found = false;
+      for (var k = i + 1; k < Math.min(i + 3, lines.length); k++) {
+        if (/[a-zA-Z]/.test(lines[k])) { found = true; break; }
       }
+      if (found) stallIdx.push(i);
     }
   }
+
   if (!stallIdx.length) return [];
-  stallIdx.forEach(function(idx, si) {
-    var stall = parseInt(lines[idx].match(/^(\d{1,2})/)[1]);
-    var blockEnd = (stallIdx[si + 1] !== undefined) ? stallIdx[si + 1] : lines.length;
-    var block = lines.slice(idx + 1, blockEnd);
-    var numLines = [];
+
+  stallIdx.forEach(function(si, pos) {
+    var stallLine = lines[si];
+    var stall = parseInt(stallLine.match(/^(\d{1,2})/)[1]);
+    var blockEnd = (stallIdx[pos + 1] !== undefined) ? stallIdx[pos + 1] : lines.length;
+    var block = lines.slice(si + 1, blockEnd);
+
+    var oddsVal = 0;
+
+    // Priority 1: look for a fractional odds line e.g. 16/1, 10/3, 100/30, Evens
     for (var j = 0; j < block.length; j++) {
-      if (/^\d+(\.\d+)?$/.test(block[j])) {
-        numLines.push(parseFloat(block[j]));
+      var fl = block[j].toUpperCase().trim();
+      if (/^(EVENS|EVS)$/.test(fl)) { oddsVal = 2; break; }
+      if (/^\d+\/\d+$/.test(fl)) {
+        var parts = fl.split('/');
+        var converted = parseFloat(parts[0]) / parseFloat(parts[1]) + 1;
+        if (converted >= 1.1 && converted < 500) { oddsVal = converted; break; }
       }
     }
-    if (numLines.length >= 1) {
-      var oddsVal = numLines[numLines.length - 1];
-      if (oddsVal >= 1.5) {
-        results.push({ stall: stall, odds: oddsVal });
+
+    // Priority 2: look for a decimal odds line e.g. 4.50, 17.0
+    // Must have a decimal point (bare integers are RPR/ratings, not odds)
+    if (!oddsVal) {
+      for (var j = 0; j < block.length; j++) {
+        if (/^\d+\.\d+$/.test(block[j].trim())) {
+          var dec = parseFloat(block[j]);
+          if (dec >= 1.1 && dec < 500) { oddsVal = dec; break; }
+        }
       }
+    }
+
+    if (oddsVal >= 1.1) {
+      results.push({ stall: stall, odds: Math.round(oddsVal * 100) / 100 });
     }
   });
+
   return results;
 }
 
@@ -3370,8 +3382,8 @@ function getPredictionLog(raceKey) {
 
 function saveRaceResult(raceKey) {
   var s1 = document.getElementById('res1');
-  var s2 = document.getElementById('res2');
-  var s3 = document.getElementById('res3');
+  var s2 = document.getElementById('res2');  // may not exist for small fields
+  var s3 = document.getElementById('res3');  // may not exist for small fields
   if (!s1 || !s1.value) { alert('Please select the winner (1st place).'); return; }
 
   var actual = [s1.value, s2 ? s2.value : '', s3 ? s3.value : ''].filter(Boolean);
