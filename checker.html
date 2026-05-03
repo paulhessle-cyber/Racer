@@ -413,7 +413,7 @@ color: var(–red);
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">Loading...</div>
   </div>
-  <div style="font-size:1.6rem">📊</div>
+  <div style="display:flex;align-items:center;gap:10px"><button onclick="debugStorage()" style="font-family:var(--mono);font-size:.55rem;padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--mt);cursor:pointer;text-transform:uppercase;letter-spacing:1px">Debug</button><div style="font-size:1.6rem">📊</div></div>
 </div>
 
 <div id="app"></div>
@@ -424,9 +424,38 @@ var currentFilter = 'all';
 
 function getLog() {
   try {
+    // Try the primary key first
     var raw = localStorage.getItem(LOG_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (raw) return JSON.parse(raw);
+
+    // Fallback: scan all localStorage keys for any pred log data
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('rq_pred') > -1) {
+        try {
+          var d = JSON.parse(localStorage.getItem(k));
+          if (Array.isArray(d) && d.length && d[0].raceKey) return d;
+        } catch(e) {}
+      }
+    }
+    return [];
   } catch(e) { return []; }
+}
+
+function debugStorage() {
+  var keys = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      var v = localStorage.getItem(k);
+      var preview = v ? v.substring(0, 60) : '(empty)';
+      keys.push(k + ': ' + preview);
+    }
+  } catch(e) {
+    keys = ['Error reading localStorage: ' + e.message];
+  }
+  if (!keys.length) keys = ['localStorage is completely empty'];
+  alert('localStorage contents (' + keys.length + ' keys):\n\n' + keys.join('\n\n'));
 }
 
 function classify(entry) {
@@ -490,7 +519,7 @@ function render() {
     app.innerHTML = '<div class="empty">' +
       '<div class="empty-icon">🏇</div>' +
       '<div class="empty-title">No Results Yet</div>' +
-      '<div class="empty-sub">Log race results in the Predictor app after each race.<br>Your stats will appear here automatically.</div>' +
+      '<div class="empty-sub">Log race results in the Predictor app after each race.<br>Your stats will appear here automatically.<br><br><strong style="color:var(--gold)">⚠ Important:</strong> Both the Predictor and this dashboard must be opened from the <strong>same location</strong> (both from GitHub Pages, or both as local files) — they cannot share data across different origins.<br><br>Tap <strong>Debug</strong> in the top right to inspect what's in storage.</div>' +
       '</div>';
     return;
   }
