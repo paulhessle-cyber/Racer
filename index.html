@@ -2119,7 +2119,7 @@ function renderPredict(race) {
       +'<span class="nr-badge">NON RUNNER</span></div>'
       +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+' id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'+(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')+'</button></div>'
       +'</div>';
-    d.querySelector('input[type=text]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseOdds(e.target.value)||0; lsSave(); }; })(r));
+    d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseOdds(e.target.value)||0; lsSave(); }; })(r));
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
 }
