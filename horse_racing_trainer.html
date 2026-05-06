@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -16,140 +15,139 @@
 body { font-family:'IBM Plex Sans',sans-serif; background:var(--bg); color:var(--tx); min-height:100vh; }
 
 header {
-background:linear-gradient(135deg,#0a1f0d,#061209);
-border-bottom:2px solid var(–g);
-padding:20px 40px; display:flex; align-items:center; gap:16px;
-position:sticky; top:0; z-index:100;
+  background:linear-gradient(135deg,#0a1f0d,#061209);
+  border-bottom:2px solid var(--g);
+  padding:20px 40px; display:flex; align-items:center; gap:16px;
+  position:sticky; top:0; z-index:100;
 }
-header h1 { font-family:‘Bebas Neue’,sans-serif; font-size:2rem; color:var(–g); letter-spacing:4px; }
+header h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; color:var(--g); letter-spacing:4px; }
 header .sub {
-font-family:‘IBM Plex Mono’,monospace; font-size:.7rem; color:var(–mt);
-border:1px solid var(–bd); padding:4px 12px; border-radius:2px; letter-spacing:2px;
+  font-family:'IBM Plex Mono',monospace; font-size:.7rem; color:var(--mt);
+  border:1px solid var(--bd); padding:4px 12px; border-radius:2px; letter-spacing:2px;
 }
 
 .container { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
 
 .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:32px; }
 .step {
-background:var(–sf); border:1px solid var(–bd); border-radius:6px;
-padding:18px 18px 18px 22px; position:relative; overflow:hidden;
+  background:var(--sf); border:1px solid var(--bd); border-radius:6px;
+  padding:18px 18px 18px 22px; position:relative; overflow:hidden;
 }
-.step::before { content:’’; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(–bd); }
-.step.active::before { background:var(–g); }
-.step.done::before { background:var(–gold); }
+.step::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--bd); }
+.step.active::before { background:var(--g); }
+.step.done::before { background:var(--gold); }
 .step .num {
-font-family:‘Bebas Neue’,sans-serif; font-size:3rem; color:var(–bd);
-position:absolute; right:12px; bottom:-4px; line-height:1;
+  font-family:'Bebas Neue',sans-serif; font-size:3rem; color:var(--bd);
+  position:absolute; right:12px; bottom:-4px; line-height:1;
 }
-.step.active .num { color:var(–g); opacity:.2; }
-.step.done .num   { color:var(–gold); opacity:.2; }
-.step h3 { font-size:.65rem; text-transform:uppercase; letter-spacing:2px; color:var(–mt); margin-bottom:5px; }
-.step p  { font-size:.85rem; line-height:1.4; color:var(–tx); padding-right:30px; }
+.step.active .num { color:var(--g); opacity:.2; }
+.step.done .num   { color:var(--gold); opacity:.2; }
+.step h3 { font-size:.65rem; text-transform:uppercase; letter-spacing:2px; color:var(--mt); margin-bottom:5px; }
+.step p  { font-size:.85rem; line-height:1.4; color:var(--tx); padding-right:30px; }
 
-.panel { background:var(–sf); border:1px solid var(–bd); border-radius:8px; padding:26px; margin-bottom:20px; }
+.panel { background:var(--sf); border:1px solid var(--bd); border-radius:8px; padding:26px; margin-bottom:20px; }
 .panel-title {
-font-family:‘Bebas Neue’,sans-serif; font-size:1.3rem; color:var(–g);
-letter-spacing:2px; margin-bottom:18px; padding-bottom:12px;
-border-bottom:1px solid var(–bd);
+  font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--g);
+  letter-spacing:2px; margin-bottom:18px; padding-bottom:12px;
+  border-bottom:1px solid var(--bd);
 }
 
 .drop-zone {
-border:2px dashed var(–bd); border-radius:8px; padding:48px 30px;
-text-align:center; cursor:pointer; position:relative; transition:all .2s;
+  border:2px dashed var(--bd); border-radius:8px; padding:48px 30px;
+  text-align:center; cursor:pointer; position:relative; transition:all .2s;
 }
-.drop-zone:hover, .drop-zone.ov { border-color:var(–g); background:rgba(0,230,118,.03); }
+.drop-zone:hover, .drop-zone.ov { border-color:var(--g); background:rgba(0,230,118,.03); }
 .drop-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
 .drop-zone .icon { font-size:2.2rem; display:block; margin-bottom:10px; }
-.drop-zone strong { display:block; color:var(–tx); margin-bottom:4px; }
-.drop-zone p { font-size:.82rem; color:var(–mt); }
+.drop-zone strong { display:block; color:var(--tx); margin-bottom:4px; }
+.drop-zone p { font-size:.82rem; color:var(--mt); }
 
 .btn {
-font-family:‘IBM Plex Mono’,monospace; font-size:.78rem; font-weight:600;
-letter-spacing:1px; text-transform:uppercase; padding:11px 24px;
-border:none; border-radius:4px; cursor:pointer; transition:all .15s;
+  font-family:'IBM Plex Mono',monospace; font-size:.78rem; font-weight:600;
+  letter-spacing:1px; text-transform:uppercase; padding:11px 24px;
+  border:none; border-radius:4px; cursor:pointer; transition:all .15s;
 }
-.btn-g    { background:var(–g); color:var(–bg); }
+.btn-g    { background:var(--g); color:var(--bg); }
 .btn-g:hover { background:#00c853; }
-.btn-g:disabled { background:var(–bd); color:var(–mt); cursor:not-allowed; }
-.btn-gold { background:var(–gold); color:var(–bg); }
+.btn-g:disabled { background:var(--bd); color:var(--mt); cursor:not-allowed; }
+.btn-gold { background:var(--gold); color:var(--bg); }
 .btn-gold:hover { background:#ffab00; }
-.btn-o    { background:transparent; color:var(–g); border:1px solid var(–g); }
+.btn-o    { background:transparent; color:var(--g); border:1px solid var(--g); }
 .btn-o:hover { background:rgba(0,230,118,.06); }
 
 .stat-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
-.stat { background:var(–sf2); border:1px solid var(–bd); border-radius:6px; padding:14px; text-align:center; }
-.stat .v { font-family:‘Bebas Neue’,sans-serif; font-size:1.8rem; color:var(–g); line-height:1; }
-.stat .l { font-size:.6rem; color:var(–mt); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+.stat { background:var(--sf2); border:1px solid var(--bd); border-radius:6px; padding:14px; text-align:center; }
+.stat .v { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; color:var(--g); line-height:1; }
+.stat .l { font-size:.6rem; color:var(--mt); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
 
 .col-grid { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .ctag {
-font-family:‘IBM Plex Mono’,monospace; font-size:.68rem;
-padding:3px 9px; border-radius:3px; border:1px solid var(–bd); color:var(–mt);
+  font-family:'IBM Plex Mono',monospace; font-size:.68rem;
+  padding:3px 9px; border-radius:3px; border:1px solid var(--bd); color:var(--mt);
 }
-.ctag.ok   { border-color:var(–g);    color:var(–g);    background:rgba(0,230,118,.05); }
-.ctag.miss { border-color:var(–re);   color:var(–re);   background:rgba(255,82,82,.05); }
-.ctag.opt  { border-color:var(–gold); color:var(–gold); background:rgba(255,193,7,.05); }
+.ctag.ok   { border-color:var(--g);    color:var(--g);    background:rgba(0,230,118,.05); }
+.ctag.miss { border-color:var(--re);   color:var(--re);   background:rgba(255,82,82,.05); }
+.ctag.opt  { border-color:var(--gold); color:var(--gold); background:rgba(255,193,7,.05); }
 
 .alert {
-padding:11px 14px; border-radius:4px; font-size:.82rem;
-margin-bottom:14px; border-left:3px solid; line-height:1.6;
+  padding:11px 14px; border-radius:4px; font-size:.82rem;
+  margin-bottom:14px; border-left:3px solid; line-height:1.6;
 }
-.alert-w { background:rgba(255,193,7,.07); border-color:var(–gold); color:#ffe082; }
-.alert-s { background:rgba(0,230,118,.07); border-color:var(–g); color:#9ef5c0; }
-.alert-i { background:rgba(64,196,255,.07); border-color:var(–bl); color:#80d8ff; }
+.alert-w { background:rgba(255,193,7,.07); border-color:var(--gold); color:#ffe082; }
+.alert-s { background:rgba(0,230,118,.07); border-color:var(--g); color:#9ef5c0; }
+.alert-i { background:rgba(64,196,255,.07); border-color:var(--bl); color:#80d8ff; }
 
-.pb  { background:var(–bd); border-radius:3px; height:7px; overflow:hidden; margin:14px 0; }
-.pf  { height:100%; background:var(–g); border-radius:3px; transition:width .4s; width:0; }
+.pb  { background:var(--bd); border-radius:3px; height:7px; overflow:hidden; margin:14px 0; }
+.pf  { height:100%; background:var(--g); border-radius:3px; transition:width .4s; width:0; }
 
 .log {
-font-family:‘IBM Plex Mono’,monospace; font-size:.75rem;
-background:#040d06; border:1px solid var(–bd); border-radius:4px;
-padding:14px; height:190px; overflow-y:auto; color:var(–mt);
+  font-family:'IBM Plex Mono',monospace; font-size:.75rem;
+  background:#040d06; border:1px solid var(--bd); border-radius:4px;
+  padding:14px; height:190px; overflow-y:auto; color:var(--mt);
 }
-.log .ok   { color:var(–g); }
-.log .info { color:var(–gold); }
-.log .err  { color:var(–re); }
+.log .ok   { color:var(--g); }
+.log .info { color:var(--gold); }
+.log .err  { color:var(--re); }
 
 .ft { width:100%; border-collapse:collapse; font-size:.83rem; margin-top:4px; }
 .ft th {
-text-align:left; padding:7px 10px; background:var(–sf2);
-color:var(–mt); font-size:.65rem; text-transform:uppercase;
-letter-spacing:1px; border-bottom:1px solid var(–bd);
+  text-align:left; padding:7px 10px; background:var(--sf2);
+  color:var(--mt); font-size:.65rem; text-transform:uppercase;
+  letter-spacing:1px; border-bottom:1px solid var(--bd);
 }
-.ft td { padding:8px 10px; border-bottom:1px solid var(–bd); font-family:‘IBM Plex Mono’,monospace; }
+.ft td { padding:8px 10px; border-bottom:1px solid var(--bd); font-family:'IBM Plex Mono',monospace; }
 .ft tr:last-child td { border-bottom:none; }
 .bar-cell  { display:flex; align-items:center; gap:8px; }
-.mini-bar  { flex:1; background:var(–bd); height:5px; border-radius:3px; overflow:hidden; }
-.mini-fill { height:100%; background:var(–g); border-radius:3px; }
+.mini-bar  { flex:1; background:var(--bd); height:5px; border-radius:3px; overflow:hidden; }
+.mini-fill { height:100%; background:var(--g); border-radius:3px; }
 
 .acc-box {
-display:flex; align-items:center; gap:24px; padding:18px;
-background:var(–sf2); border-radius:6px; border:1px solid var(–bd); margin-bottom:16px;
+  display:flex; align-items:center; gap:24px; padding:18px;
+  background:var(--sf2); border-radius:6px; border:1px solid var(--bd); margin-bottom:16px;
 }
 .ring { width:76px; height:76px; position:relative; flex-shrink:0; }
 .ring svg { transform:rotate(-90deg); }
 .ring .pct {
-position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-font-family:‘Bebas Neue’,sans-serif; font-size:1.25rem; color:var(–g);
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-family:'Bebas Neue',sans-serif; font-size:1.25rem; color:var(--g);
 }
 
 /* Column reference table */
 .col-ref { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:12px; }
 .col-ref th {
-text-align:left; padding:7px 10px; font-size:.65rem; text-transform:uppercase;
-letter-spacing:1px; color:var(–mt); border-bottom:1px solid var(–bd);
-background:var(–sf2);
+  text-align:left; padding:7px 10px; font-size:.65rem; text-transform:uppercase;
+  letter-spacing:1px; color:var(--mt); border-bottom:1px solid var(--bd);
+  background:var(--sf2);
 }
 .col-ref td { padding:7px 10px; border-bottom:1px solid rgba(26,48,32,.6); vertical-align:top; }
 .col-ref tr:last-child td { border-bottom:none; }
 .col-ref tr:hover td { background:rgba(0,230,118,.02); }
-.cname { font-family:‘IBM Plex Mono’,monospace; color:var(–g); font-size:.8rem; font-weight:600; }
-.cdesc { color:var(–tx); font-size:.8rem; }
-.cexample { font-family:‘IBM Plex Mono’,monospace; color:var(–mt); font-size:.73rem; }
+.cname { font-family:'IBM Plex Mono',monospace; color:var(--g); font-size:.8rem; font-weight:600; }
+.cdesc { color:var(--tx); font-size:.8rem; }
+.cexample { font-family:'IBM Plex Mono',monospace; color:var(--mt); font-size:.73rem; }
 
 #dlSection { display:none; }
 </style>
-
 </head>
 <body>
 
@@ -179,168 +177,163 @@ background:var(–sf2);
   </div>
 
   <!-- ── STEP 1: Load Data ─────────────────────────────────────── -->
-
   <div class="panel" id="panel1">
     <div class="panel-title">&#128194; Load Race History</div>
 
-```
-<div style="display:flex;gap:10px;margin-bottom:18px;align-items:center">
-  <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Surface:</div>
-  <button class="btn btn-g" id="surfTurf"  onclick="setSurface('turf')"  style="padding:8px 16px;flex:1">🌿 Turf</button>
-  <button class="btn btn-o" id="surfAW"    onclick="setSurface('aw')"    style="padding:8px 16px;flex:1">🏟 All-Weather</button>
-  <button class="btn btn-o" id="surfJumps" onclick="setSurface('jumps')" style="padding:8px 16px;flex:1">🏇 Jumps</button>
-  <button class="btn btn-o" id="surfAll"   onclick="setSurface('all')"   style="padding:8px 16px;flex:1">📊 All Data</button>
-</div>
-<div class="alert alert-i" id="surfAlert">
-  <strong>Turf mode:</strong> Loads all flat turf races (non-AW). Accepts all courses in the CSV — no horses are excluded by course name. Load raceform.csv or flat_turf_trainer.csv.
-</div>
+    <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Surface:</div>
+      <button class="btn btn-g" id="surfTurf"  onclick="setSurface('turf')"  style="padding:8px 16px;flex:1">🌿 Turf</button>
+      <button class="btn btn-o" id="surfAW"    onclick="setSurface('aw')"    style="padding:8px 16px;flex:1">🏟 All-Weather</button>
+      <button class="btn btn-o" id="surfJumps" onclick="setSurface('jumps')" style="padding:8px 16px;flex:1">🏇 Jumps</button>
+      <button class="btn btn-o" id="surfAll"   onclick="setSurface('all')"   style="padding:8px 16px;flex:1">📊 All Data</button>
+    </div>
+    <div class="alert alert-i" id="surfAlert">
+      <strong>Turf mode:</strong> Loads all flat turf races (non-AW). Accepts all courses in the CSV — no horses are excluded by course name. Load raceform.csv or flat_turf_trainer.csv.
+    </div>
 
-<table class="col-ref">
-  <thead>
-    <tr>
-      <th style="width:120px">Column</th>
-      <th style="width:70px">Status</th>
-      <th>What it contains</th>
-      <th style="width:180px">Example values</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td class="cname">date</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Race date</td>
-      <td class="cexample">2024-06-18</td>
-    </tr>
-    <tr>
-      <td class="cname">course</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Racecourse name</td>
-      <td class="cexample">Ascot, Newmarket, York</td>
-    </tr>
-    <tr>
-      <td class="cname">horse</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Horse name (country code stripped automatically)</td>
-      <td class="cexample">Charming Prince (IRE)</td>
-    </tr>
-    <tr>
-      <td class="cname">pos</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Finishing position. Non-finishers counted as unplaced.</td>
-      <td class="cexample">1, 2, 3, PU, F, BD, DSQ</td>
-    </tr>
-    <tr>
-      <td class="cname">jockey</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Jockey's full name</td>
-      <td class="cexample">F Dettori, W Buick</td>
-    </tr>
-    <tr>
-      <td class="cname">trainer</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Trainer's full name</td>
-      <td class="cexample">J Gosden, A P O'Brien</td>
-    </tr>
-    <tr>
-      <td class="cname">dist</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Race distance in raceform notation (converted to furlongs internally)</td>
-      <td class="cexample">5f, 1m, 1m2f, 1m6½f, 2m</td>
-    </tr>
-    <tr>
-      <td class="cname">going</td>
-      <td><span class="ctag ok">Required</span></td>
-      <td class="cdesc">Going description at race time</td>
-      <td class="cexample">Good To Firm, Good, Soft, Heavy</td>
-    </tr>
-    <tr>
-      <td class="cname">draw</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Stall draw number. Used to build course-specific draw bias tables.</td>
-      <td class="cexample">1, 5, 12</td>
-    </tr>
-    <tr>
-      <td class="cname">sp</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Starting price in fractional odds. F suffix (favourite) is stripped automatically.</td>
-      <td class="cexample">4/1, 11/4, 7/2F, Evens</td>
-    </tr>
-    <tr>
-      <td class="cname">or</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Official Rating at time of race. Higher = better-rated horse.</td>
-      <td class="cexample">95, 108, 115</td>
-    </tr>
-    <tr>
-      <td class="cname">rpr</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Racing Post Rating for this run. Used as an additional form signal.</td>
-      <td class="cexample">88, 102, 117</td>
-    </tr>
-    <tr>
-      <td class="cname">ts</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Topspeed rating for this run. Speed figure on a consistent scale.</td>
-      <td class="cexample">72, 85, 98</td>
-    </tr>
-    <tr>
-      <td class="cname">age</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Horse age in years at time of race</td>
-      <td class="cexample">2, 3, 4, 5</td>
-    </tr>
-    <tr>
-      <td class="cname">wgt</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Weight carried in stones-pounds format</td>
-      <td class="cexample">9-2, 8-11, 10-0</td>
-    </tr>
-    <tr>
-      <td class="cname">ran</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Number of runners in the race. Used to contextualise positions.</td>
-      <td class="cexample">8, 12, 16</td>
-    </tr>
-    <tr>
-      <td class="cname">class</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Race class/grade</td>
-      <td class="cexample">Class 1, Class 4, Group 1</td>
-    </tr>
-    <tr>
-      <td class="cname">pattern</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Pattern race designation</td>
-      <td class="cexample">Group 1, Group 2, Listed</td>
-    </tr>
-    <tr>
-      <td class="cname">race_id</td>
-      <td><span class="ctag opt">Optional</span></td>
-      <td class="cdesc">Unique race identifier. Used to group runners per race more accurately than date+course alone.</td>
-      <td class="cexample">615704, 910939</td>
-    </tr>
-  </tbody>
-</table>
+    <table class="col-ref">
+      <thead>
+        <tr>
+          <th style="width:120px">Column</th>
+          <th style="width:70px">Status</th>
+          <th>What it contains</th>
+          <th style="width:180px">Example values</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cname">date</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Race date</td>
+          <td class="cexample">2024-06-18</td>
+        </tr>
+        <tr>
+          <td class="cname">course</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Racecourse name</td>
+          <td class="cexample">Ascot, Newmarket, York</td>
+        </tr>
+        <tr>
+          <td class="cname">horse</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Horse name (country code stripped automatically)</td>
+          <td class="cexample">Charming Prince (IRE)</td>
+        </tr>
+        <tr>
+          <td class="cname">pos</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Finishing position. Non-finishers counted as unplaced.</td>
+          <td class="cexample">1, 2, 3, PU, F, BD, DSQ</td>
+        </tr>
+        <tr>
+          <td class="cname">jockey</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Jockey's full name</td>
+          <td class="cexample">F Dettori, W Buick</td>
+        </tr>
+        <tr>
+          <td class="cname">trainer</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Trainer's full name</td>
+          <td class="cexample">J Gosden, A P O'Brien</td>
+        </tr>
+        <tr>
+          <td class="cname">dist</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Race distance in raceform notation (converted to furlongs internally)</td>
+          <td class="cexample">5f, 1m, 1m2f, 1m6½f, 2m</td>
+        </tr>
+        <tr>
+          <td class="cname">going</td>
+          <td><span class="ctag ok">Required</span></td>
+          <td class="cdesc">Going description at race time</td>
+          <td class="cexample">Good To Firm, Good, Soft, Heavy</td>
+        </tr>
+        <tr>
+          <td class="cname">draw</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Stall draw number. Used to build course-specific draw bias tables.</td>
+          <td class="cexample">1, 5, 12</td>
+        </tr>
+        <tr>
+          <td class="cname">sp</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Starting price in fractional odds. F suffix (favourite) is stripped automatically.</td>
+          <td class="cexample">4/1, 11/4, 7/2F, Evens</td>
+        </tr>
+        <tr>
+          <td class="cname">or</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Official Rating at time of race. Higher = better-rated horse.</td>
+          <td class="cexample">95, 108, 115</td>
+        </tr>
+        <tr>
+          <td class="cname">rpr</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Racing Post Rating for this run. Used as an additional form signal.</td>
+          <td class="cexample">88, 102, 117</td>
+        </tr>
+        <tr>
+          <td class="cname">ts</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Topspeed rating for this run. Speed figure on a consistent scale.</td>
+          <td class="cexample">72, 85, 98</td>
+        </tr>
+        <tr>
+          <td class="cname">age</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Horse age in years at time of race</td>
+          <td class="cexample">2, 3, 4, 5</td>
+        </tr>
+        <tr>
+          <td class="cname">wgt</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Weight carried in stones-pounds format</td>
+          <td class="cexample">9-2, 8-11, 10-0</td>
+        </tr>
+        <tr>
+          <td class="cname">ran</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Number of runners in the race. Used to contextualise positions.</td>
+          <td class="cexample">8, 12, 16</td>
+        </tr>
+        <tr>
+          <td class="cname">class</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Race class/grade</td>
+          <td class="cexample">Class 1, Class 4, Group 1</td>
+        </tr>
+        <tr>
+          <td class="cname">pattern</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Pattern race designation</td>
+          <td class="cexample">Group 1, Group 2, Listed</td>
+        </tr>
+        <tr>
+          <td class="cname">race_id</td>
+          <td><span class="ctag opt">Optional</span></td>
+          <td class="cdesc">Unique race identifier. Used to group runners per race more accurately than date+course alone.</td>
+          <td class="cexample">615704, 910939</td>
+        </tr>
+      </tbody>
+    </table>
 
-<div style="margin:18px 0 14px; display:flex; gap:10px; flex-wrap:wrap;">
-  <button class="btn btn-o" onclick="dlTemplate()">&#8595; Download Sample CSV Template</button>
-</div>
+    <div style="margin:18px 0 14px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-o" onclick="dlTemplate()">&#8595; Download Sample CSV Template</button>
+    </div>
 
-<div class="drop-zone" id="dz">
-  <input type="file" id="fi" accept=".csv,.xlsx,.xls">
-  <span class="icon">&#128196;</span>
-  <strong>Click to browse or drag &amp; drop</strong>
-  <p id="dzHint">Accepts .csv or .xlsx &mdash; raceform.csv or your merged CSV</p>
-</div>
+    <div class="drop-zone" id="dz">
+      <input type="file" id="fi" accept=".csv,.xlsx,.xls">
+      <span class="icon">&#128196;</span>
+      <strong>Click to browse or drag &amp; drop</strong>
+      <p id="dzHint">Accepts .csv or .xlsx &mdash; raceform.csv or your merged CSV</p>
+    </div>
 
-<div id="colCheck" style="margin-top:14px; display:none;"></div>
-<div id="dataStats" style="margin-top:14px; display:none;"></div>
-```
-
+    <div id="colCheck" style="margin-top:14px; display:none;"></div>
+    <div id="dataStats" style="margin-top:14px; display:none;"></div>
   </div>
 
   <!-- ── STEP 2: Train ─────────────────────────────────────────── -->
-
   <div class="panel" id="panel2" style="opacity:.35; pointer-events:none;">
     <div class="panel-title">&#9881; Train Model</div>
     <p style="color:var(--mt); font-size:.85rem; margin-bottom:16px; line-height:1.6;">
@@ -358,49 +351,45 @@ background:var(–sf2);
   </div>
 
   <!-- ── STEP 3: Export ────────────────────────────────────────── -->
-
   <div class="panel" id="dlSection">
     <div class="panel-title">&#8659; Export Model</div>
     <div class="alert alert-s">
       &#10003; Model trained successfully!
     </div>
 
-```
-<p style="color:var(--mt); font-size:.85rem; margin-bottom:16px;">
-  Try the download button first. If nothing happens, use the
-  <strong style="color:var(--tx)">Save via Notepad</strong> method below.
-</p>
+    <p style="color:var(--mt); font-size:.85rem; margin-bottom:16px;">
+      Try the download button first. If nothing happens, use the
+      <strong style="color:var(--tx)">Save via Notepad</strong> method below.
+    </p>
 
-<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
-  <button class="btn btn-gold" onclick="dlModel()">&#8659; Download .json file</button>
-</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+      <button class="btn btn-gold" onclick="dlModel()">&#8659; Download .json file</button>
+    </div>
 
-<div class="alert alert-i" style="margin-bottom:12px;">
-  <strong>&#128203; If the download doesn't work — Save via Notepad:</strong><br><br>
-  1. Click <strong>Select All Text</strong> below — the box will highlight<br>
-  2. Press <strong>Ctrl + C</strong> to copy<br>
-  3. Open <strong>Notepad</strong> (search it in the Start menu)<br>
-  4. Press <strong>Ctrl + V</strong> to paste<br>
-  5. Click <strong>File → Save As</strong><br>
-  6. Set <strong>Save as type</strong> to <em>All Files</em><br>
-  7. Name the file <strong id="jsonFilename">racing_model.json</strong> and save
-</div>
+    <div class="alert alert-i" style="margin-bottom:12px;">
+      <strong>&#128203; If the download doesn't work — Save via Notepad:</strong><br><br>
+      1. Click <strong>Select All Text</strong> below — the box will highlight<br>
+      2. Press <strong>Ctrl + C</strong> to copy<br>
+      3. Open <strong>Notepad</strong> (search it in the Start menu)<br>
+      4. Press <strong>Ctrl + V</strong> to paste<br>
+      5. Click <strong>File → Save As</strong><br>
+      6. Set <strong>Save as type</strong> to <em>All Files</em><br>
+      7. Name the file <strong id="jsonFilename">racing_model.json</strong> and save
+    </div>
 
-<div id="jsonCharCount" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;
-  color:var(--g);margin-bottom:6px;min-height:18px;"></div>
-<button class="btn btn-o" onclick="selectJsonText()" style="margin-bottom:8px;">&#9654; Select All Text</button>
-<textarea id="jsonTextBox" readonly
-  style="width:100%;height:200px;background:#0a0f0d;color:#00e676;font-family:'IBM Plex Mono',monospace;
-         font-size:.65rem;border:2px solid var(--g);border-radius:6px;padding:10px;
-         resize:vertical;display:block;box-sizing:border-box;"
-  placeholder="JSON will appear here after training..."></textarea>
-<p style="font-size:.72rem;color:var(--mt);margin-top:6px;">
-  If the box above shows green text starting with <strong style="color:var(--tx)">{</strong> — it's ready to copy.
-</p>
+    <div id="jsonCharCount" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+      color:var(--g);margin-bottom:6px;min-height:18px;"></div>
+    <button class="btn btn-o" onclick="selectJsonText()" style="margin-bottom:8px;">&#9654; Select All Text</button>
+    <textarea id="jsonTextBox" readonly
+      style="width:100%;height:200px;background:#0a0f0d;color:#00e676;font-family:'IBM Plex Mono',monospace;
+             font-size:.65rem;border:2px solid var(--g);border-radius:6px;padding:10px;
+             resize:vertical;display:block;box-sizing:border-box;"
+      placeholder="JSON will appear here after training..."></textarea>
+    <p style="font-size:.72rem;color:var(--mt);margin-top:6px;">
+      If the box above shows green text starting with <strong style="color:var(--tx)">{</strong> — it's ready to copy.
+    </p>
 
-<div id="modelSummary" style="margin-top:16px;"></div>
-```
-
+    <div id="modelSummary" style="margin-top:16px;"></div>
   </div>
 
 </div><!-- /container -->
@@ -747,8 +736,9 @@ async function trainModel() {
     horseLastRun[h] = r.date;
 
     // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'' };
     HS[h].r++;
+    if (t && !HS[h].tr) HS[h].tr = t; // store trainer name (first seen)
     if (pos === 1)                     HS[h].w++;
     if (pos <= 3 && pos > 0)           HS[h].p++;
     if (pos === 1) {
@@ -951,7 +941,7 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw };
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'' };
   });
 
   trainedModel = {
@@ -1113,6 +1103,5 @@ function dlTemplate() {
   setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
 </script>
-
 </body>
 </html>
