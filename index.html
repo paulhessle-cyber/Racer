@@ -1891,6 +1891,7 @@ function showResults(scored, val, race, paceInfo) {
     + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
     + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
     + '<button class="res-save-btn" onclick="saveRaceResult(\'' + raceKey + '\')">✓ Save Result</button>'
+    + '<button class="res-save-btn" onclick="exportPredLog()" style="margin-top:6px;background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)">⬇ Export Results JSON</button>'
     + '<div class="res-saved" id="resSaved"></div>'
     + '</div>';
 
@@ -3358,6 +3359,23 @@ function savePredLog(log) {
 function getPredictionLog(raceKey) {
   var log = getPredLog();
   return log.find(function(e){ return e.raceKey === raceKey; }) || null;
+}
+
+
+function exportPredLog() {
+  try {
+    var log = getPredLog();
+    if (!log.length) { alert('No results logged yet.'); return; }
+    var blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = 'formintel_results_' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Export failed: ' + e.message); }
 }
 
 function saveRaceResult(raceKey) {
