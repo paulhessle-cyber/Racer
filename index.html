@@ -3150,6 +3150,43 @@ function runL15(strategy) {
   }, 50);
 }
 
+
+// ── Min/Max actual returns per scenario ─────────────────────
+function l15ReturnRange(horses, unit) {
+  unit = unit || 1;
+  var n = 4;
+  var results = [];  // [{count, min, max}]
+
+  for (var count = 0; count <= n; count++) {
+    if (count === 0) { results.push({count:0, min:0, max:0}); continue; }
+
+    // Get all combinations of 'count' winners
+    var combos = [];
+    (function pick(start, chosen) {
+      if (chosen.length === count) { combos.push(chosen.slice()); return; }
+      for (var i = start; i < n; i++) { chosen.push(i); pick(i+1, chosen); chosen.pop(); }
+    })(0, []);
+
+    var minRet = Infinity, maxRet = -Infinity;
+    combos.forEach(function(winners) {
+      var wo = winners.map(function(i){ return horses[i].odds; });
+      var ret = 0;
+      // Singles
+      for (var i=0;i<wo.length;i++) ret += unit * wo[i];
+      // Doubles
+      if (wo.length>=2) for(var a=0;a<wo.length-1;a++) for(var b=a+1;b<wo.length;b++) ret+=unit*wo[a]*wo[b];
+      // Trebles
+      if (wo.length>=3) for(var a=0;a<wo.length-2;a++) for(var b=a+1;b<wo.length-1;b++) for(var c=b+1;c<wo.length;c++) ret+=unit*wo[a]*wo[b]*wo[c];
+      // Fourfold
+      if (wo.length===4){var p=1;for(var i=0;i<4;i++)p*=wo[i];ret+=unit*p;}
+      if (ret < minRet) minRet = ret;
+      if (ret > maxRet) maxRet = ret;
+    });
+    results.push({count:count, min:minRet, max:maxRet});
+  }
+  return results;
+}
+
 function renderL15Results(best, totalHorses, allHorses, strategy) {
   strategy = strategy || 'mixed';
   var resEl = document.getElementById('l15-results');
@@ -3218,23 +3255,32 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       + '</div>'
     + '</div>';
 
-    // Breakdown by outcomes
+    // Min/Max actual returns per scenario
+    var ranges = l15ReturnRange(combo, 1);
     h += '<div class="l15-outcomes">'
-      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px">Expected return by scenario (per £15 staked)</div>';
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bd)">'
+      + '<span>Scenario</span><span style="text-align:right">Min Return</span><span style="text-align:right">Max Return</span>'
+      + '</div>';
     var scenarios = ['0 winners','1 winner','2 winners','3 winners','All 4 win'];
-    bd.forEach(function(val, i) {
-      h += '<div class="l15-outcome-row">'
-        + '<span>' + scenarios[i] + '</span>'
-        + '<span style="color:' + (val>0?'var(--g)':'var(--mt)') + '">'
-          + (val > 0 ? '+£' + val.toFixed(2) : '£0.00') + '</span>'
+    ranges.forEach(function(r) {
+      var minProfit = r.min - 15;
+      var maxProfit = r.max - 15;
+      var anyGood = r.max > 0;
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem">'
+        + '<span style="color:var(--text)">' + scenarios[r.count] + '</span>'
+        + '<span style="text-align:right;color:' + (minProfit>0?'var(--g)':minProfit<0?'var(--re)':'var(--mt)') + '">'
+          + (r.min > 0 ? '£' + r.min.toFixed(0) : '-') + '</span>'
+        + '<span style="text-align:right;color:' + (maxProfit>0?'var(--g)':maxProfit<0?'var(--re)':'var(--mt)') + '">'
+          + (r.max > 0 ? '£' + r.max.toFixed(0) : '-') + '</span>'
       + '</div>';
     });
+    h += '<div style="font-size:.6rem;color:var(--mt);margin-top:6px">Win-only · £1 unit · Min = worst combination · Max = best combination</div>';
     h += '</div></div>';
   });
 
   // Disclaimer
   h += '<div style="text-align:center;padding:8px 0 4px;font-size:.7rem;color:var(--mt);line-height:1.5">'
-    + 'Expected value based on model probabilities. Enter odds closer to race time for best accuracy.<br>'
+    + 'Win-only Lucky 15 · Returns use your entered odds · ROI uses model probabilities'
     + 'Lucky 15: 4 singles + 6 doubles + 4 trebles + 1 four-fold = 15 bets at £1 unit each.'
     + '</div>';
 
