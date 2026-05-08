@@ -554,11 +554,55 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
             </select>
           </div>
         </div>
-        <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('smart')">⚡ Find Best Lucky 15</button>
-      </div>
-    </div>
+        <!-- Stake / E/W controls -->
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
 
 ```
+      <!-- Stake input -->
+      <div style="flex:1;min-width:80px">
+        <div style="font-size:.58rem;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Stake (£ per unit)</div>
+        <input type="number" id="l15-stake" value="1" min="0.25" step="0.25"
+          style="width:100%;background:var(--sf);border:1px solid var(--bd);border-radius:7px;
+                 color:var(--tx);font-size:.95rem;padding:9px 10px;outline:none;-webkit-appearance:none"
+          oninput="renderL15Stake()">
+      </div>
+
+      <!-- E/W toggle -->
+      <div style="flex:1;min-width:80px">
+        <div style="font-size:.58rem;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Bet Type</div>
+        <div style="display:flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden">
+          <button id="l15-win-btn" onclick="setL15BetType('win')"
+            style="flex:1;padding:9px 6px;background:rgba(0,230,118,.2);border:none;
+                   color:var(--green);font-family:var(--mono);font-size:.65rem;
+                   font-weight:600;cursor:pointer;letter-spacing:1px">WIN</button>
+          <button id="l15-ew-btn" onclick="setL15BetType('ew')"
+            style="flex:1;padding:9px 6px;background:transparent;border:none;border-left:1px solid var(--bd);
+                   color:var(--mt);font-family:var(--mono);font-size:.65rem;
+                   cursor:pointer;letter-spacing:1px">E/W</button>
+        </div>
+      </div>
+
+      <!-- 1/4 vs 1/5 toggle (only visible for E/W) -->
+      <div style="flex:1;min-width:80px" id="l15-place-terms-wrap">
+        <div style="font-size:.58rem;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Place Terms</div>
+        <div style="display:flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden">
+          <button id="l15-q-btn" onclick="setL15PlaceTerms('quarter')"
+            style="flex:1;padding:9px 6px;background:rgba(0,230,118,.2);border:none;
+                   color:var(--green);font-family:var(--mono);font-size:.65rem;
+                   font-weight:600;cursor:pointer;letter-spacing:1px">¼</button>
+          <button id="l15-f-btn" onclick="setL15PlaceTerms('fifth')"
+            style="flex:1;padding:9px 6px;background:transparent;border:none;border-left:1px solid var(--bd);
+                   color:var(--mt);font-family:var(--mono);font-size:.65rem;
+                   cursor:pointer;letter-spacing:1px">⅕</button>
+        </div>
+      </div>
+
+    </div>
+
+    <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('smart')">⚡ Find Best Lucky 15</button>
+  </div>
+</div>
+
 <div id="l15-results"></div>
 ```
 
@@ -3152,8 +3196,10 @@ function runL15(strategy) {
 
 
 // ── Min/Max actual returns per scenario ─────────────────────
-function l15ReturnRange(horses, unit) {
-  unit = unit || 1;
+function l15ReturnRange(horses, unit, isEW, placeTermsFrac) {
+  unit          = unit || 1;
+  isEW          = isEW || false;
+  placeTermsFrac = placeTermsFrac || 0.25; // 1/4 odds
   var n = 4;
   var results = [];  // [{count, min, max}]
 
@@ -3170,21 +3216,88 @@ function l15ReturnRange(horses, unit) {
     var minRet = Infinity, maxRet = -Infinity;
     combos.forEach(function(winners) {
       var wo = winners.map(function(i){ return horses[i].odds; });
+      // Place odds = (o-1)*frac + 1
+      var po = wo.map(function(o){ return (o-1)*placeTermsFrac + 1; });
       var ret = 0;
       // Singles
-      for (var i=0;i<wo.length;i++) ret += unit * wo[i];
+      for(var i=0;i<wo.length;i++){
+        ret += unit * wo[i];
+        if(isEW) ret += unit * po[i];
+      }
       // Doubles
-      if (wo.length>=2) for(var a=0;a<wo.length-1;a++) for(var b=a+1;b<wo.length;b++) ret+=unit*wo[a]*wo[b];
+      if(wo.length>=2) for(var a=0;a<wo.length-1;a++) for(var b=a+1;b<wo.length;b++){
+        ret+=unit*wo[a]*wo[b];
+        if(isEW) ret+=unit*po[a]*po[b];
+      }
       // Trebles
-      if (wo.length>=3) for(var a=0;a<wo.length-2;a++) for(var b=a+1;b<wo.length-1;b++) for(var c=b+1;c<wo.length;c++) ret+=unit*wo[a]*wo[b]*wo[c];
+      if(wo.length>=3) for(var a=0;a<wo.length-2;a++) for(var b=a+1;b<wo.length-1;b++) for(var c=b+1;c<wo.length;c++){
+        ret+=unit*wo[a]*wo[b]*wo[c];
+        if(isEW) ret+=unit*po[a]*po[b]*po[c];
+      }
       // Fourfold
-      if (wo.length===4){var p=1;for(var i=0;i<4;i++)p*=wo[i];ret+=unit*p;}
-      if (ret < minRet) minRet = ret;
-      if (ret > maxRet) maxRet = ret;
+      if(wo.length===4){
+        var pw=1,pp=1;
+        for(var i=0;i<4;i++){pw*=wo[i];pp*=po[i];}
+        ret+=unit*pw;
+        if(isEW) ret+=unit*pp;
+      }
+      if(ret < minRet) minRet = ret;
+      if(ret > maxRet) maxRet = ret;
     });
     results.push({count:count, min:minRet, max:maxRet});
   }
   return results;
+}
+
+
+// ── L15 bet controls ──────────────────────────────────────
+var l15BetType    = 'win';     // 'win' or 'ew'
+var l15PlaceTerms = 'quarter'; // 'quarter' or 'fifth'
+
+function setL15BetType(type) {
+  l15BetType = type;
+  var winBtn = document.getElementById('l15-win-btn');
+  var ewBtn  = document.getElementById('l15-ew-btn');
+  var wrap   = document.getElementById('l15-place-terms-wrap');
+  if (!winBtn) return;
+  if (type === 'win') {
+    winBtn.style.background = 'rgba(0,230,118,.2)'; winBtn.style.color = 'var(--green)'; winBtn.style.fontWeight = '600';
+    ewBtn.style.background  = 'transparent';         ewBtn.style.color  = 'var(--mt)';   ewBtn.style.fontWeight  = '';
+    if (wrap) wrap.style.opacity = '0.3';
+  } else {
+    ewBtn.style.background  = 'rgba(0,230,118,.2)'; ewBtn.style.color  = 'var(--green)'; ewBtn.style.fontWeight = '600';
+    winBtn.style.background = 'transparent';         winBtn.style.color = 'var(--mt)';    winBtn.style.fontWeight = '';
+    if (wrap) wrap.style.opacity = '1';
+  }
+  renderL15Stake();
+}
+
+function setL15PlaceTerms(terms) {
+  l15PlaceTerms = terms;
+  var qBtn = document.getElementById('l15-q-btn');
+  var fBtn = document.getElementById('l15-f-btn');
+  if (!qBtn) return;
+  if (terms === 'quarter') {
+    qBtn.style.background = 'rgba(0,230,118,.2)'; qBtn.style.color = 'var(--green)'; qBtn.style.fontWeight = '600';
+    fBtn.style.background = 'transparent';         fBtn.style.color = 'var(--mt)';   fBtn.style.fontWeight = '';
+  } else {
+    fBtn.style.background = 'rgba(0,230,118,.2)'; fBtn.style.color = 'var(--green)'; fBtn.style.fontWeight = '600';
+    qBtn.style.background = 'transparent';         qBtn.style.color = 'var(--mt)';   qBtn.style.fontWeight = '';
+  }
+  renderL15Stake();
+}
+
+function getL15Stake() {
+  var el = document.getElementById('l15-stake');
+  return el ? (parseFloat(el.value) || 1) : 1;
+}
+
+// Re-render just the financial figures when stake/type changes
+function renderL15Stake() {
+  // If results are showing, update the financial section
+  var res = document.getElementById('l15-results');
+  if (!res || !res._lastBest) return;
+  renderL15Results(res._lastBest, res._lastTotal, res._lastAllHorses, 'smart');
 }
 
 function renderL15Results(best, totalHorses, allHorses, strategy) {
@@ -3256,16 +3369,20 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     + '</div>';
 
     // Min/Max actual returns per scenario
-    var ranges = l15ReturnRange(combo, 1);
+    var l15Stake  = getL15Stake();
+    var l15IsEW   = l15BetType === 'ew';
+    var l15Frac   = l15PlaceTerms === 'fifth' ? 0.2 : 0.25;
+    var l15Total  = l15IsEW ? l15Stake * 30 : l15Stake * 15; // E/W doubles the bets
+    var ranges    = l15ReturnRange(combo, l15Stake, l15IsEW, l15Frac);
     h += '<div class="l15-outcomes">'
-      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:8px">Actual returns by number of winners (win-only · £1 unit)</div>'
+      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:8px">' + (l15IsEW ? 'E/W' : 'Win only') + ' · ' + (l15IsEW ? (l15Frac===0.2?'1/5':'1/4')+' place · ':'') + '£' + l15Stake.toFixed(2) + ' unit · Total stake £' + l15Total.toFixed(2) + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bd)">'
       + '<span>Scenario</span><span style="text-align:right">Min</span><span style="text-align:right">Max</span>'
       + '</div>';
     var scenarios = ['0 winners','1 winner','2 winners','3 winners','All 4 win'];
     ranges.forEach(function(r) {
-      var minProfit = r.min - 15;
-      var maxProfit = r.max - 15;
+      var minProfit = r.min - l15Total;
+      var maxProfit = r.max - l15Total;
       var anyGood = r.max > 0;
       h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem">'
         + '<span style="color:var(--text)">' + scenarios[r.count] + '</span>'
