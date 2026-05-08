@@ -3247,7 +3247,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     h += '<div class="l15-ev-row">'
       + '<div>'
         + '<div class="l15-ev-num">£' + ev.toFixed(2) + '</div>'
-        + '<div class="l15-ev-label">Expected return on £15</div>'
+        + '<div class="l15-ev-label">Probability-weighted EV</div>'
       + '</div>'
       + '<div style="text-align:right">'
         + '<div style="font-size:1.4rem;color:' + (roi>=0?'var(--g)':'var(--re)') + '">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</div>'
@@ -3258,8 +3258,9 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     // Min/Max actual returns per scenario
     var ranges = l15ReturnRange(combo, 1);
     h += '<div class="l15-outcomes">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bd)">'
-      + '<span>Scenario</span><span style="text-align:right">Min Return</span><span style="text-align:right">Max Return</span>'
+      + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:8px">Actual returns by number of winners (win-only · £1 unit)</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bd)">'
+      + '<span>Scenario</span><span style="text-align:right">Min</span><span style="text-align:right">Max</span>'
       + '</div>';
     var scenarios = ['0 winners','1 winner','2 winners','3 winners','All 4 win'];
     ranges.forEach(function(r) {
