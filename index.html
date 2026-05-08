@@ -554,11 +554,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
             </select>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;flex:1">
-          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('mixed')">⚡ Mixed (EV Best)</button>
-          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(33,150,243,.7);border:none" onclick="runL15('likely')">🎯 Likely (Most Confident)</button>
-          <button class="btn bg" style="margin-bottom:0;padding:9px 12px;background:rgba(255,193,7,.7);border:none;color:#000" onclick="runL15('value')">💎 Value (Best Overlays)</button>
-        </div>
+        <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('smart')">⚡ Find Best Lucky 15</button>
       </div>
     </div>
 
@@ -3042,83 +3038,108 @@ function runL15(strategy) {
       return;
     }
 
-    // ── Pre-filter to top 5 per race for search ─────────────────
-    var byRace = {};
-    allHorses.forEach(function(h) {
-      if (!byRace[h.raceId]) byRace[h.raceId] = [];
-      byRace[h.raceId].push(h);
-    });
+    // ── Smart strategy: one horse from each odds band + best remaining ────────
+    // Band A: 1.0–3.9  (short, confident — model AND market agree)
+    // Band B: 4.0–9.9  (mid-range value)
+    // Band C: 10.0+    (longer shot the model still rates)
+    // Band D: best remaining from any band not already used
 
-    // For each strategy, sort candidates differently
-    var TOP_N = 3;
-    var filteredByRace = {};
-    Object.keys(byRace).forEach(function(raceId) {
-      var horses = byRace[raceId].slice();
-      if (strategy === 'likely') {
-        // Sort by model probability descending
-        horses.sort(function(a,b){ return b.prob - a.prob; });
-      } else if (strategy === 'value') {
-        // Sort by overlay (model prob - market implied) descending
-        horses.sort(function(a,b){
-          var ovA = a.prob - (a.odds>0 ? 1/a.odds : 0);
-          var ovB = b.prob - (b.odds>0 ? 1/b.odds : 0);
-          return ovB - ovA;
-        });
-      } else {
-        // Mixed: sort by EV contribution proxy = prob * odds
-        horses.sort(function(a,b){ return (b.prob*b.odds) - (a.prob*a.odds); });
-      }
-      filteredByRace[raceId] = horses.slice(0, TOP_N);
-    });
-
-    var raceIds = Object.keys(filteredByRace);
-    var nRaces  = raceIds.length;
-
-    // Scoring function varies by strategy
-    function scoreCombo(combo) {
-      if (strategy === 'likely') {
-        // Minimise EV but maximise probability all 4 win
-        return combo.reduce(function(s,h){ return s * h.prob; }, 1);
-      } else if (strategy === 'value') {
-        // Sum of overlays: model prob minus implied market prob
-        return combo.reduce(function(s,h){
-          return s + (h.prob - (h.odds>0 ? 1/h.odds : 0));
-        }, 0);
-      } else {
-        // Mixed: full Lucky 15 expected value
-        return l15EV(combo);
-      }
+    // For each horse: only include if model prob >= market implied prob
+    // i.e. model agrees with or beats the market
+    function marketAgrees(h) {
+      if (!h.odds || h.odds <= 1) return false;
+      var mktImplied = 1 / h.odds;
+      return h.prob >= mktImplied * 0.85; // within 15% — model broadly agrees
     }
 
-    // Find best 4-horse combinations across different races
-    var best = [];
-    for (var ri = 0; ri < nRaces-3; ri++) {
-      var horsesA = filteredByRace[raceIds[ri]];
-      for (var rj = ri+1; rj < nRaces-2; rj++) {
-        var horsesB = filteredByRace[raceIds[rj]];
-        for (var rk = rj+1; rk < nRaces-1; rk++) {
-          var horsesC = filteredByRace[raceIds[rk]];
-          for (var rl = rk+1; rl < nRaces; rl++) {
-            var horsesD = filteredByRace[raceIds[rl]];
-            for (var ai = 0; ai < horsesA.length; ai++) {
-              for (var bi = 0; bi < horsesB.length; bi++) {
-                for (var ci = 0; ci < horsesC.length; ci++) {
-                  for (var di = 0; di < horsesD.length; di++) {
-                    var combo = [horsesA[ai], horsesB[bi], horsesC[ci], horsesD[di]];
-                    var score = scoreCombo(combo);
-                    if (best.length < 5 || score > best[best.length-1].score) {
-                      best.push({ev: l15EV(combo), score: score, combo: combo});
-                      best.sort(function(x,y){ return y.score - x.score; });
-                      if (best.length > 5) best.pop();
-                    }
-                  }
-                }
-              }
-            }
-          }
+    // Sort all horses by combined score: prob * market_agreement_factor
+    var scoredHorses = allHorses.filter(function(h) {
+      return h.odds > 1 && h.prob > 0;
+    }).map(function(h) {
+      var mktImplied  = 1 / h.odds;
+      var agreement   = Math.min(h.prob / mktImplied, 1.5); // how much model agrees
+      h._smartScore   = h.prob * agreement;
+      h._mktImplied   = mktImplied;
+      return h;
+    });
+
+    // Split into bands — pick best from each across different races
+    function bandHorses(minOdds, maxOdds) {
+      return scoredHorses
+        .filter(function(h){ return h.odds >= minOdds && h.odds < maxOdds; })
+        .sort(function(a,b){ return b._smartScore - a._smartScore; });
+    }
+
+    var bandA = bandHorses(1.0,  4.0);   // 1.0–3.9
+    var bandB = bandHorses(4.0, 10.0);   // 4.0–9.9
+    var bandC = bandHorses(10.0, 999);   // 10+
+
+    // Pick best from each band (different races)
+    function pickBest(band, usedRaces) {
+      for (var i = 0; i < band.length; i++) {
+        if (usedRaces.indexOf(band[i].raceId) === -1) return band[i];
+      }
+      return null;
+    }
+
+    var usedRaces = [];
+    var pickA = pickBest(bandA, usedRaces);
+    if (pickA) usedRaces.push(pickA.raceId);
+    var pickB = pickBest(bandB, usedRaces);
+    if (pickB) usedRaces.push(pickB.raceId);
+    var pickC = pickBest(bandC, usedRaces);
+    if (pickC) usedRaces.push(pickC.raceId);
+
+    // Band D: best remaining horse from any band, different race
+    var allSorted = scoredHorses.slice().sort(function(a,b){ return b._smartScore - a._smartScore; });
+    var pickD = pickBest(allSorted, usedRaces);
+
+    var smartCombo = [pickA, pickB, pickC, pickD].filter(Boolean);
+
+    // If we couldn't fill all 4 bands (e.g. no 10+ runners with odds),
+    // fill remaining slots with next best from any unused race
+    if (smartCombo.length < 4) {
+      for (var i = 0; i < allSorted.length && smartCombo.length < 4; i++) {
+        var h = allSorted[i];
+        if (usedRaces.indexOf(h.raceId) === -1) {
+          smartCombo.push(h);
+          usedRaces.push(h.raceId);
         }
       }
     }
+
+    var best = [];
+    if (smartCombo.length >= 4) {
+      var combo = smartCombo.slice(0, 4);
+      best.push({ ev: l15EV(combo), score: combo.reduce(function(s,h){ return s * h.prob; }, 1), combo: combo });
+    }
+
+    // Also try a few variations: swap band selections for next-best in same band
+    // to find if a slightly different combo has better EV
+    var variations = [bandA, bandB, bandC];
+    variations.forEach(function(band, bi) {
+      if (band.length < 2) return;
+      // Try second-best in this band
+      var alt = [pickA, pickB, pickC, pickD].filter(Boolean).slice();
+      var replaceWith = null;
+      for (var i = 0; i < band.length; i++) {
+        var candidate = band[i];
+        if (candidate !== alt[bi] && [alt[0],alt[1],alt[2],alt[3]].filter(function(x){ return x&&x.raceId===candidate.raceId; }).length === 0) {
+          replaceWith = candidate; break;
+        }
+      }
+      if (replaceWith && alt[bi]) {
+        alt[bi] = replaceWith;
+        if (alt.filter(Boolean).length >= 4) {
+          var c2 = alt.slice(0,4);
+          best.push({ ev: l15EV(c2), score: c2.reduce(function(s,h){ return s*h.prob; },1), combo: c2 });
+        }
+      }
+    });
+
+    // Sort variations by EV so best shows first
+    best.sort(function(a,b){ return b.ev - a.ev; });
+    if (best.length > 3) best = best.slice(0,3);
 
     if (!best.length) {
       resEl.innerHTML = '<div class="al alw">Could not find 4 horses from different races. Make sure horses from at least 4 different races have odds entered.</div>';
@@ -3144,14 +3165,8 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     var c = n*(n-1)*(n-2)*(n-3)/24;
     return c * Math.pow(3, 4);  // TOP_N=3
   })();
-  var stratLabel = strategy === 'likely' ? '🎯 Most Confident'
-    : strategy === 'value' ? '💎 Best Value Overlays'
-    : '⚡ EV Optimised Mix';
-  var stratDesc  = strategy === 'likely'
-    ? 'Highest model probability — best chance of any winners'
-    : strategy === 'value'
-    ? 'Biggest gap between model and market — true overlays'
-    : 'Maximises expected return across all 15 bets';
+  var stratLabel = '⚡ Smart Lucky 15';
+  var stratDesc  = 'One from each odds band (evens–4s · 4s–10s · 10s+) + best remaining · model must agree with market';
   var h = '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
     + '<div style="font-size:.75rem;font-weight:600;color:var(--g);margin-bottom:2px">' + stratLabel + '</div>'
     + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:4px">' + stratDesc + '</div>'
@@ -3161,11 +3176,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
 
   var medals = ['🥇','🥈','🥉','4th','5th'];
   var cardCls = ['','silver','bronze','',''];
-  var rankLabel = strategy === 'likely'
-    ? ['Most Likely','2nd Most Likely','3rd','4th','5th']
-    : strategy === 'value'
-    ? ['Best Value','2nd Value','3rd','4th','5th']
-    : ['Best EV','2nd','3rd','4th','5th'];
+  var rankLabel = ['Best Selection', 'Alt 1', 'Alt 2', 'Alt 3', 'Alt 4'];
 
   best.forEach(function(result, ri) {
     var combo = result.combo;
@@ -3185,7 +3196,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     combo.forEach(function(horse) {
       h += '<div class="l15-horse">'
         + '<div style="flex:1;min-width:0">'
-          + '<div class="l15-horse-name">' + horse.name + '</div>'
+          + '<div class="l15-horse-name">' + horse.name + ' <span style="font-family:var(--mono);font-size:.52rem;padding:1px 5px;border-radius:3px;border:1px solid var(--bd);color:var(--mt)">' + (horse.odds < 4 ? 'SHORT' : horse.odds < 10 ? 'MID' : 'LONG') + '</span></div>'
           + '<div class="l15-horse-meeting">' + horse.time + ' ' + horse.meeting + ' · ' + horse.dist + (horse.or?' · OR '+horse.or:'') + '</div>'
           + '<div class="l15-horse-meeting">' + horse.jockey + '</div>'
         + '</div>'
