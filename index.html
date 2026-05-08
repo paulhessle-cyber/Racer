@@ -3114,7 +3114,7 @@ function runL15(strategy) {
         .sort(function(a,b){ return b._smartScore - a._smartScore; });
     }
 
-    var bandA = bandHorses(1.0,  4.0);   // 1.0–3.9
+    var bandA = bandHorses(2.5,  4.0);   // 2.5–3.9 (avoid odds-on/near-odds-on)
     var bandB = bandHorses(4.0, 10.0);   // 4.0–9.9
     var bandC = bandHorses(10.0, 999);   // 10+
 
@@ -3316,7 +3316,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     return c * Math.pow(3, 4);  // TOP_N=3
   })();
   var stratLabel = '⚡ Smart Lucky 15';
-  var stratDesc  = 'One from each odds band (evens–4s · 4s–10s · 10s+) + best remaining · model must agree with market';
+  var stratDesc  = 'One from each odds band (5/4–4s · 4s–10s · 10s+) + best remaining · model must agree with market';
   var h = '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
     + '<div style="font-size:.75rem;font-weight:600;color:var(--g);margin-bottom:2px">' + stratLabel + '</div>'
     + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:4px">' + stratDesc + '</div>'
