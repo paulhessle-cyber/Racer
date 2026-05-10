@@ -5,3 +5,8 @@ The resulting .json file is then able to be loaded into the main app. Racecards 
 Downloading the .json file and racecard will allow you to use it at the racecourse on a mobile. it doesn't have to be online
 
 I had a certain plan in the beginning which is currently evolving. The app now recognises horse bets that are potentially more lucrative than the "winner", classing these as extra value bets. I have added the ability to copy and paste odds from the attheraces site to eliminate manual input. I have added a steamer/drifter alert if the horses odds drop/raise from the previous input, showing market confidence
+
+The latest feature offers a chance to see what trainers have taken their horses on a long distance trip (over 100 miles) which should suggest their confidence in a horse
+
+The website is now live
+www.formintel.co.uk
