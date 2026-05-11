@@ -803,6 +803,7 @@ function go(n) {
   document.getElementById('t-' + n).classList.add('on');
   if (n === 'placepot') showPlacepotTab();
   if (n === 'l15')      showL15Tab();
+  if (n === 'setup')    initCalibCount();
 }
 
 // ── PDF loading ────────────────────────────────────────────
@@ -1461,6 +1462,14 @@ function predict() {
   var blendTotal = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
   var blendNorm  = blended.map(function(b){ return b / blendTotal; });
   var finalProbs = powerScaleProbs(blendNorm);
+  // Apply Platt scaling calibration if available
+  var plattBands = loadPlattCalibration();
+  if (plattBands) {
+    finalProbs = finalProbs.map(function(p){ return applyPlattCorrection(p); });
+    // Re-normalise after correction so they sum to ~1
+    var plattSum = finalProbs.reduce(function(s,p){ return s+p; }, 0);
+    if (plattSum > 0) finalProbs = finalProbs.map(function(p){ return p/plattSum; });
+  }
 
   var scored = activeRunners.map(function(r, i) {
     return Object.assign({}, r, { score: finalProbs[i] });
@@ -2115,6 +2124,86 @@ function selRace(i) {
     }
   }
   go('predict');
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// PLATT SCALING CALIBRATION
+// Reads logged results, computes actual win rate per confidence band,
+// applies a correction multiplier so future predictions are calibrated.
+// Needs 30+ logged races to be meaningful.
+// ══════════════════════════════════════════════════════════════════
+
+var PLATT_KEY = 'rq_platt_v1'; // stored separately so it persists
+
+function computePlattCalibration() {
+  var log = getPredLog();
+  if (log.length < 30) return null; // not enough data
+
+  // Confidence bands: 0-10%, 10-20%, 20-30%, 30-40%, 40-50%, 50%+
+  var bands = [
+    { min:0,   max:0.10, label:'0–10%'  },
+    { min:0.10,max:0.20, label:'10–20%' },
+    { min:0.20,max:0.30, label:'20–30%' },
+    { min:0.30,max:0.40, label:'30–40%' },
+    { min:0.40,max:0.50, label:'40–50%' },
+    { min:0.50,max:1.00, label:'50%+'   },
+  ];
+
+  bands.forEach(function(b) {
+    var entries = log.filter(function(e) {
+      var conf = e.topPickConf || 0;
+      return conf >= b.min && conf < b.max;
+    });
+    b.n       = entries.length;
+    b.wins    = entries.filter(function(e){ return e.topPickWon; }).length;
+    b.actual  = b.n > 0 ? b.wins / b.n : null;          // actual win rate
+    b.midConf = (b.min + b.max) / 2;                     // midpoint confidence
+    // Multiplier: if model says 25% but actual is 18%, multiply by 18/25 = 0.72
+    // Only apply if we have 5+ samples in the band
+    b.multiplier = (b.n >= 5 && b.actual !== null && b.midConf > 0)
+      ? Math.min(Math.max(b.actual / b.midConf, 0.4), 2.0)  // clamp 0.4–2.0
+      : 1.0;
+  });
+
+  return bands;
+}
+
+function savePlattCalibration(bands) {
+  try {
+    localStorage.setItem(PLATT_KEY, JSON.stringify(bands));
+  } catch(e) {}
+}
+
+function loadPlattCalibration() {
+  try {
+    var raw = localStorage.getItem(PLATT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function applyPlattCorrection(rawScore) {
+  // Apply calibration multiplier to a raw confidence score
+  var bands = loadPlattCalibration();
+  if (!bands) return rawScore; // no calibration yet — use raw
+
+  for (var i = 0; i < bands.length; i++) {
+    var b = bands[i];
+    if (rawScore >= b.min && rawScore < b.max) {
+      return Math.min(rawScore * b.multiplier, 0.95); // cap at 95%
+    }
+  }
+  return rawScore;
+}
+
+function rebuildPlattCalibration() {
+  var bands = computePlattCalibration();
+  if (!bands) {
+    alert('Need at least 30 logged races to calibrate. You have ' + getPredLog().length + ' so far.');
+    return null;
+  }
+  savePlattCalibration(bands);
+  return bands;
 }
 
 function renderPredict(race) {
@@ -3521,6 +3610,90 @@ function runMCPlacepot() {
 // ══════════════════════════════════════════════════════════
 // ── PREDICTION ACCURACY LOG ───────────────────────────────
 // ══════════════════════════════════════════════════════════
+
+function runCalibration() {
+  // Update count display
+  var log   = getPredLog();
+  var countEl = document.getElementById('calib-count');
+  if (countEl) countEl.textContent = log.length + ' races';
+
+  var bands = rebuildPlattCalibration();
+  var statusEl = document.getElementById('calib-status');
+  var chartEl  = document.getElementById('calib-chart');
+  if (!bands) {
+    if (statusEl) {
+      statusEl.textContent = 'Need at least 30 logged races. You have ' + log.length + ' so far.';
+      statusEl.style.color = 'var(--mt)';
+    }
+    return;
+  }
+
+  var applied = bands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1)>0.05; });
+
+  if (statusEl) {
+    if (applied.length) {
+      statusEl.textContent = '✓ Calibration applied — corrections active on '
+        + applied.length + ' confidence band(s). Future predictions updated.';
+      statusEl.style.color = 'var(--g)';
+    } else {
+      statusEl.textContent = '✓ Model is well calibrated — no corrections needed.';
+      statusEl.style.color = 'var(--g)';
+    }
+  }
+
+  // Draw calibration chart
+  if (chartEl) {
+    var ch = '<div style="font-size:.62rem;color:var(--mt);margin-bottom:8px">'
+      + '🟩 Actual win rate &nbsp; ▏ Model predicted &nbsp; Bands need 5+ races</div>';
+
+    bands.forEach(function(b) {
+      if (b.n < 1) return;
+      var actual  = b.actual !== null ? Math.round(b.actual * 100) : 0;
+      var model   = Math.round(b.midConf * 100);
+      var maxPct  = 60;
+      var aW      = Math.round(Math.min(actual/maxPct,1)*100);
+      var mW      = Math.round(Math.min(model/maxPct,1)*100);
+      var diff    = actual - model;
+      var col     = diff > 3 ? 'var(--g)' : diff < -3 ? 'var(--re)' : 'var(--mt)';
+      var faint   = b.n < 5 ? 'opacity:.4;' : '';
+
+      ch += '<div style="margin-bottom:10px;' + faint + '">'
+        + '<div style="display:flex;justify-content:space-between;'
+        + 'font-size:.6rem;color:var(--mt);margin-bottom:3px">'
+        + '<span>' + b.label + ' (' + b.n + ' races)</span>'
+        + '<span style="color:' + col + '">'
+        + actual + '% actual &nbsp; ' + model + '% model'
+        + (b.n>=5 ? ' &nbsp; ×' + b.multiplier.toFixed(2) : ' &nbsp; (need more data)')
+        + '</span></div>'
+        + '<div style="position:relative;height:12px;background:rgba(255,255,255,.05);border-radius:3px">'
+        + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;'
+        + 'background:rgba(0,230,118,.45);border-radius:3px;transition:width .6s"></div>'
+        + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:16px;'
+        + 'background:rgba(255,255,255,.5)"></div>'
+        + '</div></div>';
+    });
+
+    chartEl.innerHTML = ch;
+  }
+}
+
+function initCalibCount() {
+  var countEl = document.getElementById('calib-count');
+  if (countEl) countEl.textContent = getPredLog().length + ' races';
+  // If calibration exists, show it
+  var bands = loadPlattCalibration();
+  if (bands) {
+    var statusEl = document.getElementById('calib-status');
+    var applied = bands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1)>0.05; });
+    if (statusEl) {
+      statusEl.textContent = applied.length
+        ? '✓ Calibration active — ' + applied.length + ' correction(s) applied'
+        : '✓ Calibration active — model is well calibrated';
+      statusEl.style.color = 'var(--g)';
+    }
+  }
+}
+
 var PRED_LOG_KEY = 'rq_pred_log_v1';
 
 function getPredLog() {
@@ -3727,3 +3900,84 @@ function checkLongTravel(trainerName, raceCourse) {
 
 </body>
 </html>
+  // ── Calibration section ──────────────────────────────────
+  var plattBands = loadPlattCalibration();
+  var calibHtml = '<div style="margin-top:20px;padding:16px;background:rgba(0,230,118,.05);'
+    + 'border:1px solid rgba(0,230,118,.15);border-radius:10px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div style="font-family:var(--mono);font-size:.65rem;text-transform:uppercase;'
+    + 'letter-spacing:2px;color:var(--g)">Confidence Calibration</div>'
+    + '<button onclick="runCalibration()" style="font-family:var(--mono);font-size:.6rem;'
+    + 'padding:5px 12px;border-radius:5px;border:1px solid rgba(0,230,118,.4);'
+    + 'background:rgba(0,230,118,.1);color:var(--g);cursor:pointer">'
+    + (plattBands ? '🔄 Recalibrate' : '⚡ Calibrate Now') + '</button>'
+    + '</div>';
+
+if (log.length < 30) {
+calibHtml += ‘<div style="font-size:.78rem;color:var(--mt);text-align:center;padding:10px">’
++ log.length + ’ races logged — need 30+ to calibrate</div>’;
+} else if (!plattBands) {
+calibHtml += ‘<div style="font-size:.78rem;color:var(--mt);text-align:center;padding:10px">’
++ ‘Calibration not yet run. Tap <strong style='color:var(–g)'>Calibrate Now</strong> to improve prediction accuracy.</div>’;
+} else {
+// Show calibration chart
+calibHtml += ‘<div style="font-size:.68rem;color:var(--mt);margin-bottom:10px">’
++ ’Green bar = actual win rate · White line = what model predicted · ’
++ (plattBands ? ‘Calibration active ✓’ : ‘’) + ‘</div>’;
+
+```
+plattBands.forEach(function(b) {
+  if (b.n < 1) return;
+  var actual  = b.actual !== null ? Math.round(b.actual * 100) : 0;
+  var model   = Math.round(b.midConf * 100);
+  var maxPct  = 60;
+  var aBar    = Math.min(actual, maxPct);
+  var mLine   = Math.min(model, maxPct);
+  var diff    = actual - model;
+  var diffCol = diff > 3 ? 'var(--g)' : diff < -3 ? 'var(--re)' : 'var(--mt)';
+
+  calibHtml += '<div style="margin-bottom:8px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:.62rem;'
+    + 'color:var(--mt);margin-bottom:3px">'
+    + '<span>' + b.label + ' confidence</span>'
+    + '<span style="color:' + diffCol + '">'
+    + actual + '% actual vs ' + model + '% predicted'
+    + ' (' + b.n + ' races)</span>'
+    + '</div>'
+    + '<div style="position:relative;height:14px;background:rgba(255,255,255,.05);border-radius:4px;overflow:visible">'
+    // Actual bar
+    + '<div style="position:absolute;left:0;top:0;height:100%;width:' + (aBar/maxPct*100) + '%;'
+    + 'background:rgba(0,230,118,.5);border-radius:4px"></div>'
+    // Model line
+    + '<div style="position:absolute;left:' + (mLine/maxPct*100) + '%;top:-3px;'
+    + 'width:2px;height:20px;background:rgba(255,255,255,.6);border-radius:1px"></div>'
+    + '</div>'
+    + '</div>';
+});
+
+calibHtml += '<div style="font-size:.62rem;color:var(--mt);margin-top:8px">'
+  + 'Multipliers active: '
+  + plattBands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1) > 0.05; })
+      .map(function(b){ return b.label + ' ×' + b.multiplier.toFixed(2); }).join(' · ')
+  + '</div>';
+```
+
+}
+calibHtml += ‘</div>’;
+
+el.innerHTML += calibHtml;
+
+  <div class="card" id="calib-card">
+    <div class="ct">Prediction Calibration</div>
+    <p class="mu" style="margin-bottom:12px">
+      Analyses your logged results to correct over/under-confident predictions.
+      Needs 30+ logged races. Currently: <strong id="calib-count">—</strong> races logged.
+    </p>
+    <div id="calib-status" style="margin-bottom:12px;font-size:.78rem;color:var(--mt)">
+      Tap Calibrate to check if your model needs adjustment.
+    </div>
+    <button onclick="runCalibration()" class="btn" style="width:100%;margin-bottom:0">
+      ⚡ Calibrate Now
+    </button>
+    <div id="calib-chart" style="margin-top:14px"></div>
+  </div>
