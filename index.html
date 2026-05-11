@@ -637,6 +637,23 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   </div>
 </div>
 
+  <!-- Calibration Card -->
+
+  <div class="card" id="calib-card">
+    <div class="ct">⚡ Prediction Calibration</div>
+    <p class="mu" style="margin-bottom:12px">
+      Compares your logged results against model confidence to detect over/under-confidence.
+      Needs 30+ races. Logged: <strong id="calib-count">—</strong>
+    </p>
+    <div id="calib-status" style="margin-bottom:12px;font-size:.78rem;color:var(--mt)">
+      Tap Calibrate to check if your model needs adjustment.
+    </div>
+    <button onclick="runCalibration()" class="btn" style="width:100%;margin-bottom:0;background:rgba(0,230,118,.15);border:1px solid rgba(0,230,118,.3);color:var(--g)">
+      ⚡ Calibrate Now
+    </button>
+    <div id="calib-chart" style="margin-top:14px"></div>
+  </div>
+
 <!-- HELP -->
 
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
@@ -3900,84 +3917,3 @@ function checkLongTravel(trainerName, raceCourse) {
 
 </body>
 </html>
-  // ── Calibration section ──────────────────────────────────
-  var plattBands = loadPlattCalibration();
-  var calibHtml = '<div style="margin-top:20px;padding:16px;background:rgba(0,230,118,.05);'
-    + 'border:1px solid rgba(0,230,118,.15);border-radius:10px">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-    + '<div style="font-family:var(--mono);font-size:.65rem;text-transform:uppercase;'
-    + 'letter-spacing:2px;color:var(--g)">Confidence Calibration</div>'
-    + '<button onclick="runCalibration()" style="font-family:var(--mono);font-size:.6rem;'
-    + 'padding:5px 12px;border-radius:5px;border:1px solid rgba(0,230,118,.4);'
-    + 'background:rgba(0,230,118,.1);color:var(--g);cursor:pointer">'
-    + (plattBands ? '🔄 Recalibrate' : '⚡ Calibrate Now') + '</button>'
-    + '</div>';
-
-if (log.length < 30) {
-calibHtml += ‘<div style="font-size:.78rem;color:var(--mt);text-align:center;padding:10px">’
-+ log.length + ’ races logged — need 30+ to calibrate</div>’;
-} else if (!plattBands) {
-calibHtml += ‘<div style="font-size:.78rem;color:var(--mt);text-align:center;padding:10px">’
-+ ‘Calibration not yet run. Tap <strong style='color:var(–g)'>Calibrate Now</strong> to improve prediction accuracy.</div>’;
-} else {
-// Show calibration chart
-calibHtml += ‘<div style="font-size:.68rem;color:var(--mt);margin-bottom:10px">’
-+ ’Green bar = actual win rate · White line = what model predicted · ’
-+ (plattBands ? ‘Calibration active ✓’ : ‘’) + ‘</div>’;
-
-```
-plattBands.forEach(function(b) {
-  if (b.n < 1) return;
-  var actual  = b.actual !== null ? Math.round(b.actual * 100) : 0;
-  var model   = Math.round(b.midConf * 100);
-  var maxPct  = 60;
-  var aBar    = Math.min(actual, maxPct);
-  var mLine   = Math.min(model, maxPct);
-  var diff    = actual - model;
-  var diffCol = diff > 3 ? 'var(--g)' : diff < -3 ? 'var(--re)' : 'var(--mt)';
-
-  calibHtml += '<div style="margin-bottom:8px">'
-    + '<div style="display:flex;justify-content:space-between;font-size:.62rem;'
-    + 'color:var(--mt);margin-bottom:3px">'
-    + '<span>' + b.label + ' confidence</span>'
-    + '<span style="color:' + diffCol + '">'
-    + actual + '% actual vs ' + model + '% predicted'
-    + ' (' + b.n + ' races)</span>'
-    + '</div>'
-    + '<div style="position:relative;height:14px;background:rgba(255,255,255,.05);border-radius:4px;overflow:visible">'
-    // Actual bar
-    + '<div style="position:absolute;left:0;top:0;height:100%;width:' + (aBar/maxPct*100) + '%;'
-    + 'background:rgba(0,230,118,.5);border-radius:4px"></div>'
-    // Model line
-    + '<div style="position:absolute;left:' + (mLine/maxPct*100) + '%;top:-3px;'
-    + 'width:2px;height:20px;background:rgba(255,255,255,.6);border-radius:1px"></div>'
-    + '</div>'
-    + '</div>';
-});
-
-calibHtml += '<div style="font-size:.62rem;color:var(--mt);margin-top:8px">'
-  + 'Multipliers active: '
-  + plattBands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1) > 0.05; })
-      .map(function(b){ return b.label + ' ×' + b.multiplier.toFixed(2); }).join(' · ')
-  + '</div>';
-```
-
-}
-calibHtml += ‘</div>’;
-
-el.innerHTML += calibHtml;
-
-  <div class="card" id="calib-card">
-    <div class="ct">Prediction Calibration</div>
-    <p class="mu" style="margin-bottom:12px">
-      Analyses your logged results to correct over/under-confident predictions.
-      Needs 30+ logged races. Currently: <strong id="calib-count">—</strong> races logged.
-    </p>
-    <div id="calib-status" style="margin-bottom:12px;font-size:.78rem;color:var(--mt)">
-      Tap Calibrate to check if your model needs adjustment.
-    </div>
-    <button onclick="runCalibration()" class="btn" style="width:100%;margin-bottom:0">
-      ⚡ Calibrate Now
-    </button>
-    <div id="calib-chart" style="margin-top:14px"></div>
-  </div>
