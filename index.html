@@ -3790,6 +3790,11 @@ function saveRaceResult(raceKey) {
   }).length;
   var winnerRank    = preds.findIndex(function(p){ return p.name === winner; }) + 1;
 
+  // Find market favourite (lowest odds runner with odds entered)
+  var runners = (race.runners || []).filter(function(r){ return r.odds > 1 && !r._nr; });
+  var fav = runners.length ? runners.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
+  var favWon = !!(fav && fav.name === winner);
+
   var entry = {
     raceKey:       raceKey,
     date:          new Date().toISOString().slice(0,10),
@@ -3804,7 +3809,10 @@ function saveRaceResult(raceKey) {
     anyTop3Placed: anyTop3Placed,
     winnerRank:    winnerRank || 0,
     topPickOdds:   preds[0] ? preds[0].odds : 0,
-    topPickConf:   preds[0] ? preds[0].score : 0
+    topPickConf:   preds[0] ? preds[0].score : 0,
+    favName:       fav ? fav.name : '',
+    favOdds:       fav ? fav.odds : 0,
+    favWon:        favWon
   };
 
   // Save to log (update if exists)
