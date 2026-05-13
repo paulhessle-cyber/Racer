@@ -3408,8 +3408,10 @@ function renderL15Stake() {
 
 
 // ── Save L15 selection to bet tracker ─────────────────────
-function saveL15AsBet(horses) {
-  // horses: array of {name, odds, meeting, time, _smartScore}
+function saveL15AsBet(idx) {
+  // Look up pre-stored combo by card index
+  var horses = (window._l15Combos && window._l15Combos[idx]) || [];
+  if (!horses.length) { alert('Could not find selection data. Please try running the Lucky 15 again.'); return; }
   var BETS_KEY = 'rq_bets_v1';
   function getBetLog() {
     try { var r=localStorage.getItem(BETS_KEY); return r?JSON.parse(r):[]; } catch(e){return [];}
@@ -3547,8 +3549,13 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       + '</div>';
     });
     h += '<div style="font-size:.6rem;color:var(--mt);margin-top:6px">Win-only · £1 unit · Min = worst combination · Max = best combination</div>';
+    // Store combo data for this card so button can retrieve it safely
+    window._l15Combos = window._l15Combos || {};
+    window._l15Combos[ri] = combo.map(function(h){
+      return {name:h.name, odds:h.odds, meeting:h.meeting, time:h.time};
+    });
     h += '</div>'
-      + '<button onclick="saveL15AsBet(' + JSON.stringify(combo.map(function(h){return {name:h.name,odds:h.odds,meeting:h.meeting,time:h.time};})) + ')" '
+      + '<button onclick="saveL15AsBet(' + ri + ')" '
       + 'style="width:100%;margin-top:10px;padding:11px;border-radius:8px;'
       + 'border:1px solid rgba(0,230,118,.35);background:rgba(0,230,118,.08);'
       + 'color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;'
