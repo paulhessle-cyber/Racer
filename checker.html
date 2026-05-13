@@ -154,6 +154,16 @@ font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer}
 
 .tab-content{display:none}
 .tab-content.active{display:block}
+
+/* Bet tracker modal & legs */
+.modal-title{font-family:‘Bebas Neue’,sans-serif;font-size:1.6rem;color:var(–white);
+letter-spacing:.5px;margin-bottom:14px}
+.modal-row{display:flex;gap:8px;margin-bottom:10px}
+.leg-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.leg-num{font-family:‘Bebas Neue’,sans-serif;font-size:1.2rem;color:var(–mt);
+width:20px;flex-shrink:0;text-align:center}
+.leg-name{flex:1;min-width:100px}
+.leg-result{display:flex;gap:4px;flex-shrink:0}
 </style>
 
 </head>
@@ -171,6 +181,7 @@ font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer}
   <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
   <button class="tab-btn" onclick="showTab('backtest')">Backtesting</button>
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
+  <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
 </div>
 
 <div id="app">
@@ -229,7 +240,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -272,10 +283,12 @@ function renderAll() {
   app.innerHTML =
     '<div class="tab-content active" id="tab-overview">' + renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) + '</div>' +
     '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
-    '<div class="tab-content" id="tab-races" id="tab-races"></div>';
+    '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
+    '<div class="tab-content" id="tab-bets"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
+  renderBets();
 }
 
 // ── Overview tab ────────────────────────────────────────────
@@ -670,6 +683,510 @@ function renderImport() {
     + '<div class="import-sub">Tap to load your exported results file<br>In the Predictor: tap <b>⬇ Export Results JSON</b></div>'
     + '</div>'
     + '<button class="ls-btn" onclick="tryLS()">🔄 Try Load From This Device\'s Storage</button>';
+}
+
+
+// ══════════════════════════════════════════════════════
+// BET TRACKER — Lucky 15 & Placepot
+// ══════════════════════════════════════════════════════
+var BETS_KEY = 'rq_bets_v1';
+
+function getBetLog() {
+  try {
+    var raw = localStorage.getItem(BETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function saveBetLog(log) {
+  try { localStorage.setItem(BETS_KEY, JSON.stringify(log)); } catch(e) {}
+}
+
+function exportBetLog() {
+  var log = getBetLog();
+  if (!log.length) { alert('No bets logged yet.'); return; }
+  var blob = new Blob([JSON.stringify(log, null, 2)], {type:'application/json'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'formintel_bets_' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function importBetFile(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error('Invalid format');
+      saveBetLog(data);
+      renderBets();
+      alert('Imported ' + data.length + ' bets.');
+    } catch(err) { alert('Could not read file: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+
+// ── L15 return calculation ────────────────────────────
+function calcL15Return(legs, unit, isEW, placeFrac) {
+  // legs: array of {odds, won, placed} — 4 items
+  // Returns actual cash back
+  var ret = 0;
+  var n   = legs.length;
+  var wo  = legs.map(function(l){ return l.won ? l.odds : 0; });
+  var po  = legs.map(function(l){
+    return (l.won || l.placed) ? (l.odds - 1) * placeFrac + 1 : 0;
+  });
+
+  function combos(arr, size) {
+    var result = [];
+    (function pick(start, chosen) {
+      if (chosen.length === size) { result.push(chosen.slice()); return; }
+      for (var i = start; i < arr.length; i++) { chosen.push(i); pick(i+1, chosen); chosen.pop(); }
+    })(0, []);
+    return result;
+  }
+
+  for (var size = 1; size <= n; size++) {
+    combos(Array.from({length:n},function(_,i){return i;}), size).forEach(function(idxs) {
+      var wProd = idxs.reduce(function(p,i){ return p * wo[i]; }, 1);
+      var pProd = idxs.reduce(function(p,i){ return p * po[i]; }, 1);
+      if (wProd > 0) ret += unit * wProd;
+      if (isEW && pProd > 0) ret += unit * pProd;
+    });
+  }
+  return Math.round(ret * 100) / 100;
+}
+
+// ── Placepot return ───────────────────────────────────
+function calcPlacepotReturn(legs, stake) {
+  // All 6 legs must place. Return = stake x pool dividend
+  // We can't know the pool dividend in advance, so we track
+  // whether it won and the actual return the user enters
+  var allPlaced = legs.every(function(l){ return l.placed || l.won; });
+  return allPlaced ? null : 0; // null = user must enter actual return
+}
+
+// ── Add/edit bet modal ────────────────────────────────
+var editingBetId = null;
+
+function openAddBet(type) {
+  editingBetId = null;
+  var isL15 = type === 'l15';
+  var legs  = isL15 ? 4 : 6;
+  var html  = buildBetModal(type, legs, null);
+  showModal(html);
+}
+
+function buildBetModal(type, legs, existing) {
+  var isL15 = type === 'l15';
+  var title = isL15 ? '⚡ Lucky 15' : '🎯 Placepot';
+  var today = new Date().toISOString().slice(0,10);
+  var e = existing || {};
+
+  var h = '<div class="modal-title">' + title + '</div>';
+  h += '<div class="modal-row">';
+  h += '<div class="bt-input-wrap"><div class="bt-input-label">Date</div>'
+    + '<input class="bt-input" id="bet-date" type="date" value="' + (e.date||today) + '"></div>';
+  h += '<div class="bt-input-wrap"><div class="bt-input-label">Stake (£)</div>'
+    + '<input class="bt-input" id="bet-stake" type="number" value="' + (e.stake||'1') + '" min="0.1" step="0.5"></div>';
+  h += '</div>';
+
+  if (isL15) {
+    h += '<div class="modal-row">';
+    h += '<div class="bt-input-wrap"><div class="bt-input-label">Type</div>'
+      + '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">'
+      + '<button id="bet-win-btn" onclick="setBetType(&apos;win&apos;)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">WIN</button>'
+      + '<button id="bet-ew-btn"  onclick="setBetType(&apos;ew&apos;)"  style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">E/W</button>'
+      + '</div></div>';
+    h += '<div class="bt-input-wrap" id="bet-place-wrap">'
+      + '<div class="bt-input-label">Place Terms</div>'
+      + '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">'
+      + '<button id="bet-q-btn" onclick="setBetPlace(&apos;quarter&apos;)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">¼</button>'
+      + '<button id="bet-f-btn" onclick="setBetPlace(&apos;fifth&apos;)"   style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">⅕</button>'
+      + '</div></div>';
+    h += '</div>';
+  }
+
+  h += '<div class="bt-input-label" style="margin-top:12px;margin-bottom:6px">Selections & Results</div>';
+
+  for (var i = 0; i < legs; i++) {
+    var leg = (e.legs && e.legs[i]) || {};
+    h += '<div class="leg-row" id="leg-' + i + '">';
+    h += '<span class="leg-num">' + (i+1) + '</span>';
+    h += '<input class="bt-input leg-name" id="leg-name-' + i + '" type="text" placeholder="Horse name" value="' + esc(leg.name||'') + '">';
+    if (isL15) {
+      h += '<input class="bt-input leg-odds" id="leg-odds-' + i + '" type="number" placeholder="Odds" value="' + (leg.odds||'') + '" min="1.01" step="0.1" style="width:70px">';
+    }
+    h += '<div class="leg-result" id="leg-result-' + i + '">';
+    var res = leg.result || 'pending';
+    h += resultBtn(i, 'won',     '✓ Won',    res==='won');
+    h += resultBtn(i, 'placed',  '◎ Placed', res==='placed');
+    h += resultBtn(i, 'lost',    '✗ Lost',   res==='lost');
+    h += '</div></div>';
+  }
+
+  if (!isL15) {
+    h += '<div class="modal-row" style="margin-top:10px">';
+    h += '<div class="bt-input-wrap"><div class="bt-input-label">Actual Return (£) — if won</div>'
+      + '<input class="bt-input" id="bet-return" type="number" value="' + (e.actualReturn||'') + '" min="0" step="0.01"></div>';
+    h += '</div>';
+  }
+
+  h += '<div style="display:flex;gap:8px;margin-top:16px">';
+  h += '<button onclick="saveBet(&apos;' + type + '&apos;)" style="flex:1;padding:12px;border-radius:8px;border:none;background:rgba(0,230,118,.2);border:1px solid rgba(0,230,118,.4);color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">💾 Save</button>';
+  h += '<button onclick="closeModal()" style="flex:1;padding:12px;border-radius:8px;border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">Cancel</button>';
+  h += '</div>';
+  return h;
+}
+
+function resultBtn(idx, val, label, active) {
+  var col = val==='won' ? 'var(--green)' : val==='placed' ? 'var(--gold)' : 'var(--mt)';
+  var bg  = active ? (val==='won' ? 'rgba(0,230,118,.2)' : val==='placed' ? 'rgba(255,193,7,.15)' : 'rgba(255,255,255,.07)') : 'transparent';
+  var brd = active ? (val==='won' ? 'rgba(0,230,118,.4)' : val==='placed' ? 'rgba(255,193,7,.3)' : 'rgba(255,255,255,.15)') : 'var(--bd)';
+  return '<button onclick="setLegResult(' + idx + ',&apos;' + val + '&apos;)" id="leg-btn-' + idx + '-' + val + '" '
+    + 'style="padding:5px 8px;border-radius:5px;border:1px solid ' + brd + ';background:' + bg + ';'
+    + 'color:' + col + ';font-family:var(--mono);font-size:.58rem;cursor:pointer;white-space:nowrap">'
+    + label + '</button>';
+}
+
+var betModalType = 'win';
+var betModalPlace = 'quarter';
+
+function setBetType(t) {
+  betModalType = t;
+  var wonBtn = document.getElementById('bet-win-btn');
+  var ewBtn  = document.getElementById('bet-ew-btn');
+  if (!wonBtn) return;
+  wonBtn.style.background = t==='win' ? 'rgba(0,230,118,.15)' : 'transparent';
+  wonBtn.style.color      = t==='win' ? 'var(--green)' : 'var(--mt)';
+  ewBtn.style.background  = t==='ew'  ? 'rgba(0,230,118,.15)' : 'transparent';
+  ewBtn.style.color       = t==='ew'  ? 'var(--green)' : 'var(--mt)';
+}
+
+function setBetPlace(p) {
+  betModalPlace = p;
+  var qBtn = document.getElementById('bet-q-btn');
+  var fBtn = document.getElementById('bet-f-btn');
+  if (!qBtn) return;
+  qBtn.style.background = p==='quarter' ? 'rgba(0,230,118,.15)' : 'transparent';
+  qBtn.style.color      = p==='quarter' ? 'var(--green)' : 'var(--mt)';
+  fBtn.style.background = p==='fifth'   ? 'rgba(0,230,118,.15)' : 'transparent';
+  fBtn.style.color      = p==='fifth'   ? 'var(--green)' : 'var(--mt)';
+}
+
+var legResults = {};
+function setLegResult(idx, result) {
+  legResults[idx] = result;
+  ['won','placed','lost'].forEach(function(r) {
+    var btn = document.getElementById('leg-btn-' + idx + '-' + r);
+    if (!btn) return;
+    var active = r === result;
+    var col = r==='won' ? 'var(--green)' : r==='placed' ? 'var(--gold)' : 'var(--mt)';
+    btn.style.background = active ? (r==='won' ? 'rgba(0,230,118,.2)' : r==='placed' ? 'rgba(255,193,7,.15)' : 'rgba(255,255,255,.07)') : 'transparent';
+    btn.style.borderColor = active ? (r==='won' ? 'rgba(0,230,118,.4)' : r==='placed' ? 'rgba(255,193,7,.3)' : 'rgba(255,255,255,.15)') : 'var(--bd)';
+    btn.style.color = col;
+  });
+}
+
+function saveBet(type) {
+  var isL15  = type === 'l15';
+  var nLegs  = isL15 ? 4 : 6;
+  var date   = document.getElementById('bet-date').value || new Date().toISOString().slice(0,10);
+  var stake  = parseFloat(document.getElementById('bet-stake').value) || 1;
+  var legs   = [];
+
+  for (var i = 0; i < nLegs; i++) {
+    var nameEl = document.getElementById('leg-name-' + i);
+    var oddsEl = document.getElementById('leg-odds-' + i);
+    var name   = nameEl ? nameEl.value.trim() : '';
+    var odds   = oddsEl ? (parseFloat(oddsEl.value) || 0) : 0;
+    var result = legResults[i] || 'pending';
+    legs.push({ name:name, odds:odds, result:result,
+                won: result==='won', placed: result==='placed'||result==='won' });
+  }
+
+  var actualReturn = 0;
+  if (isL15) {
+    var isEW     = betModalType === 'ew';
+    var placeFrac = betModalPlace === 'fifth' ? 0.2 : 0.25;
+    var unit     = isEW ? stake / 30 : stake / 15;
+    actualReturn = calcL15Return(legs, unit, isEW, placeFrac);
+  } else {
+    var retEl = document.getElementById('bet-return');
+    actualReturn = retEl ? (parseFloat(retEl.value) || 0) : 0;
+  }
+
+  var hasPending = legs.some(function(l){ return l.result==='pending'; });
+  var bet = {
+    id:           editingBetId || ('bet_' + Date.now()),
+    type:         type,
+    date:         date,
+    stake:        stake,
+    legs:         legs,
+    actualReturn: actualReturn,
+    profit:       Math.round((actualReturn - stake) * 100) / 100,
+    pending:      hasPending,
+    isEW:         isL15 ? betModalType==='ew' : false,
+    placeFrac:    isL15 ? (betModalPlace==='fifth' ? 0.2 : 0.25) : 0.25,
+  };
+
+  var log = getBetLog();
+  if (editingBetId) {
+    var idx2 = log.findIndex(function(b){ return b.id === editingBetId; });
+    if (idx2 > -1) log[idx2] = bet; else log.push(bet);
+  } else {
+    log.push(bet);
+  }
+  saveBetLog(log);
+  legResults = {};
+  closeModal();
+  renderBets();
+}
+
+function editBet(id) {
+  var log = getBetLog();
+  var bet = log.find(function(b){ return b.id === id; });
+  if (!bet) return;
+  editingBetId = id;
+  betModalType  = bet.isEW ? 'ew' : 'win';
+  betModalPlace = bet.placeFrac === 0.2 ? 'fifth' : 'quarter';
+  // Pre-fill legResults
+  legResults = {};
+  bet.legs.forEach(function(l, i){ legResults[i] = l.result || 'pending'; });
+  showModal(buildBetModal(bet.type, bet.legs.length, bet));
+}
+
+function deleteBet(id) {
+  if (!confirm('Delete this bet?')) return;
+  var log = getBetLog().filter(function(b){ return b.id !== id; });
+  saveBetLog(log);
+  renderBets();
+}
+
+// ── Modal ─────────────────────────────────────────────
+function showModal(content) {
+  var existing = document.getElementById('bet-modal-overlay');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'bet-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;'
+    + 'display:flex;align-items:flex-end;padding:0';
+  overlay.innerHTML = '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:16px 16px 0 0;'
+    + 'width:100%;max-height:90vh;overflow-y:auto;padding:20px 16px 32px" id="bet-modal-inner">'
+    + content + '</div>';
+  overlay.addEventListener('click', function(ev){
+    if (ev.target === overlay) closeModal();
+  });
+  document.body.appendChild(overlay);
+}
+
+function closeModal() {
+  var el = document.getElementById('bet-modal-overlay');
+  if (el) el.remove();
+  legResults = {};
+  editingBetId = null;
+}
+
+// ── Render Bets tab ───────────────────────────────────
+function renderBets() {
+  var el = document.getElementById('tab-bets');
+  if (!el) return;
+
+  var log  = getBetLog().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  var l15s = log.filter(function(b){ return b.type==='l15'; });
+  var pps  = log.filter(function(b){ return b.type==='placepot'; });
+
+  var totalStaked   = log.reduce(function(s,b){ return s+b.stake; }, 0);
+  var totalReturned = log.reduce(function(s,b){ return s+(b.pending?0:b.actualReturn); }, 0);
+  var totalProfit   = totalReturned - totalStaked;
+  var roi           = totalStaked ? Math.round(totalProfit/totalStaked*100) : 0;
+
+  var h = '<div style="padding:16px">';
+
+  // Add buttons
+  h += '<div style="display:flex;gap:8px;margin-bottom:16px">';
+  h += '<button onclick="openAddBet(&apos;l15&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(0,230,118,.3);background:rgba(0,230,118,.1);color:var(--green);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">⚡ + Lucky 15</button>';
+  h += '<button onclick="openAddBet(&apos;placepot&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(255,193,7,.3);background:rgba(255,193,7,.08);color:var(--gold);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">🎯 + Placepot</button>';
+  h += '</div>';
+
+  if (!log.length) {
+    h += '<div style="text-align:center;padding:40px 20px;color:var(--mt);font-family:var(--mono);font-size:.72rem;line-height:2">'
+      + 'No bets logged yet.<br>Tap + Lucky 15 or + Placepot to start tracking.</div>';
+    h += '</div>';
+    el.innerHTML = h;
+    return;
+  }
+
+  // Summary stats
+  h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">';
+  h += betStat('Total Staked',    '£' + totalStaked.toFixed(2),  'var(--mt)');
+  h += betStat('Total Returned',  '£' + totalReturned.toFixed(2),'var(--blue)');
+  var pCol = totalProfit>=0 ? 'var(--green)' : 'var(--red)';
+  h += betStat('Overall P&L',     (totalProfit>=0?'+':'')+'£'+Math.abs(totalProfit).toFixed(2), pCol);
+  h += betStat('ROI',             (roi>=0?'+':'')+roi+'%', pCol);
+  h += '</div>';
+
+  // Split summary by type
+  if (l15s.length && pps.length) {
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+    h += typeBlock('⚡ Lucky 15', l15s);
+    h += typeBlock('🎯 Placepot', pps);
+    h += '</div>';
+  }
+
+  // P&L curve
+  if (log.filter(function(b){return !b.pending;}).length > 1) {
+    h += '<div class="chart-wrap" style="margin:0 0 16px">';
+    h += '<div class="chart-title">Running P&L — All Bets</div>';
+    h += buildBetPnlCurve(log);
+    h += '</div>';
+  }
+
+  // Bet cards
+  h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:10px;display:flex;align-items:center;gap:8px">'
+    + '<span style="width:20px;height:1px;background:var(--green);display:inline-block"></span>Bet History</div>';
+
+  log.forEach(function(bet) {
+    h += buildBetCard(bet);
+  });
+
+  // Export
+  h += '<button onclick="exportBetLog()" style="display:block;width:100%;margin-top:16px;padding:12px;border-radius:8px;border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer">⬇ Export Bet Log JSON</button>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function betStat(label, val, col) {
+  return '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;text-align:center">'
+    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:' + col + ';line-height:1">' + val + '</div>'
+    + '<div style="font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-top:3px">' + label + '</div>'
+    + '</div>';
+}
+
+function typeBlock(label, bets) {
+  var staked   = bets.reduce(function(s,b){return s+b.stake;},0);
+  var returned = bets.filter(function(b){return !b.pending;}).reduce(function(s,b){return s+b.actualReturn;},0);
+  var profit   = returned - staked;
+  var col      = profit>=0 ? 'var(--green)' : 'var(--red)';
+  return '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px">'
+    + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:6px">' + label + ' (' + bets.length + ')</div>'
+    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:' + col + '">'
+    + (profit>=0?'+':'')+'£'+Math.abs(profit).toFixed(2) + '</div>'
+    + '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">£'+staked.toFixed(2)+' staked</div>'
+    + '</div>';
+}
+
+function buildBetPnlCurve(log) {
+  var chron  = log.slice().reverse();
+  var pnl    = 0;
+  var l15pnl = 0, pppnl = 0;
+  var pts=[[0,0,0]]; // [combined, l15, placepot]
+  var l15c=0, ppc=0;
+
+  chron.forEach(function(b) {
+    if (b.pending) return;
+    pnl    += b.profit;
+    if (b.type==='l15')       { l15pnl += b.profit; l15c++; }
+    else if (b.type==='placepot') { pppnl  += b.profit; ppc++; }
+    pts.push([Math.round(pnl*100)/100, Math.round(l15pnl*100)/100, Math.round(pppnl*100)/100]);
+  });
+
+  if (pts.length < 2) return '<div style="font-family:var(--mono);font-size:.7rem;color:var(--mt);text-align:center;padding:12px">Settle bets to see P&L curve</div>';
+
+  var allVals = pts.reduce(function(a,p){ return a.concat(p); }, []);
+  var minV    = Math.min.apply(null, allVals);
+  var maxV    = Math.max.apply(null, allVals);
+  var range   = maxV - minV || 1;
+  var W=100, H=80;
+
+  function toLine(colIdx) {
+    return pts.map(function(p,i){
+      return (i/(pts.length-1||1)*W)+','+(H-((p[colIdx]-minV)/range*H));
+    }).join(' ');
+  }
+
+  var zY    = H - ((0 - minV) / range * H);
+  var fPnl  = pts[pts.length-1][0];
+  var fCol  = fPnl >= 0 ? '#00e676' : '#ff5252';
+
+  var svg = '<svg style="width:100%;height:80px" viewBox="0 0 100 80" preserveAspectRatio="none">'
+    + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>';
+  if (l15c > 0) svg += '<polyline points="'+toLine(1)+'" fill="none" stroke="#00e676" stroke-width="1" stroke-dasharray="3,2"/>';
+  if (ppc  > 0) svg += '<polyline points="'+toLine(2)+'" fill="none" stroke="#ffc107" stroke-width="1" stroke-dasharray="3,2"/>';
+  svg += '<polyline points="'+toLine(0)+'" fill="none" stroke="'+fCol+'" stroke-width="1.6"/>';
+  svg += '</svg>';
+
+  var legend = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-family:var(--mono);font-size:.6rem">';
+  legend += '<span style="color:'+fCol+'">— Total '+fmt(fPnl)+'</span>';
+  if (l15c>0) legend += '<span style="color:var(--green)">-- L15 '+fmt(l15pnl)+'</span>';
+  if (ppc>0)  legend += '<span style="color:var(--gold)">-- Placepot '+fmt(pppnl)+'</span>';
+  legend += '</div>';
+
+  return svg + legend;
+}
+
+function buildBetCard(bet) {
+  var isL15  = bet.type === 'l15';
+  var icon   = isL15 ? '⚡' : '🎯';
+  var typeL  = isL15 ? 'Lucky 15' : 'Placepot';
+  var won    = bet.legs.filter(function(l){return l.won;}).length;
+  var placed = bet.legs.filter(function(l){return l.placed&&!l.won;}).length;
+  var profit = bet.profit;
+  var pCol   = profit > 0 ? 'var(--green)' : profit < 0 ? 'var(--red)' : 'var(--mt)';
+  var bdrCol = profit > 0 ? 'var(--green)' : profit < 0 ? '#333' : 'var(--bd)';
+
+  var h = '<div style="background:var(--sf);border:1px solid var(--bd);border-left:3px solid '
+    + bdrCol + ';border-radius:10px;margin-bottom:10px;overflow:hidden">';
+
+  // Header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px">';
+  h += '<div>';
+  h += '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--white)">'
+    + icon + ' ' + typeL + ' &nbsp;'
+    + '<span style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">' + bet.date + '</span>'
+    + (bet.pending ? ' <span style="font-family:var(--mono);font-size:.58rem;color:var(--gold)">PENDING</span>' : '')
+    + '</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">'
+    + '£' + bet.stake.toFixed(2) + ' staked'
+    + (isL15 ? ' · ' + (bet.isEW ? 'E/W' : 'Win') : '')
+    + (isL15 && bet.isEW ? ' · ' + (bet.placeFrac===0.2?'1/5':'1/4') : '')
+    + '</div>';
+  h += '</div>';
+  h += '<div style="text-align:right">';
+  if (!bet.pending) {
+    h += '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;color:'+pCol+'">'
+      + (profit>=0?'+':'') + '£' + Math.abs(profit).toFixed(2) + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">£'+bet.actualReturn.toFixed(2)+' returned</div>';
+  } else {
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--gold)">In progress</div>';
+  }
+  h += '</div></div>';
+
+  // Legs
+  h += '<div style="padding:0 14px 10px;display:grid;grid-template-columns:1fr 1fr;gap:4px">';
+  bet.legs.forEach(function(leg, i) {
+    var lCol = leg.won ? 'var(--green)' : leg.placed ? 'var(--gold)' : leg.result==='lost' ? 'var(--mt)' : 'var(--mt)';
+    var lIcon = leg.won ? '✓' : leg.placed ? '◎' : leg.result==='lost' ? '✗' : '⏳';
+    h += '<div style="font-family:var(--mono);font-size:.62rem;color:'+lCol+';padding:2px 0">'
+      + lIcon + ' ' + esc(leg.name||('Leg '+(i+1)))
+      + (isL15 && leg.odds ? ' <span style="opacity:.6">@'+leg.odds+'</span>' : '')
+      + '</div>';
+  });
+  h += '</div>';
+
+  // Edit/Delete
+  h += '<div style="display:flex;gap:6px;padding:0 14px 12px">';
+  h += '<button onclick="editBet(&apos;' + bet.id + '&apos;)" style="flex:1;padding:7px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);font-size:.6rem;cursor:pointer">✏ Edit</button>';
+  h += '<button onclick="deleteBet(&apos;' + bet.id + '&apos;)" style="padding:7px 12px;border-radius:6px;border:1px solid rgba(255,82,82,.2);background:transparent;color:rgba(255,82,82,.6);font-family:var(--mono);font-size:.6rem;cursor:pointer">🗑</button>';
+  h += '</div>';
+
+  h += '</div>';
+  return h;
 }
 
 // ── Init ─────────────────────────────────────────────────────
