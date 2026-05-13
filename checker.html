@@ -247,6 +247,8 @@ function showTab(tab) {
   });
   var el = document.getElementById('tab-'+tab);
   if (el) el.classList.add('active');
+  // Always re-render bets tab so it picks up localStorage saves from predictor
+  if (tab === 'bets') renderBets();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -1193,6 +1195,9 @@ function buildBetCard(bet) {
 var lsData = tryLocalStorage();
 if (lsData) { loadedLog=lsData; renderAll(); }
 else renderImport();
+// Always render bets tab on load — bet data is independent of prediction log
+// Small delay to ensure tab-bets div exists in DOM
+setTimeout(function(){ renderBets(); }, 50);
 </script>
 
 </body>
