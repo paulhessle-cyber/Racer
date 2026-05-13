@@ -3406,6 +3406,54 @@ function renderL15Stake() {
   renderL15Results(res._lastBest, res._lastTotal, res._lastAllHorses, 'smart');
 }
 
+
+// ── Save L15 selection to bet tracker ─────────────────────
+function saveL15AsBet(horses) {
+  // horses: array of {name, odds, meeting, time, _smartScore}
+  var BETS_KEY = 'rq_bets_v1';
+  function getBetLog() {
+    try { var r=localStorage.getItem(BETS_KEY); return r?JSON.parse(r):[]; } catch(e){return [];}
+  }
+  function saveBetLog(log) {
+    try { localStorage.setItem(BETS_KEY, JSON.stringify(log)); } catch(e){}
+  }
+
+  // Build 4 legs from the combo
+  var legs = horses.map(function(h) {
+    return { name: h.name, odds: h.odds, result: 'pending',
+             won: false, placed: false };
+  });
+
+  // Get stake/EW settings from the L15 controls
+  var stakeEl = document.getElementById('l15-stake');
+  var stake   = stakeEl ? (parseFloat(stakeEl.value) || 1) : 1;
+  var isEW    = typeof l15BetType !== 'undefined' ? l15BetType === 'ew' : false;
+  var pFrac   = typeof l15PlaceTerms !== 'undefined' ? (l15PlaceTerms === 'fifth' ? 0.2 : 0.25) : 0.25;
+  var total   = isEW ? stake * 30 : stake * 15;
+
+  var bet = {
+    id:           'bet_' + Date.now(),
+    type:         'l15',
+    date:         new Date().toISOString().slice(0,10),
+    stake:        total,
+    legs:         legs,
+    actualReturn: 0,
+    profit:       -total,
+    pending:      true,
+    isEW:         isEW,
+    placeFrac:    pFrac,
+    source:       'app'   // marks this as app-suggested
+  };
+
+  var log = getBetLog();
+  log.push(bet);
+  saveBetLog(log);
+
+  // Confirm
+  var names = horses.map(function(h){return h.name;}).join(', ');
+  alert('✓ Saved to Bet Tracker!\n\n' + names + '\n\n£' + total.toFixed(2) + ' staked · ' + (isEW?'E/W':'Win only') + '\n\nOpen the Results Dashboard to mark results after racing.');
+}
+
 function renderL15Results(best, totalHorses, allHorses, strategy) {
   strategy = strategy || 'mixed';
   var resEl = document.getElementById('l15-results');
@@ -3499,7 +3547,15 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       + '</div>';
     });
     h += '<div style="font-size:.6rem;color:var(--mt);margin-top:6px">Win-only · £1 unit · Min = worst combination · Max = best combination</div>';
-    h += '</div></div>';
+    h += '</div>'
+      + '<button onclick="saveL15AsBet(' + JSON.stringify(combo.map(function(h){return {name:h.name,odds:h.odds,meeting:h.meeting,time:h.time};})) + ')" '
+      + 'style="width:100%;margin-top:10px;padding:11px;border-radius:8px;'
+      + 'border:1px solid rgba(0,230,118,.35);background:rgba(0,230,118,.08);'
+      + 'color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;'
+      + 'cursor:pointer;text-transform:uppercase;letter-spacing:1px">'
+      + '💾 Save as Bet</button>'
+      + '</div>'
+    + '</div>';
   });
 
   // Disclaimer
