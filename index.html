@@ -3409,51 +3409,55 @@ function renderL15Stake() {
 
 // ── Save L15 selection to bet tracker ─────────────────────
 function saveL15AsBet(idx) {
-  // Look up pre-stored combo by card index
-  var horses = (window._l15Combos && window._l15Combos[idx]) || [];
-  if (!horses.length) { alert('Could not find selection data. Please try running the Lucky 15 again.'); return; }
-  var BETS_KEY = 'rq_bets_v1';
-  function getBetLog() {
-    try { var r=localStorage.getItem(BETS_KEY); return r?JSON.parse(r):[]; } catch(e){return [];}
+  try {
+    // Look up pre-stored combo by card index
+    var horses = (window._l15Combos && window._l15Combos[idx]) || [];
+    if (!horses.length) {
+      alert('No selection data found (idx=' + idx + '). Run the Lucky 15 again then tap Save.');
+      return;
+    }
+
+    var BETS_KEY = 'rq_bets_v1';
+
+    // Build 4 legs from the combo
+    var legs = horses.map(function(h) {
+      return { name: h.name, odds: h.odds, result: 'pending', won: false, placed: false };
+    });
+
+    // Get stake/EW settings from the L15 controls
+    var stakeEl = document.getElementById('l15-stake');
+    var stake   = stakeEl ? (parseFloat(stakeEl.value) || 1) : 1;
+    var isEW    = typeof l15BetType !== 'undefined' ? l15BetType === 'ew' : false;
+    var pFrac   = typeof l15PlaceTerms !== 'undefined' ? (l15PlaceTerms === 'fifth' ? 0.2 : 0.25) : 0.25;
+    var total   = isEW ? stake * 30 : stake * 15;
+
+    var bet = {
+      id:           'bet_' + Date.now(),
+      type:         'l15',
+      date:         new Date().toISOString().slice(0,10),
+      stake:        total,
+      legs:         legs,
+      actualReturn: 0,
+      profit:       -total,
+      pending:      true,
+      isEW:         isEW,
+      placeFrac:    pFrac,
+      source:       'app'
+    };
+
+    // Save to localStorage
+    var existing = localStorage.getItem(BETS_KEY);
+    var log = existing ? JSON.parse(existing) : [];
+    log.push(bet);
+    localStorage.setItem(BETS_KEY, JSON.stringify(log));
+
+    // Confirm
+    var names = horses.map(function(h){ return h.name; }).join(', ');
+    alert('✓ Saved to Bet Tracker!\n\n' + names + '\n\n£' + total.toFixed(2) + ' staked · ' + (isEW ? 'E/W' : 'Win only') + '\n\nOpen the Results Dashboard → Bets tab to mark results after racing.');
+
+  } catch(err) {
+    alert('Save failed: ' + err.message + '\n\nStack: ' + (err.stack || '').slice(0, 200));
   }
-  function saveBetLog(log) {
-    try { localStorage.setItem(BETS_KEY, JSON.stringify(log)); } catch(e){}
-  }
-
-  // Build 4 legs from the combo
-  var legs = horses.map(function(h) {
-    return { name: h.name, odds: h.odds, result: 'pending',
-             won: false, placed: false };
-  });
-
-  // Get stake/EW settings from the L15 controls
-  var stakeEl = document.getElementById('l15-stake');
-  var stake   = stakeEl ? (parseFloat(stakeEl.value) || 1) : 1;
-  var isEW    = typeof l15BetType !== 'undefined' ? l15BetType === 'ew' : false;
-  var pFrac   = typeof l15PlaceTerms !== 'undefined' ? (l15PlaceTerms === 'fifth' ? 0.2 : 0.25) : 0.25;
-  var total   = isEW ? stake * 30 : stake * 15;
-
-  var bet = {
-    id:           'bet_' + Date.now(),
-    type:         'l15',
-    date:         new Date().toISOString().slice(0,10),
-    stake:        total,
-    legs:         legs,
-    actualReturn: 0,
-    profit:       -total,
-    pending:      true,
-    isEW:         isEW,
-    placeFrac:    pFrac,
-    source:       'app'   // marks this as app-suggested
-  };
-
-  var log = getBetLog();
-  log.push(bet);
-  saveBetLog(log);
-
-  // Confirm
-  var names = horses.map(function(h){return h.name;}).join(', ');
-  alert('✓ Saved to Bet Tracker!\n\n' + names + '\n\n£' + total.toFixed(2) + ' staked · ' + (isEW?'E/W':'Win only') + '\n\nOpen the Results Dashboard to mark results after racing.');
 }
 
 function renderL15Results(best, totalHorses, allHorses, strategy) {
@@ -3555,7 +3559,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       return {name:h.name, odds:h.odds, meeting:h.meeting, time:h.time};
     });
     h += '</div>'
-      + '<button onclick="saveL15AsBet(' + ri + ')" '
+      + '<button data-saveidx="' + ri + '" '
       + 'style="width:100%;margin-top:10px;padding:11px;border-radius:8px;'
       + 'border:1px solid rgba(0,230,118,.35);background:rgba(0,230,118,.08);'
       + 'color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;'
@@ -3572,6 +3576,19 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     + '</div>';
 
   resEl.innerHTML = h;
+
+  // Use event delegation - attach listener to container after innerHTML set
+  // This avoids Safari's blocking of onclick in dynamic innerHTML
+  resEl.addEventListener('click', function(ev) {
+    var btn = ev.target.closest ? ev.target.closest('[data-saveidx]') : null;
+    if (!btn && ev.target.getAttribute && ev.target.getAttribute('data-saveidx') !== null) {
+      btn = ev.target;
+    }
+    if (btn) {
+      var idx = parseInt(btn.getAttribute('data-saveidx'), 10);
+      saveL15AsBet(idx);
+    }
+  });
 }
 
 // ── Monte Carlo for Placepot ───────────────────────────────
