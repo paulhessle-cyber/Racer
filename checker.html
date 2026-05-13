@@ -4,62 +4,82 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Formintel — Results</title>
+<title>Formintel — Results & Backtesting</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --green:#00e676;--gold:#ffc107;--red:#ff5252;--blue:#448aff;
+    --green:#00e676;--gold:#ffc107;--red:#ff5252;--blue:#448aff;--orange:#ff6d00;
     --bg:#07090b;--sf:#0d1410;--bd:#1c2a1e;--text:#c8dece;--mt:#4a6a55;--white:#eef6f0;
     --mono:'IBM Plex Mono',monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px}
 
-.hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(–bd);position:sticky;top:0;background:var(–bg);z-index:10}
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+border-bottom:1px solid var(–bd);position:sticky;top:0;background:var(–bg);z-index:10}
 .hdr h1{font-family:‘Bebas Neue’,sans-serif;font-size:1.5rem;letter-spacing:1px;color:var(–green)}
 .hdr-sub{font-family:var(–mono);font-size:.6rem;color:var(–mt);text-transform:uppercase;letter-spacing:2px}
 
+/* Tab bar */
+.tabs{display:flex;border-bottom:1px solid var(–bd);background:var(–bg);position:sticky;top:57px;z-index:9}
+.tab-btn{flex:1;padding:12px 8px;font-family:var(–mono);font-size:.6rem;text-transform:uppercase;
+letter-spacing:1px;text-align:center;color:var(–mt);cursor:pointer;border:none;
+background:transparent;border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn.active{color:var(–green);border-bottom-color:var(–green)}
+
 /* Import */
-.import-zone{margin:16px;padding:28px 20px;border:2px dashed var(–bd);border-radius:12px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.import-zone{margin:16px;padding:24px 20px;border:2px dashed var(–bd);border-radius:12px;
+text-align:center;cursor:pointer;transition:all .2s;position:relative}
 .import-zone:hover{border-color:var(–green);background:rgba(0,230,118,.04)}
 .import-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.import-icon{font-size:2.2rem;margin-bottom:10px}
-.import-title{font-family:‘Bebas Neue’,sans-serif;font-size:1.4rem;color:var(–white);margin-bottom:6px}
+.import-icon{font-size:2rem;margin-bottom:8px}
+.import-title{font-family:‘Bebas Neue’,sans-serif;font-size:1.3rem;color:var(–white);margin-bottom:4px}
 .import-sub{font-family:var(–mono);font-size:.62rem;color:var(–mt);line-height:1.7}
 .import-sub b{color:var(–green)}
 
-.ls-btn{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:13px;border-radius:8px;border:1px solid var(–bd);background:rgba(255,255,255,.02);color:var(–text);font-family:var(–mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:all .2s}
+.ls-btn{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:12px;border-radius:8px;
+border:1px solid var(–bd);background:rgba(255,255,255,.02);color:var(–text);
+font-family:var(–mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer}
 .ls-btn:hover{border-color:var(–green);color:var(–green)}
 
-/* Stats */
+/* Stat cards */
 .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px}
-.stat-card{background:var(–sf);border:1px solid var(–bd);border-radius:10px;padding:14px 12px;text-align:center;position:relative;overflow:hidden}
+.stat-card{background:var(–sf);border:1px solid var(–bd);border-radius:10px;
+padding:14px 12px;text-align:center;position:relative;overflow:hidden}
 .stat-card::before{content:’’;position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0}
-.stat-card.win::before{background:var(–green)}.stat-card.place::before{background:var(–gold)}.stat-card.loss::before{background:var(–red)}
-.stat-card.total::before{background:var(–blue)}.stat-card.rank::before{background:var(–mt)}.stat-card.streak::before{background:#ff6d00}
-.stat-num{font-family:‘Bebas Neue’,sans-serif;font-size:2.4rem;line-height:1;margin-bottom:4px}
+.stat-card.win::before{background:var(–green)}.stat-card.place::before{background:var(–gold)}
+.stat-card.loss::before{background:var(–red)}.stat-card.total::before{background:var(–blue)}
+.stat-card.rank::before{background:var(–mt)}.stat-card.streak::before{background:var(–orange)}
+.stat-num{font-family:‘Bebas Neue’,sans-serif;font-size:2.2rem;line-height:1;margin-bottom:4px}
 .win .stat-num{color:var(–green)}.place .stat-num{color:var(–gold)}.loss .stat-num{color:var(–red)}
-.total .stat-num{color:var(–blue)}.rank .stat-num{color:var(–mt)}.streak .stat-num{color:#ff6d00}
-.stat-label{font-family:var(–mono);font-size:.58rem;text-transform:uppercase;letter-spacing:1.5px;color:var(–mt);line-height:1.3}
+.total .stat-num{color:var(–blue)}.rank .stat-num{color:var(–mt)}.streak .stat-num{color:var(–orange)}
+.stat-label{font-family:var(–mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1.5px;color:var(–mt);line-height:1.3}
 
 /* Chart */
 .chart-wrap{margin:0 16px 16px;background:var(–sf);border:1px solid var(–bd);border-radius:10px;padding:16px}
 .chart-title{font-family:var(–mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(–mt);margin-bottom:14px}
 .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.bar-label{font-family:var(–mono);font-size:.65rem;color:var(–text);width:48px;flex-shrink:0}
+.bar-label{font-family:var(–mono);font-size:.65rem;color:var(–text);width:52px;flex-shrink:0}
 .bar-track{flex:1;height:20px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden}
-.bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-family:var(–mono);font-size:.6rem;font-weight:600;white-space:nowrap;min-width:2px;transition:width .8s cubic-bezier(.16,1,.3,1)}
+.bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;
+font-family:var(–mono);font-size:.6rem;font-weight:600;white-space:nowrap;min-width:2px}
 .bar-fill.win{background:linear-gradient(90deg,#00c853,#00e676);color:#000}
 .bar-fill.place{background:linear-gradient(90deg,#ff8f00,#ffc107);color:#000}
 .bar-fill.loss{background:linear-gradient(90deg,#c62828,#ff5252);color:#fff}
 .bar-pct{font-family:var(–mono);font-size:.65rem;color:var(–text);width:36px;text-align:right;flex-shrink:0}
 
-/* Filters */
-.section-hdr{font-family:var(–mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(–mt);padding:0 16px 10px;display:flex;align-items:center;gap:8px}
+/* Section header */
+.section-hdr{font-family:var(–mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;
+color:var(–mt);padding:0 16px 10px;display:flex;align-items:center;gap:8px}
 .section-hdr::before{content:’’;display:block;width:20px;height:1px;background:var(–green)}
+
+/* Filter bar */
 .filter-bar{display:flex;gap:8px;padding:0 16px 14px;overflow-x:auto;scrollbar-width:none}
 .filter-bar::-webkit-scrollbar{display:none}
-.filter-btn{font-family:var(–mono);font-size:.6rem;text-transform:uppercase;letter-spacing:1px;padding:6px 14px;border-radius:20px;border:1px solid var(–bd);background:transparent;color:var(–mt);cursor:pointer;white-space:nowrap;transition:all .2s}
+.filter-btn{font-family:var(–mono);font-size:.6rem;text-transform:uppercase;letter-spacing:1px;
+padding:6px 14px;border-radius:20px;border:1px solid var(–bd);background:transparent;
+color:var(–mt);cursor:pointer;white-space:nowrap;transition:all .2s}
 .filter-btn.active{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.4);color:var(–green)}
 
 /* Race cards */
@@ -74,7 +94,7 @@
 .badge-win{background:rgba(0,230,118,.15);color:var(–green);border:1px solid rgba(0,230,118,.3)}
 .badge-place{background:rgba(255,193,7,.12);color:var(–gold);border:1px solid rgba(255,193,7,.3)}
 .badge-loss{background:rgba(255,82,82,.08);color:#666;border:1px solid #222}
-.race-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:6px}
+.race-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:5px}
 .race-row{display:flex;align-items:baseline;gap:8px}
 .race-row-label{font-family:var(–mono);font-size:.58rem;color:var(–mt);text-transform:uppercase;letter-spacing:1px;width:52px;flex-shrink:0}
 .race-row-val{color:var(–text);font-size:.82rem}
@@ -84,8 +104,56 @@
 .pred-chip.is-winner{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.3);color:var(–green)}
 .pred-chip.is-placed{background:rgba(255,193,7,.1);border-color:rgba(255,193,7,.25);color:var(–gold)}
 
-.reset-btn{display:block;margin:16px 16px 0;width:calc(100% - 32px);padding:12px;border-radius:8px;border:1px solid var(–bd);background:transparent;color:var(–mt);font-family:var(–mono);font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer;transition:all .2s}
+/* Backtesting */
+.bt-wrap{padding:0 16px}
+.bt-card{background:var(–sf);border:1px solid var(–bd);border-radius:10px;padding:16px;margin-bottom:12px}
+.bt-title{font-family:var(–mono);font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(–green);margin-bottom:12px}
+
+.bt-controls{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.bt-control-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.bt-input-wrap{flex:1;min-width:100px}
+.bt-input-label{font-family:var(–mono);font-size:.55rem;color:var(–mt);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.bt-input{width:100%;background:var(–bg);border:1px solid var(–bd);border-radius:6px;
+color:var(–text);font-family:var(–mono);font-size:.8rem;padding:8px 10px;outline:none}
+.bt-input:focus{border-color:var(–green)}
+.bt-run{width:100%;padding:11px;border-radius:8px;border:none;background:rgba(0,230,118,.15);
+border:1px solid rgba(0,230,118,.3);color:var(–green);font-family:var(–mono);
+font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer;font-weight:600}
+.bt-run:hover{background:rgba(0,230,118,.25)}
+
+/* Strategy comparison table */
+.strat-table{width:100%;border-collapse:collapse;font-size:.72rem}
+.strat-table th{font-family:var(–mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1px;
+color:var(–mt);padding:6px 8px;text-align:left;border-bottom:1px solid var(–bd)}
+.strat-table td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top}
+.strat-table tr:last-child td{border-bottom:none}
+.strat-name{font-family:var(–mono);font-size:.68rem;color:var(–text);font-weight:600}
+.strat-detail{font-family:var(–mono);font-size:.58rem;color:var(–mt);margin-top:2px}
+.profit-pos{color:var(–green);font-family:var(–mono);font-weight:600}
+.profit-neg{color:var(–red);font-family:var(–mono)}
+.profit-neu{color:var(–mt);font-family:var(–mono)}
+
+/* P&L curve */
+.pnl-curve{width:100%;height:120px;margin-top:12px;position:relative}
+.pnl-svg{width:100%;height:100%}
+
+/* Threshold finder */
+.threshold-rows{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.threshold-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;
+padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.03);
+border:1px solid var(–bd);font-family:var(–mono);font-size:.65rem}
+.threshold-row.best{background:rgba(0,230,118,.07);border-color:rgba(0,230,118,.25)}
+.threshold-row-hdr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;
+padding:4px 8px;font-family:var(–mono);font-size:.55rem;
+text-transform:uppercase;letter-spacing:1px;color:var(–mt)}
+
+.reset-btn{display:block;margin:16px 16px 0;width:calc(100% - 32px);padding:12px;border-radius:8px;
+border:1px solid var(–bd);background:transparent;color:var(–mt);font-family:var(–mono);
+font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer}
 .reset-btn:hover{border-color:var(–gold);color:var(–gold)}
+
+.tab-content{display:none}
+.tab-content.active{display:block}
 </style>
 
 </head>
@@ -99,16 +167,27 @@
   <div style="font-size:1.6rem">📊</div>
 </div>
 
-<div id="app"></div>
+<div class="tabs" id="tab-bar" style="display:none">
+  <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+  <button class="tab-btn" onclick="showTab('backtest')">Backtesting</button>
+  <button class="tab-btn" onclick="showTab('races')">Race Log</button>
+</div>
+
+<div id="app">
+  <!-- Import shown before data loads -->
+</div>
 
 <script>
 var LOG_KEY = 'rq_pred_log_v1';
-var currentFilter = 'all';
 var loadedLog = null;
+var currentFilter = 'all';
+var currentTab = 'overview';
 
+// ── Utilities ───────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function classify(e){ return e.topPickWon?'win':e.topPickPlaced?'place':'loss'; }
 function pct(n,t){ return t?Math.round(n/t*100)+'%':'0%'; }
+function fmt(n){ return (n>=0?'+':'')+n.toFixed(2); }
 
 function tryLocalStorage() {
   try {
@@ -126,8 +205,8 @@ function tryLocalStorage() {
 
 function tryLS() {
   var data = tryLocalStorage();
-  if (data) { loadedLog=data; render(loadedLog); }
-  else { alert('No Formintel results found in this device\'s storage.\n\nIn the Predictor, tap "⬇ Export Results JSON" after logging a result, then import that file here.'); }
+  if (data) { loadedLog=data; showTab('overview'); renderAll(); }
+  else alert('No Formintel results found in storage.\n\nExport from the Predictor via ⬇ Export Results JSON then import here.');
 }
 
 function loadFile(input) {
@@ -137,44 +216,37 @@ function loadFile(input) {
   reader.onload = function(e) {
     try {
       var data = JSON.parse(e.target.result);
-      if (!Array.isArray(data)||!data.length) throw new Error('File is empty or wrong format');
-      if (!data[0].raceKey) throw new Error('Doesn\'t look like a Formintel results file');
+      if (!Array.isArray(data)||!data.length) throw new Error('Empty or invalid file');
+      if (!data[0].raceKey) throw new Error('Not a Formintel results file');
       loadedLog = data;
-      render(loadedLog);
-    } catch(err) { alert('Could not read file: ' + err.message); }
+      showTab('overview');
+      renderAll();
+    } catch(err) { alert('Could not read file: '+err.message); }
   };
   reader.readAsText(file);
 }
 
-function setFilter(val){ currentFilter=val; render(loadedLog); }
-function resetData(){ loadedLog=null; currentFilter='all'; render(null); }
-
-function importZoneHTML() {
-  return '<div class="import-zone">' +
-    '<input type="file" accept=".json" onchange="loadFile(this)">' +
-    '<div class="import-icon">📂</div>' +
-    '<div class="import-title">Import Results</div>' +
-    '<div class="import-sub">Tap to load your exported results file<br>' +
-    'In the Predictor: tap <b>⬇ Export Results JSON</b><br>then import that file here</div>' +
-    '</div>';
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(function(b,i){
+    b.classList.toggle('active', ['overview','backtest','races'][i]===tab);
+  });
+  document.querySelectorAll('.tab-content').forEach(function(c){
+    c.classList.remove('active');
+  });
+  var el = document.getElementById('tab-'+tab);
+  if (el) el.classList.add('active');
 }
 
-function render(log) {
-  var app = document.getElementById('app');
+function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
+function setFilter(val){ currentFilter=val; renderRaces(); }
 
-  if (!log || !log.length) {
-    document.getElementById('subtitle').textContent = 'No data loaded';
-    app.innerHTML = importZoneHTML() +
-      '<button class="ls-btn" onclick="tryLS()">🔄 Try Load From This Device\'s Storage</button>' +
-      '<div style="text-align:center;padding:20px 30px;color:var(--mt);font-family:var(--mono);font-size:.65rem;line-height:2">' +
-        'How to get your results here:<br>' +
-        '1. Open the Predictor and log a race result<br>' +
-        '2. Tap <span style="color:var(--green)">⬇ Export Results JSON</span><br>' +
-        '3. Import that file above' +
-      '</div>';
-    return;
-  }
+// ── Main render ─────────────────────────────────────────────
+function renderAll() {
+  var log = loadedLog;
+  if (!log||!log.length){ renderImport(); return; }
 
+  document.getElementById('tab-bar').style.display='flex';
   var sorted = log.slice().sort(function(a,b){
     return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
   });
@@ -182,7 +254,7 @@ function render(log) {
   var total  = sorted.length;
   var wins   = sorted.filter(function(e){return e.topPickWon;}).length;
   var places = sorted.filter(function(e){return !e.topPickWon&&e.topPickPlaced;}).length;
-  var losses = total - wins - places;
+  var losses = total-wins-places;
 
   var maxStreak=0,curStreak=0;
   sorted.forEach(function(e,i){
@@ -191,37 +263,348 @@ function render(log) {
     if(curStreak>maxStreak) maxStreak=curStreak;
   });
 
-  var ranked = sorted.filter(function(e){return e.winnerRank>0;});
-  var avgRank = ranked.length ? (ranked.reduce(function(s,e){return s+e.winnerRank;},0)/ranked.length).toFixed(1) : '-';
+  var ranked=sorted.filter(function(e){return e.winnerRank>0;});
+  var avgRank=ranked.length?(ranked.reduce(function(s,e){return s+e.winnerRank;},0)/ranked.length).toFixed(1):'-';
 
-  document.getElementById('subtitle').textContent = total + ' race' + (total!==1?'s':'') + ' logged';
+  document.getElementById('subtitle').textContent = total+' race'+(total!==1?'s':'')+' logged';
 
+  var app = document.getElementById('app');
+  app.innerHTML =
+    '<div class="tab-content active" id="tab-overview">' + renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) + '</div>' +
+    '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
+    '<div class="tab-content" id="tab-races" id="tab-races"></div>';
+
+  renderRaces();
+  runDefaultBacktest(sorted);
+}
+
+// ── Overview tab ────────────────────────────────────────────
+function renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) {
+  var h = '<div class="summary">';
+  h += sc('win',   pct(wins,total),  'Win<br>Rate');
+  h += sc('place', pct(places,total),'Place<br>Rate');
+  h += sc('loss',  pct(losses,total),'Loss<br>Rate');
+  h += sc('total', total,            'Races<br>Logged');
+  h += sc('rank',  avgRank,          'Avg Winner<br>Rank');
+  h += sc('streak',maxStreak,        'Best<br>Streak');
+  h += '</div>';
+
+  h += '<div class="chart-wrap"><div class="chart-title">Result Breakdown</div>';
+  h += br('Wins',   wins,   total, 'win');
+  h += br('Places', places, total, 'place');
+  h += br('Losses', losses, total, 'loss');
+  h += '</div>';
+
+  // P&L curve (flat £1 stake)
+  h += '<div class="chart-wrap">';
+  h += '<div class="chart-title">Running P&L — Flat £1 Win Stake</div>';
+  h += buildPnlCurve(sorted, function(e){ return e.topPickWon; }, function(e){ return e.topPickOdds||0; });
+  h += '</div>';
+
+  return h;
+}
+
+function buildPoints(chronological, wonFn, oddsFn, skipNoOdds) {
+  var pnl = 0, points = [0], bets = 0;
+  chronological.forEach(function(e) {
+    var o = oddsFn(e);
+    if (skipNoOdds && (!o || o <= 1)) return; // skip races where fav had no odds
+    bets++;
+    if (wonFn(e) && o > 1) pnl += o - 1;
+    else pnl -= 1;
+    points.push(Math.round(pnl*100)/100);
+  });
+  return { points: points, bets: bets, pnl: pnl };
+}
+
+function buildPnlCurve(sorted, wonFn, oddsFn) {
+  var chronological = sorted.slice().reverse();
+
+  // Model top pick line
+  var model = buildPoints(chronological, wonFn, oddsFn, false);
+
+  // Market favourite line — only for races where favOdds was recorded
+  var hasFavData = sorted.some(function(e){ return e.favOdds > 1; });
+  var fav = hasFavData
+    ? buildPoints(chronological,
+        function(e){ return !!e.favWon; },
+        function(e){ return e.favOdds || 0; },
+        true)
+    : null;
+
+  // Scale both lines on the same axis
+  var allPoints = model.points.concat(fav ? fav.points : []);
+  var minP = Math.min.apply(null, allPoints);
+  var maxP = Math.max.apply(null, allPoints);
+  var range = maxP - minP || 1;
+  var W = 100, H = 100;
+
+  function toSvgPts(points) {
+    return points.map(function(p, i) {
+      var x = (i / (points.length - 1 || 1)) * W;
+      var y = H - ((p - minP) / range) * H;
+      return x + ',' + y;
+    }).join(' ');
+  }
+
+  var zeroY  = H - ((0 - minP) / range) * H;
+  var mCol   = model.pnl >= 0 ? '#00e676' : '#ff5252';
+  var fCol   = '#448aff'; // always blue for favourite
+
+  var svg = '<svg class="pnl-svg" viewBox="0 0 100 100" preserveAspectRatio="none">'
+    + '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY
+    + '" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>'
+    + '<polyline points="' + toSvgPts(model.points)
+    + '" fill="none" stroke="' + mCol + '" stroke-width="1.4"/>';
+
+  if (fav && fav.points.length > 1) {
+    svg += '<polyline points="' + toSvgPts(fav.points)
+      + '" fill="none" stroke="' + fCol + '" stroke-width="1.2" stroke-dasharray="3,2"/>';
+  }
+  svg += '</svg>';
+
+  // Legend + summary
+  var label = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-family:var(--mono);font-size:.62rem">';
+  label += '<span style="color:' + mCol + '">— Model pick &nbsp; ' + fmt(model.pnl)
+    + ' P&L &nbsp; ROI ' + (model.bets ? Math.round(model.pnl / model.bets * 100) : 0) + '%</span>';
+  if (fav && fav.points.length > 1) {
+    label += '<span style="color:' + fCol + '">- - Favourite &nbsp; ' + fmt(fav.pnl)
+      + ' P&L &nbsp; ROI ' + (fav.bets ? Math.round(fav.pnl / fav.bets * 100) : 0) + '%</span>';
+  } else if (!hasFavData) {
+    label += '<span style="color:var(--mt)">Favourite line needs new results (odds must be entered before predicting)</span>';
+  }
+  label += '<span style="color:var(--mt)">'+sorted.length+' races · £1 flat stake</span>';
+  label += '</div>';
+
+  return '<div class="pnl-curve">' + svg + '</div>' + label;
+}
+
+// ── Backtesting tab ─────────────────────────────────────────
+function renderBacktest(sorted) {
+  var h = '<div class="bt-wrap">';
+
+  // Strategy controls
+  h += '<div class="bt-card">';
+  h += '<div class="bt-title">Strategy Simulator</div>';
+  h += '<div class="bt-controls">';
+
+  h += '<div class="bt-control-row">';
+  h += ctrl('Min Confidence (%)', 'bt-min-conf', '0', 'number', '0','100');
+  h += ctrl('Min Odds', 'bt-min-odds', '1.5', 'number', '1','999', '0.5');
+  h += ctrl('Max Odds', 'bt-max-odds', '99', 'number', '1','999', '0.5');
+  h += '</div>';
+
+  h += '<div class="bt-control-row">';
+  h += '<div class="bt-input-wrap" style="display:flex;flex-direction:column">';
+  h += '<div class="bt-input-label">Value filter</div>';
+  h += '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">';
+  h += '<button id="bt-val-off" onclick="setBtVal(false)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">Any</button>';
+  h += '<button id="bt-val-on"  onclick="setBtVal(true)"  style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">Value only</button>';
+  h += '</div></div>';
+  h += ctrl('Stake (£)', 'bt-stake', '1', 'number', '0.1', '100', '0.5');
+  h += '</div>';
+
+  h += '<button class="bt-run" onclick="runBacktest()">▶ Run Simulation</button>';
+  h += '</div>';
+  h += '<div id="bt-results"></div>';
+  h += '</div>';
+
+  // Confidence threshold finder
+  h += '<div class="bt-card">';
+  h += '<div class="bt-title">Confidence Threshold Finder</div>';
+  h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:12px">';
+  h += 'Which confidence cutoff produces the best ROI on your 205 races?</div>';
+  h += '<div id="bt-threshold"></div>';
+  h += '</div>';
+
+  // Odds range finder
+  h += '<div class="bt-card">';
+  h += '<div class="bt-title">Best Odds Range</div>';
+  h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:12px">';
+  h += 'Where does the model perform best by price range?</div>';
+  h += '<div id="bt-odds-range"></div>';
+  h += '</div>';
+
+  h += '</div>'; // bt-wrap
+  return h;
+}
+
+var btValueOnly = false;
+function setBtVal(v) {
+  btValueOnly = v;
+  document.getElementById('bt-val-off').style.background = v ? 'transparent' : 'rgba(0,230,118,.15)';
+  document.getElementById('bt-val-off').style.color = v ? 'var(--mt)' : 'var(--green)';
+  document.getElementById('bt-val-on').style.background  = v ? 'rgba(0,230,118,.15)' : 'transparent';
+  document.getElementById('bt-val-on').style.color  = v ? 'var(--green)' : 'var(--mt)';
+}
+
+function ctrl(label, id, val, type, min, max, step) {
+  return '<div class="bt-input-wrap">'
+    + '<div class="bt-input-label">'+label+'</div>'
+    + '<input class="bt-input" id="'+id+'" type="'+type+'" value="'+val+'"'
+    + (min?' min="'+min+'"':'') + (max?' max="'+max+'"':'') + (step?' step="'+step+'"':'')
+    + '></div>';
+}
+
+function getVal(id, def) {
+  var el = document.getElementById(id);
+  return el ? (parseFloat(el.value)||def) : def;
+}
+
+function simulateStrategy(log, minConf, minOdds, maxOdds, valueOnly, stake) {
+  var bets=0, wins=0, pnl=0, points=[0];
+  var chron = log.slice().reverse();
+
+  chron.forEach(function(e) {
+    var conf = (e.topPickConf||0)*100;
+    var odds = e.topPickOdds||0;
+    if (conf < minConf) return;
+    if (odds < minOdds || odds > maxOdds) return;
+    if (valueOnly) {
+      var implied = odds>0 ? 1/odds : 0;
+      if ((e.topPickConf||0) < implied) return; // model doesn't beat market
+    }
+    bets++;
+    var staked = stake;
+    if (e.topPickWon && odds>1) {
+      pnl += (odds-1)*staked;
+      wins++;
+    } else {
+      pnl -= staked;
+    }
+    points.push(Math.round(pnl*100)/100);
+  });
+
+  return { bets:bets, wins:wins, pnl:pnl, roi: bets?pnl/(bets*stake)*100:0, points:points };
+}
+
+function runBacktest() {
+  if (!loadedLog) return;
+  var minConf = getVal('bt-min-conf', 0);
+  var minOdds = getVal('bt-min-odds', 1.5);
+  var maxOdds = getVal('bt-max-odds', 99);
+  var stake   = getVal('bt-stake', 1);
+  var res     = simulateStrategy(loadedLog, minConf, minOdds, maxOdds, btValueOnly, stake);
+
+  var col = res.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+  var el  = document.getElementById('bt-results');
+  if (!el) return;
+
+  var h = '<div style="border-top:1px solid var(--bd);padding-top:14px;margin-top:14px">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px">';
+  h += mini('Bets', res.bets);
+  h += mini('Wins', res.wins);
+  h += mini('Strike', res.bets?Math.round(res.wins/res.bets*100)+'%':'—');
+  h += mini2('P&L', fmt(res.pnl), col);
+  h += mini2('ROI', (res.roi>=0?'+':'')+Math.round(res.roi)+'%', col);
+  h += mini('Staked', '£'+(res.bets*stake).toFixed(0));
+  h += '</div>';
+
+  if (res.bets > 1) {
+    // Mini P&L curve
+    var W=100,H=60, pts=res.points, minP=Math.min.apply(null,pts), maxP=Math.max.apply(null,pts);
+    var range=maxP-minP||1;
+    var svgPts = pts.map(function(p,i){
+      return (i/(pts.length-1||1)*W)+','+(H-((p-minP)/range*H));
+    }).join(' ');
+    var zY = H-((0-minP)/range*H);
+    h += '<svg style="width:100%;height:60px" viewBox="0 0 100 60" preserveAspectRatio="none">'
+      + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>'
+      + '<polyline points="'+svgPts+'" fill="none" stroke="'+col+'" stroke-width="1.5"/>'
+      + '</svg>';
+  } else {
+    h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--mt);text-align:center;padding:10px">No bets matched these filters</div>';
+  }
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function runDefaultBacktest(sorted) {
+  if (!sorted||!sorted.length) return;
+
+  // Threshold finder
+  var thEl = document.getElementById('bt-threshold');
+  if (thEl) {
+    var thresholds = [0,10,15,20,25,30,35,40];
+    var rows = thresholds.map(function(t) {
+      return Object.assign({ threshold:t }, simulateStrategy(sorted, t, 1.5, 99, false, 1));
+    });
+    var bestROI = Math.max.apply(null, rows.filter(function(r){return r.bets>=5;}).map(function(r){return r.roi;}));
+
+    var h = '<div class="threshold-row-hdr"><span>Min Conf</span><span>Bets</span><span>Strike</span><span>ROI</span></div>';
+    h += '<div class="threshold-rows">';
+    rows.forEach(function(r) {
+      var isBest = r.bets>=5 && Math.abs(r.roi-bestROI)<0.1;
+      var col = r.roi>0?'var(--green)':r.roi<0?'var(--red)':'var(--mt)';
+      h += '<div class="threshold-row'+(isBest?' best':'')+'">'
+        + '<span style="color:var(--text)">'+r.threshold+'%+'+(isBest?' 🏆':'')+' </span>'
+        + '<span style="color:var(--mt)">'+r.bets+'</span>'
+        + '<span style="color:var(--mt)">'+(r.bets?Math.round(r.wins/r.bets*100)+'%':'—')+'</span>'
+        + '<span style="color:'+col+'">'+(r.roi>=0?'+':'')+Math.round(r.roi)+'%</span>'
+        + '</div>';
+    });
+    h += '</div>';
+    thEl.innerHTML = h;
+  }
+
+  // Odds range breakdown
+  var orEl = document.getElementById('bt-odds-range');
+  if (orEl) {
+    var ranges = [
+      {label:'Evens–2/1', min:1.5, max:3.0},
+      {label:'2/1–4/1',   min:3.0, max:5.0},
+      {label:'4/1–6/1',   min:5.0, max:7.0},
+      {label:'6/1–10/1',  min:7.0, max:11.0},
+      {label:'10/1–16/1', min:11.0, max:17.0},
+      {label:'16/1+',     min:17.0, max:999},
+    ];
+    var h2 = '<div class="threshold-row-hdr"><span>Odds Range</span><span>Bets</span><span>Strike</span><span>ROI</span></div>';
+    h2 += '<div class="threshold-rows">';
+    ranges.forEach(function(range) {
+      var r = simulateStrategy(sorted, 0, range.min, range.max, false, 1);
+      var col = r.roi>0?'var(--green)':r.roi<0?'var(--red)':'var(--mt)';
+      h2 += '<div class="threshold-row">'
+        + '<span style="color:var(--text)">'+range.label+'</span>'
+        + '<span style="color:var(--mt)">'+r.bets+'</span>'
+        + '<span style="color:var(--mt)">'+(r.bets?Math.round(r.wins/r.bets*100)+'%':'—')+'</span>'
+        + '<span style="color:'+col+'">'+(r.roi>=0?'+':'')+Math.round(r.roi)+'%</span>'
+        + '</div>';
+    });
+    h2 += '</div>';
+    orEl.innerHTML = h2;
+  }
+}
+
+function mini(label, val) {
+  return '<div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
+    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:var(--white)">' + val + '</div>'
+    + '<div style="font-family:var(--mono);font-size:.52rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">' + label + '</div>'
+    + '</div>';
+}
+function mini2(label, val, col) {
+  return '<div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
+    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:'+col+'">' + val + '</div>'
+    + '<div style="font-family:var(--mono);font-size:.52rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">' + label + '</div>'
+    + '</div>';
+}
+
+// ── Race log tab ─────────────────────────────────────────────
+function renderRaces() {
+  if (!loadedLog) return;
+  var el = document.getElementById('tab-races');
+  if (!el) return;
+
+  var sorted = loadedLog.slice().sort(function(a,b){
+    return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
+  });
+  var total  = sorted.length;
+  var wins   = sorted.filter(function(e){return e.topPickWon;}).length;
+  var places = sorted.filter(function(e){return !e.topPickWon&&e.topPickPlaced;}).length;
+  var losses = total-wins-places;
   var filtered = currentFilter==='all' ? sorted : sorted.filter(function(e){return classify(e)===currentFilter;});
 
-  var h = importZoneHTML();
-
-  // Stats
-  h += '<div class="summary">';
-  h += '<div class="stat-card win"><div class="stat-num">'+pct(wins,total)+'</div><div class="stat-label">Win<br>Rate</div></div>';
-  h += '<div class="stat-card place"><div class="stat-num">'+pct(places,total)+'</div><div class="stat-label">Place<br>Rate</div></div>';
-  h += '<div class="stat-card loss"><div class="stat-num">'+pct(losses,total)+'</div><div class="stat-label">Loss<br>Rate</div></div>';
-  h += '<div class="stat-card total"><div class="stat-num">'+total+'</div><div class="stat-label">Races<br>Logged</div></div>';
-  h += '<div class="stat-card rank"><div class="stat-num">'+avgRank+'</div><div class="stat-label">Avg Winner<br>Rank</div></div>';
-  h += '<div class="stat-card streak"><div class="stat-num">'+maxStreak+'</div><div class="stat-label">Best<br>Streak</div></div>';
-  h += '</div>';
-
-  // Chart
-  h += '<div class="chart-wrap"><div class="chart-title">Result Breakdown</div>';
-  ['Wins','Places','Losses'].forEach(function(lbl,i){
-    var n=[wins,places,losses][i], cls=['win','place','loss'][i];
-    var p=total?Math.round(n/total*100):0;
-    h += '<div class="bar-row"><span class="bar-label">'+lbl+'</span><div class="bar-track"><div class="bar-fill '+cls+'" style="width:'+p+'%">'+(p>6?p+'%':'')+'</div></div><span class="bar-pct">'+p+'%</span></div>';
-  });
-  h += '</div>';
-
-  // Filters + list
-  h += '<div class="section-hdr">Race Log</div>';
-  h += '<div class="filter-bar">';
+  var h = '<div class="filter-bar">';
   [['all','All ('+total+')'],['win','🟢 Wins ('+wins+')'],['place','🟡 Places ('+places+')'],['loss','🔴 Losses ('+losses+')']].forEach(function(fb){
     h += '<button class="filter-btn'+(currentFilter===fb[0]?' active':'')+'" onclick="setFilter(\''+fb[0]+'\')">'+fb[1]+'</button>';
   });
@@ -231,7 +614,7 @@ function render(log) {
     h += '<div style="text-align:center;padding:30px;color:var(--mt);font-family:var(--mono);font-size:.75rem">No '+currentFilter+' results yet</div>';
   }
 
-  filtered.forEach(function(entry, idx) {
+  filtered.forEach(function(entry,idx){
     var cls   = classify(entry);
     var badge = cls==='win'   ? '<span class="race-badge badge-win">✓ Win</span>'
               : cls==='place' ? '<span class="race-badge badge-place">◎ Place</span>'
@@ -239,21 +622,22 @@ function render(log) {
 
     var rCls = entry.winnerRank===1?'rank-1':entry.winnerRank===2?'rank-2':entry.winnerRank===3?'rank-3':'rank-bad';
     var rTxt = entry.winnerRank>0 ? '<span class="'+rCls+'">#'+entry.winnerRank+'</span> in predictions' : 'Winner not in top picks';
-
     var preds  = entry.predictions||[];
     var actual = entry.actual||[];
     var chips  = preds.slice(0,5).map(function(p,i){
-      var iW=actual[0]&&p.name===actual[0], iP=actual.indexOf(p.name)>-1;
+      var iW=actual[0]&&p.name===actual[0],iP=actual.indexOf(p.name)>-1;
       var cc=iW?' is-winner':iP?' is-placed':'';
       var sc=p.score?' '+Math.round(p.score*100)+'%':'';
       return '<span class="pred-chip'+cc+'">'+(i+1)+'. '+esc(p.name)+sc+'</span>';
     }).join('');
 
     var course=[entry.course,entry.time,entry.dist].filter(Boolean).join(' · ');
+    var conf = entry.topPickConf ? Math.round(entry.topPickConf*100)+'%' : '—';
+    var odds = entry.topPickOdds ? entry.topPickOdds.toFixed(1) : '—';
 
-    h += '<div class="race-card '+cls+'" style="animation-delay:'+(idx*.04)+'s">';
+    h += '<div class="race-card '+cls+'" style="animation-delay:'+(idx*.03)+'s">';
     h += '<div class="race-top"><div><div class="race-name">'+esc(course)+'</div>';
-    h += '<div class="race-meta">'+esc(entry.date||'')+(entry.going?' · '+esc(entry.going):'')+'</div></div>'+badge+'</div>';
+    h += '<div class="race-meta">'+esc(entry.date||'')+(entry.going?' · '+esc(entry.going):'')+' · Conf '+conf+' · Odds '+odds+'</div></div>'+badge+'</div>';
     h += '<div class="race-body">';
     h += '<div class="race-row"><span class="race-row-label">Winner</span><span class="race-row-val">'+esc((actual[0])||'—')+'</span></div>';
     h += '<div class="race-row"><span class="race-row-label">Top Pick</span><span class="race-row-val">'+esc(preds[0]?preds[0].name:'—')+'</span></div>';
@@ -263,13 +647,35 @@ function render(log) {
   });
 
   h += '</div><button class="reset-btn" onclick="resetData()">↩ Load Different File</button>';
-  app.innerHTML = h;
+  el.innerHTML = h;
 }
 
-// Init — try localStorage first, fall back to import screen
+// ── Small helpers ────────────────────────────────────────────
+function sc(cls,num,label){
+  return '<div class="stat-card '+cls+'"><div class="stat-num">'+num+'</div><div class="stat-label">'+label+'</div></div>';
+}
+function br(label,n,total,cls){
+  var p=total?Math.round(n/total*100):0;
+  return '<div class="bar-row"><span class="bar-label">'+label+'</span><div class="bar-track"><div class="bar-fill '+cls+'" style="width:'+p+'%">'+(p>6?p+'%':'')+'</div></div><span class="bar-pct">'+p+'%</span></div>';
+}
+
+// ── Import screen ────────────────────────────────────────────
+function renderImport() {
+  document.getElementById('tab-bar').style.display='none';
+  document.getElementById('subtitle').textContent='No data loaded';
+  document.getElementById('app').innerHTML =
+    '<div class="import-zone"><input type="file" accept=".json" onchange="loadFile(this)">'
+    + '<div class="import-icon">📂</div>'
+    + '<div class="import-title">Import Results</div>'
+    + '<div class="import-sub">Tap to load your exported results file<br>In the Predictor: tap <b>⬇ Export Results JSON</b></div>'
+    + '</div>'
+    + '<button class="ls-btn" onclick="tryLS()">🔄 Try Load From This Device\'s Storage</button>';
+}
+
+// ── Init ─────────────────────────────────────────────────────
 var lsData = tryLocalStorage();
-if (lsData) { loadedLog=lsData; render(loadedLog); }
-else render(null);
+if (lsData) { loadedLog=lsData; renderAll(); }
+else renderImport();
 </script>
 
 </body>
