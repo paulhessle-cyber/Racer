@@ -3629,66 +3629,82 @@ function runMCPlacepot() {
 // ══════════════════════════════════════════════════════════
 
 function runCalibration() {
-  // Update count display
-  var log   = getPredLog();
+  var log     = getPredLog();
   var countEl = document.getElementById('calib-count');
   if (countEl) countEl.textContent = log.length + ' races';
 
-  var bands = rebuildPlattCalibration();
+  var bands    = rebuildPlattCalibration();
   var statusEl = document.getElementById('calib-status');
   var chartEl  = document.getElementById('calib-chart');
+
   if (!bands) {
     if (statusEl) {
       statusEl.textContent = 'Need at least 30 logged races. You have ' + log.length + ' so far.';
       statusEl.style.color = 'var(--mt)';
     }
+    if (chartEl) chartEl.innerHTML = '';
     return;
   }
 
-  var applied = bands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1)>0.05; });
+  var applied = bands.filter(function(b){ return b.n >= 5 && Math.abs(b.multiplier - 1) > 0.05; });
 
   if (statusEl) {
-    if (applied.length) {
-      statusEl.textContent = '✓ Calibration applied — corrections active on '
-        + applied.length + ' confidence band(s). Future predictions updated.';
-      statusEl.style.color = 'var(--g)';
-    } else {
-      statusEl.textContent = '✓ Model is well calibrated — no corrections needed.';
-      statusEl.style.color = 'var(--g)';
-    }
+    statusEl.textContent = applied.length
+      ? '✓ Corrections applied to ' + applied.length + ' band(s) — predictions updated'
+      : '✓ Well calibrated — no corrections needed';
+    statusEl.style.color = 'var(--g)';
   }
 
-  // Draw calibration chart
+  // Always draw the band chart so you can see how well calibrated it is
   if (chartEl) {
-    var ch = '<div style="font-size:.62rem;color:var(--mt);margin-bottom:8px">'
-      + '🟩 Actual win rate &nbsp; ▏ Model predicted &nbsp; Bands need 5+ races</div>';
+    var ch = '';
 
     bands.forEach(function(b) {
       if (b.n < 1) return;
-      var actual  = b.actual !== null ? Math.round(b.actual * 100) : 0;
-      var model   = Math.round(b.midConf * 100);
-      var maxPct  = 60;
-      var aW      = Math.round(Math.min(actual/maxPct,1)*100);
-      var mW      = Math.round(Math.min(model/maxPct,1)*100);
-      var diff    = actual - model;
-      var col     = diff > 3 ? 'var(--g)' : diff < -3 ? 'var(--re)' : 'var(--mt)';
-      var faint   = b.n < 5 ? 'opacity:.4;' : '';
+      var actual = b.actual !== null ? Math.round(b.actual * 100) : 0;
+      var model  = Math.round(b.midConf * 100);
+      var maxPct = 70; // scale: 70% = full bar width
+      var aW     = Math.round(Math.min(actual / maxPct, 1) * 100);
+      var mW     = Math.round(Math.min(model  / maxPct, 1) * 100);
+      var diff   = actual - model;
+      var col    = diff > 4 ? 'var(--g)' : diff < -4 ? 'var(--re)' : 'var(--mt)';
+      var faint  = b.n < 5 ? 'opacity:.35;' : '';
+      var mult   = b.n >= 5
+        ? (Math.abs(b.multiplier - 1) > 0.05
+            ? ' <span style="color:var(--gold)">×' + b.multiplier.toFixed(2) + '</span>'
+            : ' <span style="color:var(--g)">✓</span>')
+        : ' <span style="color:var(--mt);font-size:.55rem">need 5+</span>';
 
-      ch += '<div style="margin-bottom:10px;' + faint + '">'
-        + '<div style="display:flex;justify-content:space-between;'
-        + 'font-size:.6rem;color:var(--mt);margin-bottom:3px">'
-        + '<span>' + b.label + ' (' + b.n + ' races)</span>'
-        + '<span style="color:' + col + '">'
-        + actual + '% actual &nbsp; ' + model + '% model'
-        + (b.n>=5 ? ' &nbsp; ×' + b.multiplier.toFixed(2) : ' &nbsp; (need more data)')
-        + '</span></div>'
-        + '<div style="position:relative;height:12px;background:rgba(255,255,255,.05);border-radius:3px">'
-        + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;'
-        + 'background:rgba(0,230,118,.45);border-radius:3px;transition:width .6s"></div>'
-        + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:16px;'
-        + 'background:rgba(255,255,255,.5)"></div>'
-        + '</div></div>';
+      ch += '<div style="margin-bottom:9px;' + faint + '">'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;'
+          + 'font-size:.62rem;margin-bottom:3px">'
+          + '<span style="color:var(--mt)">' + b.label
+          + ' <span style="opacity:.6">(' + b.n + ')</span></span>'
+          + '<span style="color:' + col + '">'
+          + actual + '% actual · ' + model + '% model' + mult
+          + '</span>'
+          + '</div>'
+          + '<div style="position:relative;height:10px;background:rgba(255,255,255,.05);border-radius:3px">'
+          // Actual win rate bar
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;'
+          + 'background:rgba(0,230,118,.5);border-radius:3px"></div>'
+          // Model predicted line
+          + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:14px;'
+          + 'background:rgba(255,255,255,.55);border-radius:1px"></div>'
+          + '</div>'
+          + '</div>';
     });
+
+    // Compact legend below chart
+    ch += '<div style="display:flex;gap:14px;margin-top:10px;font-size:.58rem;color:var(--mt)">'
+        + '<span><span style="display:inline-block;width:10px;height:10px;'
+        + 'background:rgba(0,230,118,.5);border-radius:2px;vertical-align:middle;margin-right:4px"></span>'
+        + 'Actual win rate</span>'
+        + '<span><span style="display:inline-block;width:2px;height:10px;'
+        + 'background:rgba(255,255,255,.55);vertical-align:middle;margin-right:4px"></span>'
+        + 'Model predicted</span>'
+        + '<span style="opacity:.5">faded = &lt;5 races</span>'
+        + '</div>';
 
     chartEl.innerHTML = ch;
   }
