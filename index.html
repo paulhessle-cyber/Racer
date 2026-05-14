@@ -3451,9 +3451,24 @@ function saveL15AsBet(idx) {
     log.push(bet);
     localStorage.setItem(BETS_KEY, JSON.stringify(log));
 
-    // Confirm
+    // Confirm and offer export
     var names = horses.map(function(h){ return h.name; }).join(', ');
-    alert('✓ Saved to Bet Tracker!\n\n' + names + '\n\n£' + total.toFixed(2) + ' staked · ' + (isEW ? 'E/W' : 'Win only') + '\n\nOpen the Results Dashboard → Bets tab to mark results after racing.');
+    var msg = '✓ Lucky 15 saved!\n\n' + names + '\n\n£' + total.toFixed(2) + ' staked · ' + (isEW ? 'E/W' : 'Win only');
+    msg += '\n\nTap OK to download the bet file, then import it in the Results Dashboard → Bets tab.';
+    alert(msg);
+    // Auto-export so it can be imported into dashboard
+    try {
+      var exportLog = log;
+      var blob = new Blob([JSON.stringify(exportLog, null, 2)], {type:'application/json'});
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href = url;
+      a.download = 'formintel_bets_' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(exportErr) {}
 
   } catch(err) {
     alert('Save failed: ' + err.message + '\n\nStack: ' + (err.stack || '').slice(0, 200));
