@@ -182,6 +182,7 @@ width:20px;flex-shrink:0;text-align:center}
   <button class="tab-btn" onclick="showTab('backtest')">Backtesting</button>
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
+  <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
 </div>
 
 <div id="app">
@@ -240,7 +241,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -249,6 +250,7 @@ function showTab(tab) {
   if (el) el.classList.add('active');
   // Always re-render bets tab so it picks up localStorage saves from predictor
   if (tab === 'bets') renderBets();
+  if (tab === 'insights') renderInsights();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -286,11 +288,13 @@ function renderAll() {
     '<div class="tab-content active" id="tab-overview">' + renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) + '</div>' +
     '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
-    '<div class="tab-content" id="tab-bets"></div>';
+    '<div class="tab-content" id="tab-bets"></div>' +
+    '<div class="tab-content" id="tab-insights"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
   renderBets();
+  renderInsights();
 }
 
 // ── Overview tab ────────────────────────────────────────────
@@ -727,11 +731,32 @@ function importBetFile(input) {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var data = JSON.parse(e.target.result);
-      if (!Array.isArray(data)) throw new Error('Invalid format');
-      saveBetLog(data);
+      var incoming = JSON.parse(e.target.result);
+      if (!Array.isArray(incoming)) throw new Error('Invalid format');
+
+      // Merge with existing bets — don't overwrite, add new ones only
+      var existing = getBetLog();
+      var existingIds = {};
+      existing.forEach(function(b){ existingIds[b.id] = true; });
+
+      var added = 0;
+      incoming.forEach(function(b) {
+        if (!existingIds[b.id]) {
+          existing.push(b);
+          added++;
+        }
+      });
+
+      saveBetLog(existing);
       renderBets();
-      alert('Imported ' + data.length + ' bets.');
+
+      if (added === 0) {
+        alert('No new bets to add — all ' + incoming.length + ' bets already in your log.');
+      } else {
+        alert('Added ' + added + ' new bet(s). ' + (incoming.length - added) + ' already existed.');
+
+
+      }
     } catch(err) { alert('Could not read file: ' + err.message); }
   };
   reader.readAsText(file);
@@ -1201,6 +1226,289 @@ function buildBetCard(bet) {
   h += '</div>';
   return h;
 }
+
+// ══════════════════════════════════════════════════════════════
+// RETRAIN SUGGESTIONS — Insights Tab
+// Analyses logged race results to find where the model is
+// strong/weak and generates specific recommendations
+// ══════════════════════════════════════════════════════════════
+
+function parseDist(d) {
+  if (!d) return 0;
+  var m = String(d).match(/(\d+)m(?:(\d+)f)?/i);
+  if (m) return parseInt(m[1])*8 + (parseInt(m[2])||0);
+  m = String(d).match(/(\d+(?:\.\d+)?)f/i);
+  if (m) return parseFloat(m[1]);
+  return 0;
+}
+
+function distBand(f) {
+  if (f <= 6)  return 'Sprint (≤6f)';
+  if (f <= 9)  return 'Mile (7–9f)';
+  if (f <= 13) return 'Middle (10–13f)';
+  return 'Staying (14f+)';
+}
+
+function goingBand(g) {
+  if (!g) return 'Unknown';
+  var gl = g.toLowerCase();
+  if (gl.indexOf('firm') > -1 || gl.indexOf('fast') > -1) return 'Firm/Fast';
+  if (gl.indexOf('good to firm') > -1 || gl.indexOf('standard to fast') > -1) return 'Gd-Firm';
+  if (gl.indexOf('good to soft') > -1 || gl.indexOf('standard to slow') > -1) return 'Gd-Soft';
+  if (gl.indexOf('good') > -1 || gl.indexOf('standard') > -1) return 'Good/Std';
+  if (gl.indexOf('soft') > -1 || gl.indexOf('slow') > -1) return 'Soft/Slow';
+  if (gl.indexOf('heavy') > -1 || gl.indexOf('yielding') > -1) return 'Heavy/Yld';
+  return 'Other';
+}
+
+function fieldBand(runners) {
+  var n = runners || 0;
+  if (n <= 5)  return '2–5 runners';
+  if (n <= 9)  return '6–9 runners';
+  if (n <= 15) return '10–15 runners';
+  return '16+ runners';
+}
+
+function analyseByDimension(log, keyFn, label) {
+  var groups = {};
+  log.forEach(function(e) {
+    var k = keyFn(e);
+    if (!k || k === 'Unknown') return;
+    if (!groups[k]) groups[k] = { n:0, wins:0, placed:0, rankSum:0, rankCount:0 };
+    groups[k].n++;
+    if (e.topPickWon)    groups[k].wins++;
+    if (e.topPickPlaced) groups[k].placed++;
+    if (e.winnerRank > 0) { groups[k].rankSum += e.winnerRank; groups[k].rankCount++; }
+  });
+
+  var results = [];
+  var totalWinRate = log.length ? log.filter(function(e){return e.topPickWon;}).length / log.length : 0;
+
+  Object.keys(groups).forEach(function(k) {
+    var g = groups[k];
+    if (g.n < 5) return; // need at least 5 races to be meaningful
+    var winRate   = g.wins / g.n;
+    var placeRate = (g.wins + g.placed) / g.n;
+    var avgRank   = g.rankCount ? g.rankSum / g.rankCount : 0;
+    var vsAvg     = winRate - totalWinRate; // how much better/worse than average
+    results.push({ key:k, n:g.n, wins:g.wins, winRate:winRate, placeRate:placeRate, avgRank:avgRank, vsAvg:vsAvg });
+  });
+
+  results.sort(function(a,b){ return b.vsAvg - a.vsAvg; });
+  return results;
+}
+
+function generateRecommendation(dim, result, totalWinRate) {
+  var wr   = Math.round(result.winRate * 100);
+  var avg  = Math.round(totalWinRate * 100);
+  var diff = wr - avg;
+  var ar   = result.avgRank ? result.avgRank.toFixed(1) : '—';
+
+  if (diff >= 8) {
+    return 'Model performs well here (+' + diff + '% vs average). '
+      + 'Consider increasing weight for ' + dim + '-related features when in this category.';
+  } else if (diff <= -8) {
+    return 'Model underperforms here (' + diff + '% vs average, avg winner rank ' + ar + '). '
+      + 'Consider reducing confidence in this category or adding it as a filter in the Lucky 15.';
+  } else if (diff <= -5 && result.avgRank > 3) {
+    return 'Slightly below average with winner often ranking ' + ar + ' — model is not finding the right horse here. Worth reviewing.';
+  }
+  return 'Within normal range — no significant adjustment needed.';
+}
+
+function renderInsights() {
+  var el = document.getElementById('tab-insights');
+  if (!el) return;
+
+  var log = loadedLog;
+  if (!log || log.length < 20) {
+    el.innerHTML = '<div style="padding:30px 16px;text-align:center;font-family:var(--mono);'
+      + 'font-size:.72rem;color:var(--mt);line-height:2">'
+      + 'Need at least 20 logged races for meaningful insights.<br>'
+      + (log ? log.length + ' logged so far.' : 'Import your results JSON first.')
+      + '</div>';
+    return;
+  }
+
+  var totalWinRate = log.filter(function(e){return e.topPickWon;}).length / log.length;
+  var h = '<div style="padding:16px">';
+
+  // Header
+  h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;'
+    + 'letter-spacing:2px;color:var(--green);margin-bottom:4px">🔬 Retrain Suggestions</div>';
+  h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:16px;line-height:1.6">'
+    + log.length + ' races analysed · Overall win rate: ' + Math.round(totalWinRate*100) + '% · '
+    + 'Baseline for all comparisons</div>';
+
+  // ── Dimension analyses ──────────────────────────────────
+  var dimensions = [
+    {
+      label: 'Distance',
+      fn: function(e){ return distBand(parseDist(e.dist)); },
+      advice: 'Distance wins (dw) and class rating (or) features'
+    },
+    {
+      label: 'Going',
+      fn: function(e){ return goingBand(e.going); },
+      advice: 'Going preference (gw) feature in the model'
+    },
+    {
+      label: 'Odds Range',
+      fn: function(e){
+        var o = e.topPickOdds || 0;
+        if (!o) return null;
+        if (o < 2.5)  return 'Odds-on (<5/2)';
+        if (o < 4.0)  return '5/2–3/1';
+        if (o < 6.0)  return '4/1–5/1';
+        if (o < 10.0) return '6/1–9/1';
+        return '10/1+';
+      },
+      advice: 'Market agreement filter and confidence threshold'
+    },
+    {
+      label: 'Confidence Band',
+      fn: function(e){
+        var c = (e.topPickConf || 0);
+        if (c < 0.15) return '<15%';
+        if (c < 0.20) return '15–20%';
+        if (c < 0.25) return '20–25%';
+        if (c < 0.30) return '25–30%';
+        if (c < 0.40) return '30–40%';
+        return '40%+';
+      },
+      advice: 'Calibration multipliers — run Calibrate Now in Setup after seeing this'
+    },
+    {
+      label: 'Course',
+      fn: function(e){ return e.course || null; },
+      advice: 'Course win stats (cw) feature — consider course-specific model'
+    }
+  ];
+
+  dimensions.forEach(function(dim) {
+    var results = analyseByDimension(log, dim.fn, dim.label);
+    if (!results.length) return;
+
+    h += '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;'
+      + 'padding:14px;margin-bottom:12px">';
+    h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;'
+      + 'letter-spacing:2px;color:var(--mt);margin-bottom:10px">' + dim.label + '</div>';
+
+    results.forEach(function(r) {
+      var wr    = Math.round(r.winRate * 100);
+      var avg   = Math.round(totalWinRate * 100);
+      var diff  = wr - avg;
+      var col   = diff >= 6 ? 'var(--green)' : diff <= -6 ? 'var(--red)' : 'var(--mt)';
+      var icon  = diff >= 6 ? '▲' : diff <= -6 ? '▼' : '—';
+      var barW  = Math.min(Math.round(r.winRate / 0.6 * 100), 100);
+      var avgW  = Math.min(Math.round(totalWinRate / 0.6 * 100), 100);
+      var rec   = generateRecommendation(dim.label, r, totalWinRate);
+
+      h += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.04)">';
+      // Row header
+      h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
+      h += '<span style="font-family:var(--mono);font-size:.7rem;color:var(--text)">'
+        + esc(r.key) + ' <span style="color:var(--mt);font-size:.58rem">(' + r.n + ' races)</span></span>';
+      h += '<span style="font-family:var(--mono);font-size:.7rem;color:' + col + '">'
+        + icon + ' ' + wr + '% <span style="font-size:.58rem;color:var(--mt)">vs ' + avg + '% avg</span></span>';
+      h += '</div>';
+      // Bar
+      h += '<div style="position:relative;height:8px;background:rgba(255,255,255,.04);border-radius:4px;margin-bottom:5px">';
+      h += '<div style="position:absolute;left:0;top:0;height:100%;width:' + barW + '%;'
+        + 'background:' + col + ';opacity:.5;border-radius:4px"></div>';
+      // Average line
+      h += '<div style="position:absolute;left:' + avgW + '%;top:-2px;width:2px;height:12px;'
+        + 'background:rgba(255,255,255,.4);border-radius:1px"></div>';
+      h += '</div>';
+      // Recommendation
+      h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);line-height:1.5">'
+        + rec + '</div>';
+      if (diff >= 6 || diff <= -6) {
+        h += '<div style="font-family:var(--mono);font-size:.58rem;color:rgba(255,255,255,.3);'
+          + 'margin-top:3px">→ Affects: ' + esc(dim.advice) + '</div>';
+      }
+      h += '</div>';
+    });
+
+    h += '</div>';
+  });
+
+  // ── Winner rank analysis ──────────────────────────────
+  var rankDist = [0,0,0,0,0,0]; // ranks 1-5, and 6+
+  var rankTotal = 0;
+  log.forEach(function(e) {
+    if (e.winnerRank > 0) {
+      rankTotal++;
+      var ri = Math.min(e.winnerRank, 6) - 1;
+      rankDist[ri]++;
+    }
+  });
+
+  if (rankTotal > 0) {
+    h += '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px">';
+    h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:10px">Winner Rank Distribution</div>';
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:10px">'
+      + 'Where does the actual winner appear in your predictions?</div>';
+
+    var rankLabels = ['#1 (Top Pick)','#2','#3','#4','#5','#6+/Not found'];
+    var rankCols   = ['var(--green)','var(--gold)','#cd7f32','var(--mt)','var(--mt)','var(--red)'];
+    rankDist.forEach(function(n, i) {
+      var pct = Math.round(n / rankTotal * 100);
+      var barW = pct;
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+      h += '<span style="font-family:var(--mono);font-size:.62rem;color:' + rankCols[i] + ';width:90px;flex-shrink:0">' + rankLabels[i] + '</span>';
+      h += '<div style="flex:1;height:14px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden">';
+      h += '<div style="width:' + barW + '%;height:100%;background:' + rankCols[i] + ';opacity:.6;border-radius:3px"></div>';
+      h += '</div>';
+      h += '<span style="font-family:var(--mono);font-size:.62rem;color:var(--mt);width:44px;text-align:right">' + pct + '% (' + n + ')</span>';
+      h += '</div>';
+    });
+
+    // Interpretation
+    var top2pct = Math.round((rankDist[0]+rankDist[1]) / rankTotal * 100);
+    var missedPct = Math.round(rankDist[5] / rankTotal * 100);
+    h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);'
+      + 'font-family:var(--mono);font-size:.63rem;color:var(--mt);line-height:1.7">';
+    if (top2pct >= 50) {
+      h += '✓ Winner is in your top 2 picks ' + top2pct + '% of the time — model is ranking well.';
+    } else {
+      h += '⚠ Winner only in top 2 picks ' + top2pct + '% of the time — model ranking needs work.';
+    }
+    if (missedPct > 30) {
+      h += ' ' + missedPct + '% of winners not in your top 5 at all — consider expanding predictions shown.';
+    }
+    h += '</div>';
+    h += '</div>';
+  }
+
+  // ── Overall recommendation summary ───────────────────
+  h += '<div style="background:rgba(0,230,118,.05);border:1px solid rgba(0,230,118,.2);'
+    + 'border-radius:10px;padding:14px;margin-bottom:12px">';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;'
+    + 'letter-spacing:2px;color:var(--green);margin-bottom:10px">📋 Retrain Checklist</div>';
+
+  var steps = [
+    'Export your results JSON from the Predictor (⬇ Export Results JSON button)',
+    'Open the Trainer app and load your racing CSV',
+    'Retrain — the model will rebuild with your latest data',
+    'If specific going types are underperforming, check you have enough CSV rows for those conditions',
+    'Run Calibrate Now in the Predictor Setup tab after loading the new model',
+    'Log another 30+ races and re-check this Insights tab'
+  ];
+
+  steps.forEach(function(step, i) {
+    h += '<div style="display:flex;gap:10px;margin-bottom:8px">';
+    h += '<span style="font-family:var(--mono);font-size:.65rem;color:var(--green);flex-shrink:0">' + (i+1) + '.</span>';
+    h += '<span style="font-family:var(--mono);font-size:.65rem;color:var(--mt);line-height:1.5">' + step + '</span>';
+    h += '</div>';
+  });
+
+  h += '</div>';
+  h += '</div>'; // padding wrap
+
+  el.innerHTML = h;
+}
+
 
 // ── Init ─────────────────────────────────────────────────────
 var lsData = tryLocalStorage();
