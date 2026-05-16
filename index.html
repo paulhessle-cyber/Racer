@@ -1303,6 +1303,205 @@ function jockeyMultiplier(jockeyName) {
   return 1.0;
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// TRACK-SPECIFIC DRAW BIAS
+// Hardcoded lookup table based on known UK track characteristics.
+// Returns a multiplier (>1 = favoured, <1 = disadvantaged).
+// draw   = stall number (1 = lowest/innermost)
+// n      = number of runners
+// dist   = distance in furlongs
+// course = course name (lowercase)
+// ══════════════════════════════════════════════════════════════
+
+var TRACK_DRAW_BIAS = {
+  // ── Chester: extreme low draw advantage, tight left-handed oval ──
+  'chester': function(draw, n, dist) {
+    if (dist > 10) return 1.0; // longer trips less affected
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.18; // draws 1-2 in 10-runner = huge advantage
+    if (pos <= 0.35) return 1.10;
+    if (pos <= 0.5)  return 1.03;
+    if (pos <= 0.7)  return 0.96;
+    return 0.88; // high draws at Chester are a serious disadvantage
+  },
+
+  // ── Beverley: high draw favoured in sprints ──
+  'beverley': function(draw, n, dist) {
+    if (dist > 9) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.8)  return 1.10;
+    if (pos >= 0.6)  return 1.04;
+    if (pos <= 0.2)  return 0.93;
+    if (pos <= 0.4)  return 0.97;
+    return 1.0;
+  },
+
+  // ── Catterick: low draw favoured, sharp left-handed ──
+  'catterick': function(draw, n, dist) {
+    if (dist > 10) return 1.0;
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.12;
+    if (pos <= 0.4)  return 1.05;
+    if (pos >= 0.8)  return 0.92;
+    if (pos >= 0.6)  return 0.97;
+    return 1.0;
+  },
+
+  // ── Ascot: straight course high draw favoured ──
+  'ascot': function(draw, n, dist) {
+    if (dist > 8) return 1.0; // round course less affected
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.10;
+    if (pos >= 0.55) return 1.04;
+    if (pos <= 0.25) return 0.93;
+    return 1.0;
+  },
+
+  // ── Wolverhampton: low draw favoured, tight left-handed AW ──
+  'wolverhampton': function(draw, n, dist) {
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.10;
+    if (pos <= 0.4)  return 1.04;
+    if (pos >= 0.8)  return 0.93;
+    if (pos >= 0.6)  return 0.97;
+    return 1.0;
+  },
+
+  // ── Epsom: camber favours low/middle draws in sprint ──
+  'epsom': function(draw, n, dist) {
+    if (dist > 9) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.8)  return 0.91; // high draws pushed into camber
+    if (pos >= 0.6)  return 0.96;
+    if (pos <= 0.3)  return 1.07;
+    return 1.0;
+  },
+
+  // ── Carlisle: high draw slightly favoured ──
+  'carlisle': function(draw, n, dist) {
+    if (n < 8) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.06;
+    if (pos <= 0.25) return 0.96;
+    return 1.0;
+  },
+
+  // ── Hamilton: low draw slightly favoured, sharp right-handed ──
+  'hamilton': function(draw, n, dist) {
+    if (dist > 9) return 1.0;
+    var pos = draw / n;
+    if (pos <= 0.25) return 1.07;
+    if (pos >= 0.75) return 0.95;
+    return 1.0;
+  },
+
+  // ── Sandown: straight course low draw favoured ──
+  'sandown': function(draw, n, dist) {
+    if (dist > 8) return 1.0;
+    var pos = draw / n;
+    if (pos <= 0.25) return 1.06;
+    if (pos >= 0.75) return 0.95;
+    return 1.0;
+  },
+
+  // ── Brighton: low draw favoured on tight track ──
+  'brighton': function(draw, n, dist) {
+    var pos = draw / n;
+    if (pos <= 0.25) return 1.08;
+    if (pos <= 0.4)  return 1.03;
+    if (pos >= 0.75) return 0.94;
+    return 1.0;
+  },
+
+  // ── Haydock: high draw favoured in sprints ──
+  'haydock': function(draw, n, dist) {
+    if (dist > 8 || n < 8) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.07;
+    if (pos <= 0.25) return 0.95;
+    return 1.0;
+  },
+
+  // ── Newbury: high draw favoured in large fields ──
+  'newbury': function(draw, n, dist) {
+    if (n < 10) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.06;
+    if (pos <= 0.25) return 0.96;
+    return 1.0;
+  },
+
+  // ── York: high draw favoured in large sprint fields ──
+  'york': function(draw, n, dist) {
+    if (dist > 8 || n < 10) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.08;
+    if (pos >= 0.55) return 1.03;
+    if (pos <= 0.25) return 0.94;
+    return 1.0;
+  },
+
+  // ── Lingfield AW: low draw favoured on Polytrack ──
+  'lingfield': function(draw, n, dist) {
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.08;
+    if (pos <= 0.4)  return 1.03;
+    if (pos >= 0.8)  return 0.94;
+    return 1.0;
+  },
+
+  // ── Kempton AW: low draw favoured ──
+  'kempton': function(draw, n, dist) {
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.07;
+    if (pos <= 0.4)  return 1.02;
+    if (pos >= 0.8)  return 0.95;
+    return 1.0;
+  },
+
+  // ── Southwell AW: low draw favoured on Fibresand ──
+  'southwell': function(draw, n, dist) {
+    var pos = draw / n;
+    if (pos <= 0.2)  return 1.09;
+    if (pos <= 0.4)  return 1.03;
+    if (pos >= 0.8)  return 0.93;
+    return 1.0;
+  },
+
+  // ── Doncaster: fairly straight, high draw slight edge in big fields ──
+  'doncaster': function(draw, n, dist) {
+    if (n < 12 || dist > 8) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.05;
+    if (pos <= 0.25) return 0.97;
+    return 1.0;
+  },
+
+  // ── Leicester: high draw favoured on straight course ──
+  'leicester': function(draw, n, dist) {
+    if (dist > 8) return 1.0;
+    var pos = draw / n;
+    if (pos >= 0.75) return 1.07;
+    if (pos <= 0.25) return 0.95;
+    return 1.0;
+  }
+};
+
+function getTrackDrawMult(course, draw, n, dist) {
+  if (!draw || draw <= 0 || !n || n < 4) return 1.0; // no draw data or tiny field
+  var c = (course || '').toLowerCase().replace(/\s*(racecourse|races|park|a\.w\.)\s*/gi,'').trim();
+  // Match partial names e.g. "wolverhampton (a.w.)" -> "wolverhampton"
+  var fn = null;
+  Object.keys(TRACK_DRAW_BIAS).forEach(function(k) {
+    if (c.indexOf(k) > -1 || k.indexOf(c) > -1) fn = TRACK_DRAW_BIAS[k];
+  });
+  if (!fn) return 1.0;
+  var mult = fn(draw, n, dist);
+  // Cap the adjustment: max ±20% to avoid over-correcting
+  return Math.min(Math.max(mult, 0.80), 1.20);
+}
+
 function rawScoreMdl(r, race, ctx) {
   var m  = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
@@ -1374,10 +1573,14 @@ function rawScoreMdl(r, race, ctx) {
     jockey:  Math.round((jkyMult - 1.0) * 100),
     trainer: Math.round((trnMult - 1.0) * 100),
     combo:   Math.round(cboBonus * 100),
-    pace:    0
+    pace:    0,
+    trackDraw: Math.round((trackDrawMult - 1.0) * 100)
   };
   r._mktProb = mktProbMdl;
-  r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus);
+  // Apply track-specific draw bias
+  var trackDrawMult = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
+  r._trackDrawMult  = trackDrawMult; // store for explanation display
+  r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult;
   return r._formScore;
 }
 
@@ -1881,6 +2084,8 @@ function showResults(scored, val, race, paceInfo) {
     if (sc.jockey > 0) explainParts.push('Jockey +' + sc.jockey + '%');
     if (sc.trainer > 0) explainParts.push('Trainer +' + sc.trainer + '%');
     if (sc.combo > 0) explainParts.push('Combo +' + sc.combo + '%');
+    if (sc.trackDraw && sc.trackDraw >= 3)  explainParts.push('Draw ▲ +' + sc.trackDraw + '%');
+    if (sc.trackDraw && sc.trackDraw <= -3) explainParts.push('Draw ▼ ' + sc.trackDraw + '%');
     if (r._pace === 'front' && r._mv === 'steam') explainParts.push('Steam + Front ↑↑');
     else if (r._mv === 'steam') explainParts.push('Steaming ↑');
     else if (r._mv === 'drift') explainParts.push('Drifting ↓');
