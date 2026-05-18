@@ -187,6 +187,28 @@ header .sub {
       <button class="btn btn-o" id="surfJumps" onclick="setSurface('jumps')" style="padding:8px 16px;flex:1">🏇 Jumps</button>
       <button class="btn btn-o" id="surfAll"   onclick="setSurface('all')"   style="padding:8px 16px;flex:1">📊 All Data</button>
     </div>
+
+    <!-- Date range filter -->
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Date Range:</div>
+      <input type="number" id="dateFrom" value="2020" min="2015" max="2026"
+        style="width:75px;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.8rem;padding:7px 10px;outline:none"
+        onchange="updateDateFilter()">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt)">to</span>
+      <input type="number" id="dateTo" value="2026" min="2015" max="2027"
+        style="width:75px;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.8rem;padding:7px 10px;outline:none"
+        onchange="updateDateFilter()">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--mt)">
+        — more recent = more relevant, fewer rows = faster training
+      </div>
+    </div>
+
+    <!-- UK/Ireland only toggle -->
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Origin:</div>
+      <button class="btn btn-g" id="originUK" onclick="setOrigin('uk')" style="padding:8px 16px;flex:1">🇬🇧 UK &amp; Ireland Only</button>
+      <button class="btn btn-o" id="originAll" onclick="setOrigin('all')" style="padding:8px 16px;flex:1">🌍 All Courses</button>
+    </div>
     <div class="alert alert-i" id="surfAlert">
       <strong>Turf mode:</strong> Loads all flat turf races (non-AW). Accepts all courses in the CSV — no horses are excluded by course name. Load raceform.csv or flat_turf_trainer.csv.
     </div>
@@ -403,6 +425,9 @@ var OPT_COLS = ['draw','sp','or','rpr','ts','age','wgt','ran','class','pattern',
 
 // ── Surface selection ─────────────────────────────────────────
 var currentSurface = 'turf'; // 'turf' or 'aw'
+var currentOrigin = 'uk';     // 'uk' = UK/Ireland only, 'all' = any course
+var dateFromYear  = 2020;
+var dateToYear    = 2026;
 
 var TURF_COURSES = {
   'ascot':1,'bath':1,'beverley':1,'brighton':1,'carlisle':1,'catterick':1,
@@ -426,6 +451,19 @@ var AW_COURSES = {
   'dundalk (aw)':1,
 };
 var AW_GOING_VALS = {'standard':1,'standard to slow':1,'standard to fast':1,'slow':1,'fast':1};
+
+function setOrigin(o) {
+  currentOrigin = o;
+  document.getElementById('originUK').className  = o === 'uk'  ? 'btn btn-g' : 'btn btn-o';
+  document.getElementById('originAll').className  = o === 'all' ? 'btn btn-g' : 'btn btn-o';
+}
+
+function updateDateFilter() {
+  var from = parseInt(document.getElementById('dateFrom').value) || 2015;
+  var to   = parseInt(document.getElementById('dateTo').value)   || 2026;
+  dateFromYear = Math.min(from, to);
+  dateToYear   = Math.max(from, to);
+}
 
 function setSurface(s) {
   currentSurface = s;
@@ -454,7 +492,22 @@ function setSurface(s) {
 var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1};
 
 function isValidRow(row) {
-  // All Data mode — no filtering at all
+  // ── Date filter ──────────────────────────────────────────
+  var rowDate = row.date || row.Date || '';
+  if (rowDate) {
+    var year = parseInt(String(rowDate).slice(0, 4));
+    if (year && (year < dateFromYear || year > dateToYear)) return false;
+  }
+
+  // ── Origin filter — UK/Ireland only ──────────────────────
+  if (currentOrigin === 'uk') {
+    var c = (row.course || '').toLowerCase();
+    // Reject if course has a foreign country suffix e.g. (usa) (aus) (ger) (fr) (hk) etc
+    if (/\((usa|aus|nz|ger|fr|jpn|hk|uae|ire outside|saf|chi|brz|arg|uru|per|qa|tur|swe|den|nor|bel|ita|spa|por|cze|hun|pol|ind|sin|mex|cad|jor|bah|kuw)\)/i.test(c)) return false;
+    // Note: (ire) is KEPT — Irish courses are valid
+  }
+
+  // All Data mode — no filtering at all beyond date/origin
   if (currentSurface === 'all') return true;
 
   var type   = (row.type   || '').toLowerCase().trim();
@@ -516,7 +569,52 @@ function parseCSVText(text) {
     });
     data.push(row);
   }
-  return data;
+  // Normalise common column name variations (Kaggle, Racing Post exports etc)
+  var COL_ALIASES = {
+    'horse_name':     'horse',
+    'horse name':     'horse',
+    'name':           'horse',
+    'runner':         'horse',
+    'position':       'pos',
+    'finish_pos':     'pos',
+    'fin_pos':        'pos',
+    'finishing_position': 'pos',
+    'jockey_name':    'jockey',
+    'jockey name':    'jockey',
+    'trainer_name':   'trainer',
+    'trainer name':   'trainer',
+    'distance':       'dist',
+    'race_distance':  'dist',
+    'racecourse':     'course',
+    'venue':          'course',
+    'track':          'course',
+    'race_date':      'date',
+    'racedate':       'date',
+    'race date':      'date',
+    'ground':         'going',
+    'official_rating': 'or',
+    'official rating': 'or',
+    'rating':          'or',
+    'rpr_rating':      'rpr',
+    'ts_rating':       'ts',
+    'stall':           'draw',
+    'draw_number':     'draw',
+    'starting_price':  'sp',
+    'price':           'sp',
+    'runners':         'ran',
+    'field_size':      'ran',
+    'weight':          'wgt',
+    'race_class':      'class',
+    'race class':      'class',
+  };
+  return data.map(function(row) {
+    var out = {};
+    Object.keys(row).forEach(function(k) {
+      var lk = k.toLowerCase().trim();
+      out[COL_ALIASES[lk] || lk] = row[k];
+    });
+    return out;
+  });
 }
 
 function loadFile(f) {
@@ -736,9 +834,8 @@ async function trainModel() {
     horseLastRun[h] = r.date;
 
     // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'' };
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
     HS[h].r++;
-    if (t && !HS[h].tr) HS[h].tr = t; // store trainer name (first seen)
     if (pos === 1)                     HS[h].w++;
     if (pos <= 3 && pos > 0)           HS[h].p++;
     if (pos === 1) {
@@ -941,7 +1038,7 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'' };
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw };
   });
 
   trainedModel = {
