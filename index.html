@@ -896,12 +896,15 @@ function parseATR(txt) {
     var runners = extractRunners(block);
     var tipM = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
     var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
-    // Detect surface from course name
+    // Detect surface from course name and race title
     var cName = h[3].trim().toLowerCase();
     var awCourses = ['southwell','wolverhampton','kempton','lingfield','chelmsford','newcastle','dundalk'];
     var isAWrace  = awCourses.some(function(c){ return cName.indexOf(c) > -1; })
                  || cName.indexOf('(a.w)') > -1 || cName.indexOf('(aw)') > -1;
-    var raceSurface = isAWrace ? 'aw' : 'turf';
+    var rTitle = (titleM ? titleM[1] : '').toLowerCase();
+    var jumpKeywords = ['hurdle','chase','bumper','national hunt','nh flat'];
+    var isJumpsRace = jumpKeywords.some(function(k){ return rTitle.indexOf(k) > -1; });
+    var raceSurface = isAWrace ? 'aw' : isJumpsRace ? 'jumps' : 'turf';
     races.push({ rnum: parseInt(h[1]), time: h[2], course: h[3].trim(), dist: h[4].trim(),
       surface: raceSurface,
       title: titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '',
@@ -2717,6 +2720,8 @@ function renderRaceList(races) {
     var tip = r.topTip ? '<div class="tbadge">Tip: '+r.topTip.substring(0,22)+'</div>' : '';
     var surfTag = (r.surface === 'aw')
       ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.2);margin-left:5px;vertical-align:middle">AW</span>'
+      : (r.surface === 'jumps')
+      ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.2);margin-left:5px;vertical-align:middle">Jumps</span>'
       : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,.08);color:var(--g);border:1px solid rgba(0,230,118,.15);margin-left:5px;vertical-align:middle">Turf</span>';
     d.innerHTML = '<div><div class="tm">'+r.time+'</div>'
       +'<div class="nm">'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
@@ -2734,12 +2739,15 @@ function selRace(i) {
   S.sel = raceList[i];
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
-  // Auto-set going based on the race surface (AW vs Turf)
+  // Auto-set going based on the race surface (AW vs Turf vs Jumps)
   var gsel = document.getElementById('gsel');
   var raceSurf = (S.sel && S.sel.surface) ? S.sel.surface : null;
   if (raceSurf === 'aw') {
     // AW race: always set to Standard unless user has manually set an AW going
     if (!S._goingChosenAW) gsel.value = 'Standard';
+  } else if (raceSurf === 'jumps') {
+    // Jumps race: default to Good to Soft unless user has manually chosen
+    if (!S._goingChosenJumps) gsel.value = 'Good to Soft';
   } else {
     // Turf race: set to Good unless user has manually set a turf going
     if (!S._goingChosenTurf) gsel.value = 'Good';
@@ -2754,6 +2762,11 @@ function selRace(i) {
       badge.style.background = 'rgba(64,196,255,.1)';
       badge.style.color = 'var(--bl)';
       badge.style.borderColor = 'rgba(64,196,255,.2)';
+    } else if (raceSurf === 'jumps') {
+      badge.textContent = 'Jumps';
+      badge.style.background = 'rgba(255,193,7,.1)';
+      badge.style.color = 'var(--gold)';
+      badge.style.borderColor = 'rgba(255,193,7,.2)';
     } else {
       badge.textContent = 'Turf';
       badge.style.background = 'rgba(0,230,118,.1)';
@@ -2922,6 +2935,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (gselEl) gselEl.addEventListener('change', function(){
     // Track which surface the user has manually set going for
     if (S._currentSurface === 'aw') S._goingChosenAW = true;
+    else if (S._currentSurface === 'jumps') S._goingChosenJumps = true;
     else S._goingChosenTurf = true;
   });
   var ppGoingEl = document.getElementById('pp-going');
