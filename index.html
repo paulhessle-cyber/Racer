@@ -1178,7 +1178,7 @@ function buildFieldCtx(runners) {
   var ors  = runners.map(function(r){ return r.or || 0; });
   var odds = runners.map(function(r){ return r.odds || 0; });
   var jwrs = runners.map(function(r){
-    var j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
+    var j = (r.jockey||'').toLowerCase().replace(/\s*\(\d+\)/,'');
     var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[j] : null;
     return js ? js.w / Math.max(js.r, 1) : 0.12;
   });
@@ -1891,8 +1891,8 @@ function rawScoreMdl(r, race, ctx) {
   var m  = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
   var hs = m.horseStats || {}, js = m.jockeyStats || {}, ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
-  var h  = r.name.toLowerCase(), j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
-  var t  = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
+  var h  = (r.name||'').toLowerCase(), j = (r.jockey||'').toLowerCase().replace(/\s*\(\d+\)/,'');
+  var t  = (r.trainer||'').toLowerCase(), c = (race.course||'').toLowerCase();
   var dist = parseDist(race.dist);
   var gs = gm[(r.going||'good').toLowerCase()] || 4;
   var H  = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
@@ -1948,9 +1948,13 @@ function rawScoreMdl(r, race, ctx) {
 
   var trnMult  = trainerMultiplier(r.trainer || t);
   var cboBonus = comboBonus(r.jockey, r.trainer || t);
-  // Store score components for explanation card
   var runnerIdx = ctx.odds.indexOf(r.odds);
   var mktProbMdl = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
+  // Apply track-specific draw bias
+  var trackDrawMult    = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
+  // Apply track profile (style vs track characteristics)
+  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
+  // Store score components for explanation card (after multipliers computed)
   r._scoreComponents = {
     market:  Math.round(mktProbMdl * 100),
     form:    Math.round(recentScore * 100),
@@ -1963,10 +1967,6 @@ function rawScoreMdl(r, race, ctx) {
     trackProfile: Math.round((trackProfileMult - 1.0) * 100)
   };
   r._mktProb = mktProbMdl;
-  // Apply track-specific draw bias
-  var trackDrawMult    = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
-  // Apply track profile (style vs track characteristics)
-  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
   r._trackDrawMult     = trackDrawMult;
   r._trackProfileMult  = trackProfileMult;
   r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult * trackProfileMult;
@@ -2016,6 +2016,27 @@ function rawScoreDef(r, race, ctx) {
 }
 
 function predict() {
+  try {
+    _predict();
+  } catch (err) {
+    var msg = 'Predict failed: ' + (err && err.message ? err.message : String(err));
+    var stack = (err && err.stack) ? String(err.stack).split('\n').slice(0,4).join(' | ') : '';
+    var box = document.getElementById('pres');
+    if (box) {
+      box.innerHTML = '<div style="background:rgba(255,82,82,.1);border:1px solid rgba(255,82,82,.4);border-radius:8px;padding:14px;color:#ff8a80;font-size:.78rem;line-height:1.5;font-family:\'IBM Plex Mono\',monospace;word-break:break-word">'
+        + '<div style="font-size:.85rem;font-weight:600;margin-bottom:8px">\u26a0 Predict error caught</div>'
+        + '<div style="margin-bottom:8px">' + msg + '</div>'
+        + (stack ? '<div style="font-size:.65rem;color:#bda;opacity:.7">' + stack + '</div>' : '')
+        + '</div>';
+      box.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      alert(msg);
+    }
+    console.error('predict() error:', err);
+  }
+}
+
+function _predict() {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
   var going = document.getElementById('gsel').value;
@@ -2576,7 +2597,7 @@ function showResults(scored, val, race, paceInfo) {
   h += '<div class="res-log-card" id="resLogCard">'
     + '<div class="res-log-title">📋 Log the Result</div>'
     + '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Enter actual positions. A &ldquo;place&rdquo; only counts on races with 5+ runners.</div>'
-    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:8px">' + (runners.length <= 4 ? '\U0001f3c7 ' + runners.length + ' runners — win only' : runners.length <= 7 ? '\U0001f3c7 ' + runners.length + ' runners — 2 places' : '\U0001f3c7 ' + runners.length + ' runners — 3 places') + '</div>'
+    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:8px">' + (runners.length <= 4 ? '🏇 ' + runners.length + ' runners — win only' : runners.length <= 7 ? '🏇 ' + runners.length + ' runners — 2 places' : '🏇 ' + runners.length + ' runners — 3 places') + '</div>'
     + '<div class="res-pos-row"><div class="res-pos-num p1">1st</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
     + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
     + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
