@@ -901,10 +901,17 @@ function parseATR(txt) {
     var awCourses = ['southwell','wolverhampton','kempton','lingfield','chelmsford','newcastle','dundalk'];
     var isAWrace  = awCourses.some(function(c){ return cName.indexOf(c) > -1; })
                  || cName.indexOf('(a.w)') > -1 || cName.indexOf('(aw)') > -1;
+    // UK/IRE National Hunt-only courses (no flat fixtures held here)
+    var jumpsOnlyCourses = ['huntingdon','plumpton','market rasen','fakenham','fontwell','hexham',
+                            'kelso','sedgefield','bangor','ludlow','wincanton','taunton','exeter',
+                            'newton abbot','towcester','hereford','cartmel','uttoxeter',
+                            'punchestown','fairyhouse','navan','thurles','clonmel','tramore',
+                            'gowran park','downpatrick','listowel','ballinrobe','sligo','wexford'];
+    var isJumpsCourse = jumpsOnlyCourses.some(function(c){ return cName.indexOf(c) > -1; });
     var rTitle = (titleM ? titleM[1] : '').toLowerCase();
-    var jumpKeywords = ['hurdle','chase','bumper','national hunt','nh flat'];
+    var jumpKeywords = ['hurdle','chase','bumper','national hunt','nh flat','mares\' standard','open hunters'];
     var isJumpsRace = jumpKeywords.some(function(k){ return rTitle.indexOf(k) > -1; });
-    var raceSurface = isAWrace ? 'aw' : isJumpsRace ? 'jumps' : 'turf';
+    var raceSurface = isAWrace ? 'aw' : (isJumpsRace || isJumpsCourse) ? 'jumps' : 'turf';
     races.push({ rnum: parseInt(h[1]), time: h[2], course: h[3].trim(), dist: h[4].trim(),
       surface: raceSurface,
       title: titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '',
@@ -2034,6 +2041,17 @@ function predict() {
     }
     console.error('predict() error:', err);
   }
+}
+
+// HTML-escape helper (used for safe attribute interpolation)
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function _predict() {
