@@ -371,7 +371,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div style="font-size:.7rem;color:var(--mt);margin-top:3px" id="rdst"></div>
       </div>
       <div style="flex-shrink:0">
-        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going <span id="going-course-label" style="text-transform:none;color:var(--mt);font-size:.56rem;letter-spacing:0"></span> <span id="surface-badge" style="font-size:.58rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.2);margin-left:4px"></span></div>
+        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going <span id="surface-badge" style="font-size:.58rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.2);margin-left:4px"></span></div>
         <select id="gsel">
           <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
           <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
@@ -543,13 +543,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
               <option>Standard To Fast</option><option>Slow</option>
             </select>
           </div>
-          <div style="flex:1;min-width:120px">
-            <div style="font-size:.58rem;color:var(--gold);margin-bottom:2px">🏇 Jumps</div>
-            <select id="l15-going-jumps" style="width:100%">
-              <option>Good to Firm</option><option>Good</option>
-              <option selected>Good to Soft</option><option>Soft</option><option>Heavy</option>
-            </select>
-          </div>
         </div>
         <!-- Stake / E/W controls -->
         <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
@@ -607,26 +600,15 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 <!-- SETUP -->
 <div class="scr" id="s-setup">
   <div class="card">
-    <div class="ct">Trained Models</div>
-    <div id="autoload-status" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:7px;background:rgba(64,196,255,.07);border:1px solid rgba(64,196,255,.2);font-size:.75rem;color:var(--bl)">
-        <div class="spin" style="width:14px;height:14px;border:2px solid rgba(64,196,255,.3);border-top-color:var(--bl);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0"></div>
-        Loading models from GitHub…
-      </div>
+    <div class="ct">Trained Model</div>
+    <p class="mu" style="margin-bottom:12px">Load <code style="color:var(--g)">racing_model.json</code> from the desktop Trainer app.</p>
+    <div class="drop">
+      <input type="file" id="mIn" accept=".json">
+      <span class="ico">🧠</span>
+      <strong>Tap to load racing_model.json</strong>
+      <p>Transfer via AirDrop, WhatsApp or email</p>
     </div>
-    <p class="mu" style="margin-bottom:8px">Models auto-load from your GitHub repo. To update a model, commit it to the <code style="color:var(--g)">models/</code> folder of <code style="color:var(--g)">paulhessle-cyber/Racer</code> as <code style="color:var(--g)">model_turf.json</code>, <code style="color:var(--g)">model_jumps.json</code>, or <code style="color:var(--g)">model_aw.json</code>.</p>
-    <details style="margin-bottom:10px">
-      <summary style="font-size:.72rem;color:var(--mt);cursor:pointer;user-select:none">▶ Load a model manually instead</summary>
-      <div style="margin-top:10px">
-        <div class="drop">
-          <input type="file" id="mIn" accept=".json">
-          <span class="ico">🧠</span>
-          <strong>Tap to load model .json</strong>
-          <p>Surface type is auto-detected (Turf / Jumps / AW)</p>
-        </div>
-      </div>
-    </details>
-    <div id="mst" style="margin-top:4px"></div>
+    <div id="mst" style="margin-top:10px"></div>
   </div>
   <div class="card" id="msc" style="display:none">
     <div class="ct">Model Stats</div>
@@ -760,7 +742,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <!-- Going -->
     <div class="h-sec">
       <div class="h-sec-hdr"><div class="h-sec-num">9</div><div class="h-sec-ttl">Setting the going</div></div>
-      <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website. Going can change between morning and race time. <strong>Going is remembered per meeting</strong>: if you set Soft at Huntingdon and Good at Newmarket, switching between races on either card will restore that meeting's setting. The course name appears next to the "Going" label so you know which meeting you're setting.</p>
+      <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website. Going can change between morning and race time. Your going selection is remembered between races and is not reset when you switch races.</p>
       <table class="h-going">
         <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
         <tbody>
@@ -811,74 +793,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 
 // ── State ──────────────────────────────────────────────────
-var S = {
-  model: null,           // back-compat: points to the surface-appropriate model
-  models: { jumps:null, turf:null, aw:null },  // per-surface model bank
-  races: [], meetings: [], currentRaces: [], sel: null,
-  goingByMeeting: {}     // course-keyed going overrides (e.g. {'huntingdon':'Soft'})
-};
-
-// Return the right model for a race's surface. Falls back to any loaded
-// model if the matching one isn't loaded, then to null.
-function getModelFor(race) {
-  if (!race) return S.model;
-  var surf = race.surface || 'turf';
-  var m = S.models && S.models[surf];
-  if (m) return m;
-  // Fallback: any loaded model is better than nothing
-  if (S.models) {
-    if (S.models.turf) return S.models.turf;
-    if (S.models.jumps) return S.models.jumps;
-    if (S.models.aw) return S.models.aw;
-  }
-  return S.model;
-}
-
-// Refresh S.model to point at the currently selected race's model.
-// Called whenever the selected race changes so legacy code that reads
-// S.model directly keeps working correctly.
-function refreshActiveModel() {
-  if (S.sel) S.model = getModelFor(S.sel);
-  else if (S.models) S.model = S.models.turf || S.models.jumps || S.models.aw || S.model;
-}
-
-// Score a runner with the model matching that race's surface.
-// Temporarily swaps S.model so rawScoreMdl uses the right weights/stats,
-// then restores. This keeps every existing scoring call correct even
-// when multiple meetings of different surfaces are scored in one loop
-// (Lucky 15, Monte Carlo, etc).
-function scoreFormForRace(r, race, ctx) {
-  var prev = S.model;
-  var m = getModelFor(race);
-  if (m) {
-    S.model = m;
-    var out = rawScoreMdl(r, race, ctx);
-    S.model = prev;
-    return out;
-  } else {
-    S.model = null;
-    var out2 = rawScoreDef(r, race, ctx);
-    S.model = prev;
-    return out2;
-  }
-}
-
-// Meeting key for per-meeting going storage. We use the course (lowercased)
-// as the key — a single user typically loads one meeting per course at a time.
-function meetingKey(race) {
-  return (race && race.course) ? race.course.toLowerCase().trim() : '';
-}
-
-function getMeetingGoing(race) {
-  var k = meetingKey(race);
-  if (!k) return null;
-  return S.goingByMeeting[k] || null;
-}
-
-function setMeetingGoing(race, going) {
-  var k = meetingKey(race);
-  if (k) S.goingByMeeting[k] = going;
-}
+var S = { model: null, races: [], meetings: [], currentRaces: [], sel: null };
 
 // ── Navigation ─────────────────────────────────────────────
 function go(n) {
@@ -981,22 +896,12 @@ function parseATR(txt) {
     var runners = extractRunners(block);
     var tipM = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
     var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
-    // Detect surface from course name and race title
+    // Detect surface from course name
     var cName = h[3].trim().toLowerCase();
     var awCourses = ['southwell','wolverhampton','kempton','lingfield','chelmsford','newcastle','dundalk'];
     var isAWrace  = awCourses.some(function(c){ return cName.indexOf(c) > -1; })
                  || cName.indexOf('(a.w)') > -1 || cName.indexOf('(aw)') > -1;
-    // UK/IRE National Hunt-only courses (no flat fixtures held here)
-    var jumpsOnlyCourses = ['huntingdon','plumpton','market rasen','fakenham','fontwell','hexham',
-                            'kelso','sedgefield','bangor','ludlow','wincanton','taunton','exeter',
-                            'newton abbot','towcester','hereford','cartmel','uttoxeter',
-                            'punchestown','fairyhouse','navan','thurles','clonmel','tramore',
-                            'gowran park','downpatrick','listowel','ballinrobe','sligo','wexford'];
-    var isJumpsCourse = jumpsOnlyCourses.some(function(c){ return cName.indexOf(c) > -1; });
-    var rTitle = (titleM ? titleM[1] : '').toLowerCase();
-    var jumpKeywords = ['hurdle','chase','bumper','national hunt','nh flat','mares\' standard','open hunters'];
-    var isJumpsRace = jumpKeywords.some(function(k){ return rTitle.indexOf(k) > -1; });
-    var raceSurface = isAWrace ? 'aw' : (isJumpsRace || isJumpsCourse) ? 'jumps' : 'turf';
+    var raceSurface = isAWrace ? 'aw' : 'turf';
     races.push({ rnum: parseInt(h[1]), time: h[2], course: h[3].trim(), dist: h[4].trim(),
       surface: raceSurface,
       title: titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '',
@@ -1270,7 +1175,7 @@ function buildFieldCtx(runners) {
   var ors  = runners.map(function(r){ return r.or || 0; });
   var odds = runners.map(function(r){ return r.odds || 0; });
   var jwrs = runners.map(function(r){
-    var j = (r.jockey||'').toLowerCase().replace(/\s*\(\d+\)/,'');
+    var j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
     var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[j] : null;
     return js ? js.w / Math.max(js.r, 1) : 0.12;
   });
@@ -1983,8 +1888,8 @@ function rawScoreMdl(r, race, ctx) {
   var m  = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
   var hs = m.horseStats || {}, js = m.jockeyStats || {}, ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
-  var h  = (r.name||'').toLowerCase(), j = (r.jockey||'').toLowerCase().replace(/\s*\(\d+\)/,'');
-  var t  = (r.trainer||'').toLowerCase(), c = (race.course||'').toLowerCase();
+  var h  = r.name.toLowerCase(), j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
+  var t  = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
   var dist = parseDist(race.dist);
   var gs = gm[(r.going||'good').toLowerCase()] || 4;
   var H  = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
@@ -2040,13 +1945,9 @@ function rawScoreMdl(r, race, ctx) {
 
   var trnMult  = trainerMultiplier(r.trainer || t);
   var cboBonus = comboBonus(r.jockey, r.trainer || t);
+  // Store score components for explanation card
   var runnerIdx = ctx.odds.indexOf(r.odds);
   var mktProbMdl = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
-  // Apply track-specific draw bias
-  var trackDrawMult    = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
-  // Apply track profile (style vs track characteristics)
-  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
-  // Store score components for explanation card (after multipliers computed)
   r._scoreComponents = {
     market:  Math.round(mktProbMdl * 100),
     form:    Math.round(recentScore * 100),
@@ -2059,6 +1960,10 @@ function rawScoreMdl(r, race, ctx) {
     trackProfile: Math.round((trackProfileMult - 1.0) * 100)
   };
   r._mktProb = mktProbMdl;
+  // Apply track-specific draw bias
+  var trackDrawMult    = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
+  // Apply track profile (style vs track characteristics)
+  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
   r._trackDrawMult     = trackDrawMult;
   r._trackProfileMult  = trackProfileMult;
   r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult * trackProfileMult;
@@ -2108,45 +2013,9 @@ function rawScoreDef(r, race, ctx) {
 }
 
 function predict() {
-  try {
-    _predict();
-  } catch (err) {
-    var msg = 'Predict failed: ' + (err && err.message ? err.message : String(err));
-    var stack = (err && err.stack) ? String(err.stack).split('\n').slice(0,4).join(' | ') : '';
-    var box = document.getElementById('pres');
-    if (box) {
-      box.innerHTML = '<div style="background:rgba(255,82,82,.1);border:1px solid rgba(255,82,82,.4);border-radius:8px;padding:14px;color:#ff8a80;font-size:.78rem;line-height:1.5;font-family:\'IBM Plex Mono\',monospace;word-break:break-word">'
-        + '<div style="font-size:.85rem;font-weight:600;margin-bottom:8px">\u26a0 Predict error caught</div>'
-        + '<div style="margin-bottom:8px">' + msg + '</div>'
-        + (stack ? '<div style="font-size:.65rem;color:#bda;opacity:.7">' + stack + '</div>' : '')
-        + '</div>';
-      box.scrollIntoView({ behavior: 'smooth' });
-    } else {
-      alert(msg);
-    }
-    console.error('predict() error:', err);
-  }
-}
-
-// HTML-escape helper (used for safe attribute interpolation)
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function _predict() {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
-  // Ensure S.model points to the surface-appropriate model for this race
-  refreshActiveModel();
   var going = document.getElementById('gsel').value;
-  // Persist the chosen going for this meeting so other races on the same card use it
-  setMeetingGoing(race, going);
 
   var activeRunners = race.runners.filter(function(r) {
     var card = document.getElementById('nr_' + r.stall);
@@ -2173,7 +2042,7 @@ function _predict() {
 
   // Step 1: compute form scores and store market probs on each runner
   var formArr = activeRunners.map(function(r) {
-    var fs = scoreFormForRace(r, race, ctx);
+    var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
     return fs * paceAdjust(r, paceInfo);
   });
 
@@ -2462,7 +2331,7 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
   var dutchSource = (typeof scored !== 'undefined') ? scored : (S._lastScored || []);
   var dutchCandidates = dutchSource
     .filter(function(r){ return r.odds > 1.5 && r.score > 0.08; })
-    .slice(0, 3);
+    .slice(0, 5); // top 5 gives more chance of matching a known UK/IRE course
   var dutchHtml = dutchCandidates.length >= 2 ? dutchHTML(
     dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }),
     stake
@@ -2704,7 +2573,7 @@ function showResults(scored, val, race, paceInfo) {
   h += '<div class="res-log-card" id="resLogCard">'
     + '<div class="res-log-title">📋 Log the Result</div>'
     + '<div style="font-size:.72rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Enter actual positions. A &ldquo;place&rdquo; only counts on races with 5+ runners.</div>'
-    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:8px">' + (runners.length <= 4 ? '🏇 ' + runners.length + ' runners — win only' : runners.length <= 7 ? '🏇 ' + runners.length + ' runners — 2 places' : '🏇 ' + runners.length + ' runners — 3 places') + '</div>'
+    + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:8px">' + (runners.length <= 4 ? '\U0001f3c7 ' + runners.length + ' runners — win only' : runners.length <= 7 ? '\U0001f3c7 ' + runners.length + ' runners — 2 places' : '\U0001f3c7 ' + runners.length + ' runners — 3 places') + '</div>'
     + '<div class="res-pos-row"><div class="res-pos-num p1">1st</div><select class="res-pos-sel" id="res1">'+options+'</select></div>'
     + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
     + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
@@ -2814,16 +2683,14 @@ function updateSetupHint(races) {
     surface = 'turf'; surfaceCol = 'var(--g)'; surfaceLabel = 'Flat Turf';
   }
 
-  // Check the model bank for this surface
-  var modelForSurface = S.models && S.models[surface];
-  var anyModelLoaded = S.models && (S.models.jumps || S.models.turf || S.models.aw);
+  var modelMatch = S.model && S.model.surface === surface;
+  var modelMismatch = S.model && S.model.surface !== surface;
   var statusHtml;
-  if (modelForSurface) {
-    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.3);font-size:.78rem;color:#9ef5c0">✓ ' + surfaceLabel + ' model loaded — ready to predict.</div>';
-  } else if (anyModelLoaded) {
+  if (modelMatch) {
+    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.3);font-size:.78rem;color:#9ef5c0">✓ Loaded model matches this card — you\'re good to go.</div>';
+  } else if (modelMismatch) {
     var needed = surface === 'aw' ? 'All-Weather' : surface === 'jumps' ? 'Jumps' : 'Flat Turf';
-    var loadedLbl = ['jumps','turf','aw'].filter(function(k){ return S.models[k]; }).map(modelSurfaceLabel).join(' + ');
-    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);font-size:.78rem;color:#ffe082">⚠ You have a <strong>' + loadedLbl + '</strong> model loaded, but this card needs a <strong>' + needed + '</strong> model. It will still predict using the closest model, but accuracy will be lower.</div>';
+    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);font-size:.78rem;color:#ffe082">⚠ Loaded model is <strong>' + S.model.surface.toUpperCase() + '</strong> but this card needs a <strong>' + needed + '</strong> model. Retrain on ' + needed + ' data for best results.</div>';
   } else {
     statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(64,196,255,.08);border:1px solid rgba(64,196,255,.3);font-size:.78rem;color:#80d8ff">💡 No model loaded. For this card, train on <strong>' + surfaceLabel + '</strong> data in the Trainer app.</div>';
   }
@@ -2850,8 +2717,6 @@ function renderRaceList(races) {
     var tip = r.topTip ? '<div class="tbadge">Tip: '+r.topTip.substring(0,22)+'</div>' : '';
     var surfTag = (r.surface === 'aw')
       ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.2);margin-left:5px;vertical-align:middle">AW</span>'
-      : (r.surface === 'jumps')
-      ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.2);margin-left:5px;vertical-align:middle">Jumps</span>'
       : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,.08);color:var(--g);border:1px solid rgba(0,230,118,.15);margin-left:5px;vertical-align:middle">Turf</span>';
     d.innerHTML = '<div><div class="tm">'+r.time+'</div>'
       +'<div class="nm">'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
@@ -2867,28 +2732,20 @@ function selRace(i) {
   var el = document.getElementById('ri_'+i); if (el) el.classList.add('sel');
   var raceList = S.currentRaces || S.races;
   S.sel = raceList[i];
-  // Switch to the surface-matching model for this race
-  refreshActiveModel();
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
-  // Set going from per-meeting memory first, then surface default
+  // Auto-set going based on the race surface (AW vs Turf)
   var gsel = document.getElementById('gsel');
   var raceSurf = (S.sel && S.sel.surface) ? S.sel.surface : null;
-  var savedGoing = getMeetingGoing(S.sel);
-  if (savedGoing) {
-    // This meeting already has a going set — use it
-    gsel.value = savedGoing;
-  } else if (raceSurf === 'aw') {
-    gsel.value = 'Standard';
-  } else if (raceSurf === 'jumps') {
-    gsel.value = 'Good to Soft';
+  if (raceSurf === 'aw') {
+    // AW race: always set to Standard unless user has manually set an AW going
+    if (!S._goingChosenAW) gsel.value = 'Standard';
   } else {
-    gsel.value = 'Good';
+    // Turf race: set to Good unless user has manually set a turf going
+    if (!S._goingChosenTurf) gsel.value = 'Good';
   }
+  // Track which surface's going has been user-chosen
   S._currentSurface = raceSurf;
-  // Show course name next to "Going" so user knows it persists per-meeting
-  var gcLbl = document.getElementById('going-course-label');
-  if (gcLbl) gcLbl.textContent = S.sel && S.sel.course ? '· ' + S.sel.course : '';
   // Update surface badge
   var badge = document.getElementById('surface-badge');
   if (badge) {
@@ -2897,11 +2754,6 @@ function selRace(i) {
       badge.style.background = 'rgba(64,196,255,.1)';
       badge.style.color = 'var(--bl)';
       badge.style.borderColor = 'rgba(64,196,255,.2)';
-    } else if (raceSurf === 'jumps') {
-      badge.textContent = 'Jumps';
-      badge.style.background = 'rgba(255,193,7,.1)';
-      badge.style.color = 'var(--gold)';
-      badge.style.borderColor = 'rgba(255,193,7,.2)';
     } else {
       badge.textContent = 'Turf';
       badge.style.background = 'rgba(0,230,118,.1)';
@@ -3053,86 +2905,12 @@ function toggleMV(stall) {
 
 // ── Model loading ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-
-  // ── Auto-fetch models from /models/ on same origin ─────────────
-  // Tries to load all three surface models silently on startup.
-  // If a file isn't found yet, shows a gentle 're-link' fallback.
-  var MODEL_URLS = {
-    turf:  'https://paulhessle-cyber.github.io/Racer/models/model_turf.json',
-    jumps: 'https://paulhessle-cyber.github.io/Racer/models/model_jumps.json',
-    aw:    'https://paulhessle-cyber.github.io/Racer/models/model_aw.json'
-  };
-
-  function slotFetchedModel(m) {
-    var surf = (m.surface || 'turf').toLowerCase();
-    if (surf !== 'jumps' && surf !== 'turf' && surf !== 'aw') surf = 'turf';
-    S.models[surf] = m;
-    S.model = m;
-    onModelLoaded(m);
-  }
-
-  function showAutoFetchStatus(results) {
-    // Hide the loading spinner
-    var als = document.getElementById('autoload-status');
-    if (als) als.style.display = 'none';
-    // results: [{surf, ok, err}]
-    var loaded = results.filter(function(r){ return r.ok; });
-    var failed = results.filter(function(r){ return !r.ok; });
-    // If all loaded silently, nothing to show — onModelLoaded already updated UI
-    if (!failed.length) return;
-    // Show a compact notice for any that failed
-    var notice = failed.map(function(r){
-      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;'
-        + 'background:rgba(255,193,7,.07);border:1px solid rgba(255,193,7,.25);margin-bottom:4px">'
-        + '<span style="font-size:.72rem;color:var(--gold);flex:1">'
-        + modelSurfaceLabel(r.surf).toUpperCase() + ' model not found at <code style="font-size:.65rem">'
-        + MODEL_URLS[r.surf] + '</code> — commit it to the Racer repo to enable auto-loading.</span>'
-        + '</div>';
-    }).join('');
-    var box = document.getElementById('mst');
-    if (box) box.innerHTML = (box.innerHTML||'') + '<div style="margin-top:8px">' + notice + '</div>';
-  }
-
-  // Fetch all three models in parallel
-  var fetchResults = [];
-  var surfaces = ['turf','jumps','aw'];
-  var pending = surfaces.length;
-
-  function oneFetchDone(surf, ok, err) {
-    fetchResults.push({surf:surf, ok:ok, err:err});
-    pending--;
-    if (pending === 0) showAutoFetchStatus(fetchResults);
-  }
-
-  surfaces.forEach(function(surf) {
-    fetch(MODEL_URLS[surf])
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(m) {
-        slotFetchedModel(m);
-        oneFetchDone(surf, true, null);
-      })
-      .catch(function(err) {
-        oneFetchDone(surf, false, err);
-      });
-  });
-
   var mInEl = document.getElementById('mIn');
   if (mInEl) mInEl.addEventListener('change', function(e) {
     var f = e.target.files[0]; if (!f) return;
     var reader = new FileReader();
     reader.onload = function(ev) {
-      try {
-        var m = JSON.parse(ev.target.result);
-        // Slot the model into the bank based on its surface
-        var surf = (m.surface || 'turf').toLowerCase();
-        if (surf !== 'jumps' && surf !== 'turf' && surf !== 'aw') surf = 'turf';
-        S.models[surf] = m;
-        S.model = m; // legacy alias points to most recently loaded
-        onModelLoaded(m);
-      }
+      try { var m = JSON.parse(ev.target.result); S.model = m; onModelLoaded(m); }
       catch(err) { document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: '+err.message+'</div>'; }
     };
     reader.readAsText(f);
@@ -3142,9 +2920,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Track when user manually changes going so we don't override their choice
   var gselEl = document.getElementById('gsel');
   if (gselEl) gselEl.addEventListener('change', function(){
-    // Persist the chosen going on the current meeting so other races
-    // in the same meeting use it. Each course is tracked independently.
-    if (S.sel) setMeetingGoing(S.sel, gselEl.value);
+    // Track which surface the user has manually set going for
+    if (S._currentSurface === 'aw') S._goingChosenAW = true;
+    else S._goingChosenTurf = true;
   });
   var ppGoingEl = document.getElementById('pp-going');
   if (ppGoingEl) ppGoingEl.addEventListener('change', function(){ S._ppGoingChosen = true; });
@@ -3156,88 +2934,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-function modelSurfaceLabel(s) {
-  return s==='aw'?'AW':s==='jumps'?'Jumps':'Turf';
-}
-
-// Count loaded models and produce the header pill text
-function updateModelPill() {
-  var slots = ['jumps','turf','aw'];
-  var loaded = slots.filter(function(k){ return S.models && S.models[k]; });
-  var pill = document.getElementById('mpill');
-  if (!pill) return;
-  if (loaded.length === 0) {
-    pill.textContent = 'NO MODEL';
-    pill.className = 'mpill';
-  } else if (loaded.length === 1) {
-    var m = S.models[loaded[0]];
-    pill.textContent = modelSurfaceLabel(loaded[0]).toUpperCase() + ' MODEL ✓ ' + Math.round(m.winAccuracy*100) + '%';
-    pill.className = 'mpill ok';
-  } else {
-    var labels = loaded.map(function(k){ return modelSurfaceLabel(k).toUpperCase(); }).join('+');
-    pill.textContent = labels + ' MODELS ✓';
-    pill.className = 'mpill ok';
-  }
-}
-
-// Render a compact status row for each loaded model in the Setup tab
-function renderLoadedModels() {
-  var box = document.getElementById('mst');
-  if (!box) return;
-  var slots = ['jumps','turf','aw'];
-  var any = slots.some(function(k){ return S.models && S.models[k]; });
-  if (!any) { box.innerHTML = ''; return; }
-  var html = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">';
-  slots.forEach(function(k){
-    var m = S.models[k];
-    if (!m) return;
-    var lbl = modelSurfaceLabel(k);
-    var col = k==='jumps'?'var(--gold)':k==='aw'?'var(--bl)':'var(--g)';
-    var bg  = k==='jumps'?'rgba(255,193,7,.08)':k==='aw'?'rgba(64,196,255,.08)':'rgba(0,230,118,.08)';
-    var bd  = k==='jumps'?'rgba(255,193,7,.3)':k==='aw'?'rgba(64,196,255,.3)':'rgba(0,230,118,.3)';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:7px;background:'+bg+';border:1px solid '+bd+';font-size:.78rem">'
-         + '<div><span style="color:'+col+';font-weight:600;letter-spacing:1px">'+lbl.toUpperCase()+'</span> '
-         + '<span style="color:var(--mt);margin-left:6px">'+(m.trainingRecords||0).toLocaleString()+' rec · '+(m.winAccuracy*100).toFixed(1)+'%</span></div>'
-         + '<button onclick="unloadModel(\''+k+'\')" style="background:transparent;border:1px solid var(--bd);color:var(--mt);font-size:.62rem;padding:3px 8px;border-radius:4px;cursor:pointer">Unload</button>'
-         + '</div>';
-  });
-  // Hint about loading additional surfaces
-  var missing = slots.filter(function(k){ return !S.models[k]; });
-  if (missing.length) {
-    html += '<div style="font-size:.66rem;color:var(--mt);margin-top:4px;line-height:1.4">💡 You can load additional surface models (' + missing.map(modelSurfaceLabel).join(', ') + ') above. Each race auto-uses its matching model.</div>';
-  }
-  html += '</div>';
-  box.innerHTML = html;
-}
-
-function unloadModel(surf) {
-  if (!S.models || !S.models[surf]) return;
-  S.models[surf] = null;
-  // Refresh S.model alias to whatever's left, or null
-  refreshActiveModel();
-  if (!S.models.jumps && !S.models.turf && !S.models.aw) {
-    S.model = null;
-    document.getElementById('msc').style.display = 'none';
-    document.getElementById('nmc').style.display = 'block';
-    document.getElementById('fw').innerHTML = '';
-  }
-  updateModelPill();
-  renderLoadedModels();
-  // Refresh the status hint on the predict screen if a race is showing
-  if (S.currentRaces && S.currentRaces.length) {
-    updateSetupHint(S.currentRaces);
-  }
-}
-
 function onModelLoaded(m) {
-  updateModelPill();
-  renderLoadedModels();
-  // Reset the file input so the same file (or another) can be loaded again
-  var mIn = document.getElementById('mIn');
-  if (mIn) mIn.value = '';
+  var surf = m.surface==='aw'?'AW':m.surface==='jumps'?'JUMPS':'TURF';
+  document.getElementById('mpill').textContent = surf+' MODEL ✓ '+Math.round(m.winAccuracy*100)+'%';
+  document.getElementById('mpill').className = 'mpill ok';
+  document.getElementById('mst').innerHTML = '<div class="al als">✓ '+surf+' model loaded: '
+    +(m.trainingRecords||'?').toLocaleString()+' records · Win '+(m.winAccuracy*100).toFixed(1)
+    +'% · Place '+(m.placeAccuracy*100).toFixed(1)+'%</div>';
+  if (m.surface==='aw' && !S._goingChosen) document.getElementById('gsel').value='Standard';
   document.getElementById('nmc').style.display = 'none';
   document.getElementById('msc').style.display = 'block';
-  // Show stats for the most-recently-loaded model
   document.getElementById('msg').innerHTML =
     sb((m.trainingRecords||0).toLocaleString(),'Records') +
     sb(Math.round(m.winAccuracy*100)+'%','Win Acc') +
@@ -3248,15 +2954,13 @@ function onModelLoaded(m) {
     pairs.sort(function(a,b){ return b[1]-a[1]; });
     var mx = pairs[0][1];
     var fw = '<div style="height:1px;background:var(--bd);margin:12px 0"></div>'
-      +'<div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">Feature Weights ('+modelSurfaceLabel(m.surface||'turf')+')</div>';
+      +'<div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:10px">Feature Weights</div>';
     pairs.forEach(function(p){
       fw += '<div class="fwr"><div class="fwl"><span>'+p[0]+'</span><span>'+(p[1]*100).toFixed(1)+'%</span></div>'
         +'<div class="fwb"><div class="fwf" style="width:'+Math.round(p[1]/mx*100)+'%"></div></div></div>';
     });
     document.getElementById('fw').innerHTML = fw;
   }
-  // Refresh hint on Setup tab if a card is loaded
-  if (S.currentRaces && S.currentRaces.length) updateSetupHint(S.currentRaces);
   initAC();
 }
 function sb(v,l){ return '<div class="sb"><div class="sv">'+v+'</div><div class="sl">'+l+'</div></div>'; }
@@ -3550,7 +3254,8 @@ function showPlacepotTab() {
 
 function scoreRunnerForPP(r, race, going, ctx) {
   var rr = Object.assign({}, r, { going: going });
-  return scoreFormForRace(rr, race, ctx);
+  var raw = S.model ? rawScoreMdl(rr, race, ctx) : rawScoreDef(rr, race, ctx);
+  return raw;
 }
 
 function runPlacepot() {
@@ -4035,14 +3740,8 @@ function runL15(strategy) {
   if (!meetings || !meetings.length) return;
   var l15TurfGoing = (document.getElementById('l15-going-turf')||{}).value || 'Good';
   var l15AWGoing   = (document.getElementById('l15-going-aw')||{}).value   || 'Standard';
-  var l15JumpsGoing = (document.getElementById('l15-going-jumps')||{}).value || 'Good to Soft';
   function getL15Going(race) {
-    // Prefer the per-meeting going if the user has set one for this course
-    var meetingGoing = getMeetingGoing(race);
-    if (meetingGoing) return meetingGoing;
-    if (race.surface === 'aw') return l15AWGoing;
-    if (race.surface === 'jumps') return l15JumpsGoing;
-    return l15TurfGoing;
+    return (race.surface === 'aw') ? l15AWGoing : l15TurfGoing;
   }
   var resEl   = document.getElementById('l15-results');
   resEl.innerHTML = '<div class="prog" style="margin:12px 0"><div class="spin"></div><p style="font-size:.8rem;color:var(--mt)">Scoring all horses and finding best combinations…</p></div>';
@@ -4059,7 +3758,8 @@ function runL15(strategy) {
         var paceInfo = assessPace(active);
         var l15Going = getL15Going(race);
         var formArr  = active.map(function(r) {
-          var raw = scoreFormForRace(Object.assign({},r,{going:l15Going}), race, ctx);
+          var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:l15Going}),race,ctx)
+                            : rawScoreDef(Object.assign({},r,{going:l15Going}),race,ctx);
           return raw * paceAdjust(r, paceInfo);
         });
         var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
@@ -4535,7 +4235,8 @@ function runMonteCarloPlacepot(ppRaces, going, nSims) {
     var ctx = buildFieldCtx(active);
     var paceInfo = assessPace(active);
     var formArr = active.map(function(r){
-      var raw = scoreFormForRace(Object.assign({},r,{going:going}), race, ctx);
+      var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:going}),race,ctx)
+                        : rawScoreDef(Object.assign({},r,{going:going}),race,ctx);
       return raw * paceAdjust(r, paceInfo);
     });
     var ft = formArr.reduce(function(a,b){return a+b;},0)||1;
@@ -4856,7 +4557,6 @@ function saveRaceResult(raceKey) {
 
 // Known course locations (lat/lng) for distance calculation
 var COURSE_COORDS = {
-  // UK Flat & Dual-purpose
   'newmarket': [52.245, 0.407], 'ascot': [51.408, -0.683],
   'goodwood': [50.900, -0.753], 'epsom': [51.330, -0.268],
   'sandown': [51.366, -0.349], 'kempton': [51.412, -0.368],
@@ -4884,55 +4584,21 @@ var COURSE_COORDS = {
   'market rasen': [53.384, -0.336], 'huntingdon': [52.344, -0.192],
   'fakenham': [52.831, 0.847], 'sedgefield': [54.660, -1.557],
   'hexham': [54.974, -2.098], 'kelso': [55.600, -2.437],
-  // Additional UK courses previously missing
-  'aintree': [53.476, -2.945], 'cartmel': [54.205, -2.951],
-  'fontwell': [50.857, -0.661], 'ludlow': [52.367, -2.717],
-  'newton abbot': [50.529, -3.610], 'towcester': [52.140, -1.022],
-  'wetherby': [53.927, -1.388], 'lingfield park': [51.175, -0.006],
-  'galway': [53.272, -9.022],
-  // Ireland (Flat and NH)
-  'curragh': [53.144, -6.835], 'the curragh': [53.144, -6.835],
-  'leopardstown': [53.260, -6.198], 'punchestown': [53.196, -6.665],
-  'fairyhouse': [53.469, -6.499], 'navan': [53.660, -6.682],
-  'naas': [53.218, -6.677], 'cork': [51.881, -8.539],
-  'limerick': [52.524, -8.694], 'tipperary': [52.488, -8.115],
-  'thurles': [52.682, -7.811], 'clonmel': [52.359, -7.700],
-  'gowran park': [52.621, -7.069], 'gowran': [52.621, -7.069],
-  'roscommon': [53.620, -8.205], 'sligo': [54.272, -8.473],
-  'wexford': [52.342, -6.482], 'ballinrobe': [53.612, -9.158],
-  'tramore': [52.171, -7.135], 'killarney': [52.052, -9.512],
-  'listowel': [52.443, -9.484], 'down royal': [54.480, -6.180],
-  'downpatrick': [54.330, -5.713], 'dundalk': [54.000, -6.395],
-  'bellewstown': [53.667, -6.341], 'laytown': [53.683, -6.244],
-  'kilbeggan': [53.378, -7.500]
+  // Irish courses — needed for trainerCourses home lookups
+  'leopardstown': [53.289, -6.218], 'curragh': [53.153, -6.814],
+  'navan': [53.653, -6.699], 'galway': [53.270, -9.029],
+  'tipperary': [52.478, -8.157], 'naas': [53.214, -6.670],
+  'cork': [51.930, -8.490], 'limerick': [52.638, -8.643],
+  'fairyhouse': [53.565, -6.418], 'gowran park': [52.643, -7.073],
+  'punchestown': [53.148, -6.714], 'dundalk': [54.001, -6.408],
+  'sligo': [54.269, -8.476], 'roscommon': [53.628, -8.190],
+  'tramore': [52.159, -7.148], 'killarney': [52.059, -9.502],
+  'listowel': [52.452, -9.481], 'ballinrobe': [53.627, -9.221],
+  'bellewstown': [53.727, -6.428], 'clonmel': [52.355, -7.699],
+  'down royal': [54.478, -6.038], 'downpatrick': [54.323, -5.702],
+  'laytown': [53.685, -6.228], 'thurles': [52.679, -7.804],
+  'wexford': [52.339, -6.457],
 };
-
-// Normalise a course string so we can match it to COURSE_COORDS keys.
-// Handles things like:
-//   'newmarket (rowley)'      -> 'newmarket'
-//   'newmarket (july)'        -> 'newmarket'
-//   'catterick bridge'        -> 'catterick'
-//   'newcastle (a.w)'         -> 'newcastle'
-//   'lingfield park'          -> 'lingfield'
-//   'the curragh'             -> 'curragh'
-function normaliseCourseKey(name) {
-  if (!name) return '';
-  var s = String(name).toLowerCase()
-    .replace(/\s*\([^)]+\)/g, '')       // strip (Rowley), (July), (A.W.) etc
-    .replace(/\bracecourse\b/g, '')
-    .replace(/\bpark\b/g, '')
-    .replace(/\bbridge\b/g, '')         // catterick bridge -> catterick
-    .replace(/^the\s+/, '')              // the curragh -> curragh
-    .replace(/\s+/g, ' ')
-    .trim();
-  // Exact hit first
-  if (COURSE_COORDS[s]) return s;
-  // Try prefix/contains for compound names
-  for (var k in COURSE_COORDS) {
-    if (s === k || s.indexOf(k) === 0 || k.indexOf(s) === 0) return k;
-  }
-  return s;
-}
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   var R = 6371;
@@ -4964,27 +4630,41 @@ function checkLongTravel(trainerName, raceCourse) {
   var homes = getTrainerHomeCourses(trainerName);
   if (!homes || !homes.length) return null;
 
-  var raceKey = normaliseCourseKey(raceCourse);
-  var raceCoords = COURSE_COORDS[raceKey];
+  var raceKey = raceCourse.toLowerCase()
+    .replace(/\s*\([^)]+\)/g,'') // remove (A.W.) etc
+    .replace(/park|racecourse/g,'')
+    .trim();
+
+  // Find race course coords
+  var raceCoords = null;
+  for (var k in COURSE_COORDS) {
+    if (raceKey.indexOf(k) > -1 || k.indexOf(raceKey) > -1) {
+      raceCoords = COURSE_COORDS[k]; break;
+    }
+  }
   if (!raceCoords) return null;
 
-  // Find closest home course (normalising each home key the same way)
-  var minDist = 9999, closestHome = null, isHomeCourse = false;
+  // Find closest home course — ONLY use courses we have coordinates for
+  // This filters out international trainers (NZ, AUS, USA) whose home
+  // courses aren't in COURSE_COORDS, preventing false 9999mi alerts
+  var minDist = 9999, closestHome = null;
   homes.forEach(function(h) {
-    var homeKey = normaliseCourseKey(h.course);
-    if (homeKey === raceKey) { isHomeCourse = true; return; }
-    var hCoords = COURSE_COORDS[homeKey];
-    if (!hCoords) return;
+    var hCoords = COURSE_COORDS[h.course];
+    if (!hCoords) return; // skip courses we don't know about
     var dist = kmToMiles(haversineKm(raceCoords[0], raceCoords[1], hCoords[0], hCoords[1]));
-    if (dist < minDist) {
-      minDist = dist;
-      closestHome = { course: homeKey, runs: h.runs };
-    }
+    if (dist < minDist) { minDist = dist; closestHome = h; }
   });
 
-  if (isHomeCourse || !closestHome) return null;
-  // Flag if more than 100 miles from nearest home course
-  if (minDist >= 100) {
+  // Must have found a known home course AND distance must be realistic
+  // Cap at 500 miles — beyond that it's likely a data issue not a real trip
+  if (!closestHome || minDist > 500) return null;
+
+  // Flag if more than 100 miles from nearest home course AND
+  // the race course is not already one of their home courses
+  var isHomeCourse = homes.some(function(h){
+    return COURSE_COORDS[h.course] && (h.course === raceKey || raceKey.indexOf(h.course) > -1);
+  });
+  if (!isHomeCourse && minDist >= 100) {
     return {
       miles: Math.round(minDist),
       homeCourse: closestHome.course,
