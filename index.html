@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.6 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.7 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2842,6 +2842,7 @@ function selRace(i) {
   var el = document.getElementById('ri_'+i); if (el) el.classList.add('sel');
   var raceList = S.currentRaces || S.races;
   S.sel = raceList[i];
+  if (typeof updateModelPill === 'function') updateModelPill();
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
   // Auto-set going based on the race surface (AW vs Turf)
