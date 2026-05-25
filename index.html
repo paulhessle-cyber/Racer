@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.4 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.5 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -797,7 +797,23 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 
 // ── State ──────────────────────────────────────────────────
-var S = { model: null, races: [], meetings: [], currentRaces: [], sel: null };
+var S = {
+  model:      null,  // active model (set per-race based on surface)
+  modelTurf:  null,
+  modelAW:    null,
+  modelJumps: null,
+  races: [], meetings: [], currentRaces: [], sel: null
+};
+
+// Get the right model for a given race surface
+function getModelForRace(race) {
+  if (!race) return S.modelTurf || S.model;
+  var surf = (race.surface || 'turf').toLowerCase();
+  if (surf === 'aw' || surf === 'allweather') return S.modelAW || S.modelTurf || S.model;
+  if (surf === 'jumps' || surf === 'jump' || surf === 'nh' || surf === 'national hunt') return S.modelJumps || S.modelTurf || S.model;
+  return S.modelTurf || S.model;
+}
+
 
 // ── Navigation ─────────────────────────────────────────────
 function go(n) {
@@ -2074,6 +2090,10 @@ function predict() {
   if (!race) { alert('Select a race first'); return; }
   var going = document.getElementById('gsel').value;
 
+  // Auto-select the right model for this race's surface
+  var selectedModel = getModelForRace(race);
+  if (selectedModel) S.model = selectedModel;
+
   var activeRunners = race.runners.filter(function(r) {
     var card = document.getElementById('nr_' + r.stall);
     return !(card && card.closest('.re').classList.contains('nr'));
@@ -2998,6 +3018,100 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }, 200);
 
+  // ── Multi-model file inputs ─────────────────────────────────
+  ['turf','aw','jumps'].forEach(function(slot){
+    var inputId  = 'mIn' + slot.charAt(0).toUpperCase() + slot.slice(1);
+    var labelId  = 'mLabel' + slot.charAt(0).toUpperCase() + slot.slice(1);
+    var infoId   = 'mInfo' + slot.charAt(0).toUpperCase() + slot.slice(1);
+    var el = document.getElementById(inputId);
+    if (!el) return;
+    el.addEventListener('change', function(e) {
+      var f = e.target.files[0]; if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          var m = JSON.parse(ev.target.result);
+          // Save to right slot in S
+          if (slot === 'turf')  S.modelTurf  = m;
+          if (slot === 'aw')    S.modelAW    = m;
+          if (slot === 'jumps') S.modelJumps = m;
+          // Set active model for legacy code paths
+          if (!S.model || slot === 'turf') S.model = m;
+          // Persist
+          if (!m._fromStorage) saveModelToStorage(m, slot);
+          // Update UI
+          updateModelLabel(slot, m);
+          onModelLoaded(m);
+        } catch(err) {
+          alert('Failed to load ' + slot + ' model: ' + err.message);
+        }
+      };
+      reader.readAsText(f);
+    });
+  });
+
+  function updateModelLabel(slot, m) {
+    var cap = slot.charAt(0).toUpperCase() + slot.slice(1);
+    var labelEl = document.getElementById('mLabel' + cap);
+    var infoEl  = document.getElementById('mInfo' + cap);
+    if (labelEl) labelEl.textContent = '✓ ' + cap + ' model loaded';
+    if (infoEl) {
+      var meta = getModelMeta(slot) || {};
+      var acc = m.winAccuracy ? Math.round(m.winAccuracy * 100) + '% win acc' : '';
+      var size = meta.sizeKB ? meta.sizeKB + ' KB' : '';
+      var when = meta.savedAt ? new Date(meta.savedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '';
+      infoEl.innerHTML = '<span style="color:var(--g)">' + (acc || 'loaded') + '</span>' +
+        (size ? ' · ' + size : '') +
+        (when ? ' · ' + when : '') +
+        (meta.trimmed ? ' · trimmed' : '');
+    }
+  }
+
+  // ── Auto-load all three models from storage on startup ────
+  setTimeout(function() {
+    var anyLoaded = false;
+    ['turf','aw','jumps'].forEach(function(slot){
+      var stored = loadModelFromStorageSlot(slot);
+      if (!stored) return;
+      stored._fromStorage = true;
+      if (slot === 'turf')  S.modelTurf  = stored;
+      if (slot === 'aw')    S.modelAW    = stored;
+      if (slot === 'jumps') S.modelJumps = stored;
+      if (!S.model) S.model = stored;
+      updateModelLabel(slot, stored);
+      anyLoaded = true;
+    });
+    if (anyLoaded && S.model) {
+      try { onModelLoaded(S.model); } catch(e) {}
+      var mstEl = document.getElementById('mst');
+      if (mstEl) {
+        var slots = [];
+        if (S.modelTurf)  slots.push('🌿 Turf');
+        if (S.modelAW)    slots.push('🏟 AW');
+        if (S.modelJumps) slots.push('🏇 Jumps');
+        mstEl.innerHTML = '<div class="al als" style="font-family:var(--mono);font-size:.65rem">⚡ Auto-loaded ' + slots.length + ' model' + (slots.length>1?'s':'') + ' from device: ' + slots.join(', ') + '</div>';
+      }
+    }
+    // Migration: if legacy single model is in storage, move it to turf slot
+    if (!S.modelTurf && !S.modelAW && !S.modelJumps) {
+      try {
+        var legacy = localStorage.getItem(MODEL_KEY);
+        if (legacy) {
+          var m = JSON.parse(legacy);
+          m._fromStorage = true;
+          S.modelTurf = m;
+          S.model = m;
+          updateModelLabel('turf', m);
+          saveModelToStorage(m, 'turf');
+          localStorage.removeItem(MODEL_KEY);
+          localStorage.removeItem(MODEL_META_KEY);
+          onModelLoaded(m);
+        }
+      } catch(migErr) {}
+    }
+  }, 200);
+
+  // Legacy single model input (kept for compatibility)
   var mInEl = document.getElementById('mIn');
   if (mInEl) mInEl.addEventListener('change', function(e) {
     var stEl = document.getElementById('mst');
@@ -3080,33 +3194,47 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── Model persistence ────────────────────────────────────────
 // Saves loaded model to localStorage so it auto-loads next time.
 // 20MB+ models may exceed localStorage quota — handled gracefully.
+var MODEL_KEYS = {
+  turf:  'rq_model_turf_v1',
+  aw:    'rq_model_aw_v1',
+  jumps: 'rq_model_jumps_v1'
+};
+var MODEL_META_KEYS = {
+  turf:  'rq_model_turf_meta_v1',
+  aw:    'rq_model_aw_meta_v1',
+  jumps: 'rq_model_jumps_meta_v1'
+};
+// Legacy single-model key (for migration from older versions)
 var MODEL_KEY = 'rq_model_v1';
 var MODEL_META_KEY = 'rq_model_meta_v1';
 
-function saveModelToStorage(m) {
+function saveModelToStorage(m, slot) {
+  // slot: 'turf', 'aw', or 'jumps'
+  slot = slot || 'turf';
+  var key     = MODEL_KEYS[slot]      || MODEL_KEY;
+  var metaKey = MODEL_META_KEYS[slot]  || MODEL_META_KEY;
   try {
     var serialised = JSON.stringify(m);
     var sizeKB = Math.round(serialised.length / 1024);
     try {
-      localStorage.setItem(MODEL_KEY, serialised);
-      localStorage.setItem(MODEL_META_KEY, JSON.stringify({
+      localStorage.setItem(key, serialised);
+      localStorage.setItem(metaKey, JSON.stringify({
         savedAt: new Date().toISOString(),
         sizeKB:  sizeKB,
-        surface: m.surface || 'unknown',
+        surface: m.surface || slot,
         records: m.trainingRecords || 0
       }));
       return { ok: true, sizeKB: sizeKB };
     } catch(quotaErr) {
-      // Quota exceeded - try saving without horseStats (largest field)
       try {
         var trimmed = Object.assign({}, m);
         delete trimmed.horseStats;
         delete trimmed.jockeyStats;
-        localStorage.setItem(MODEL_KEY, JSON.stringify(trimmed));
-        localStorage.setItem(MODEL_META_KEY, JSON.stringify({
+        localStorage.setItem(key, JSON.stringify(trimmed));
+        localStorage.setItem(metaKey, JSON.stringify({
           savedAt: new Date().toISOString(),
           sizeKB:  Math.round(JSON.stringify(trimmed).length / 1024),
-          surface: m.surface || 'unknown',
+          surface: m.surface || slot,
           records: m.trainingRecords || 0,
           trimmed: true
         }));
@@ -3117,6 +3245,26 @@ function saveModelToStorage(m) {
     }
   } catch(err) {
     return { ok: false, error: err.message };
+  }
+}
+
+function loadModelFromStorageSlot(slot) {
+  try {
+    var raw = localStorage.getItem(MODEL_KEYS[slot]);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(err) {
+    return null;
+  }
+}
+
+function getModelMeta(slot) {
+  try {
+    var raw = localStorage.getItem(MODEL_META_KEYS[slot]);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(err) {
+    return null;
   }
 }
 
