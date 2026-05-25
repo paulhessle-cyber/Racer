@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.5 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.6 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -604,15 +604,34 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 <!-- SETUP -->
 <div class="scr" id="s-setup">
   <div class="card">
-    <div class="ct">Trained Model</div>
-    <p class="mu" style="margin-bottom:12px">Load <code style="color:var(--g)">racing_model.json</code> from the desktop Trainer app.</p>
-    <div class="drop">
-      <input type="file" id="mIn" accept=".json">
-      <span class="ico">🧠</span>
-      <strong>Tap to load racing_model.json</strong>
-      <p>Transfer via AirDrop, WhatsApp or email</p>
+    <div class="ct">Trained Models</div>
+    <p class="mu" style="margin-bottom:12px">Models auto-load from GitHub on startup. Upload here to override or update.</p>
+
+    <div class="drop" style="margin-bottom:10px">
+      <input type="file" id="mInTurf" accept=".json">
+      <span class="ico">🌿</span>
+      <strong id="mLabelTurf">Tap to load Turf model</strong>
+      <p id="mInfoTurf" style="color:var(--mt)">Not loaded</p>
     </div>
+
+    <div class="drop" style="margin-bottom:10px">
+      <input type="file" id="mInAW" accept=".json">
+      <span class="ico">🏟</span>
+      <strong id="mLabelAW">Tap to load All-Weather model</strong>
+      <p id="mInfoAW" style="color:var(--mt)">Not loaded</p>
+    </div>
+
+    <div class="drop">
+      <input type="file" id="mInJumps" accept=".json">
+      <span class="ico">🏇</span>
+      <strong id="mLabelJumps">Tap to load Jumps model</strong>
+      <p id="mInfoJumps" style="color:var(--mt)">Not loaded</p>
+    </div>
+
     <div id="mst" style="margin-top:10px"></div>
+
+    <!-- Legacy input kept for backwards compat -->
+    <input type="file" id="mIn" accept=".json" style="display:none">
   </div>
   <div class="card" id="msc" style="display:none">
     <div class="ct">Model Stats</div>
@@ -3067,49 +3086,100 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // ── Auto-load all three models from storage on startup ────
+  // ── Auto-load all three models on startup ─────────────────
+  // Strategy:
+  //  1. Try localStorage first (fastest, works offline)
+  //  2. If a slot is empty, fetch from GitHub models/ folder
+  //  3. Cache fetched models to localStorage for next time
+
+  var MODEL_URLS = {
+    turf:  'models/model_turf.json',
+    aw:    'models/model_aw.json',
+    jumps: 'models/model_jumps.json'
+  };
+
+  function setSlot(slot, m, fromGitHub) {
+    m._fromStorage = !fromGitHub; // don't re-save if loaded from storage
+    if (slot === 'turf')  S.modelTurf  = m;
+    if (slot === 'aw')    S.modelAW    = m;
+    if (slot === 'jumps') S.modelJumps = m;
+    if (!S.model || slot === 'turf') S.model = m;
+    updateModelLabel(slot, m);
+    if (fromGitHub) saveModelToStorage(m, slot); // cache for next time
+  }
+
+  function loadSlotFromGitHub(slot) {
+    return fetch(MODEL_URLS[slot], { cache: 'no-cache' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(m) { setSlot(slot, m, true); return true; })
+      .catch(function(err) {
+        console.warn('GitHub load failed for ' + slot + ':', err.message);
+        return false;
+      });
+  }
+
   setTimeout(function() {
-    var anyLoaded = false;
-    ['turf','aw','jumps'].forEach(function(slot){
+    var mstEl = document.getElementById('mst');
+    if (mstEl) mstEl.innerHTML = '<div class="al" style="background:rgba(0,230,118,.05);border:1px solid var(--bd);font-family:var(--mono);font-size:.62rem;color:var(--mt);padding:8px 12px;border-radius:6px">⏳ Loading models…</div>';
+
+    // Step 1: try localStorage for each slot
+    var slotsFromStorage = [];
+    var slotsToFetch = [];
+    ['turf','aw','jumps'].forEach(function(slot) {
       var stored = loadModelFromStorageSlot(slot);
-      if (!stored) return;
-      stored._fromStorage = true;
-      if (slot === 'turf')  S.modelTurf  = stored;
-      if (slot === 'aw')    S.modelAW    = stored;
-      if (slot === 'jumps') S.modelJumps = stored;
-      if (!S.model) S.model = stored;
-      updateModelLabel(slot, stored);
-      anyLoaded = true;
-    });
-    if (anyLoaded && S.model) {
-      try { onModelLoaded(S.model); } catch(e) {}
-      var mstEl = document.getElementById('mst');
-      if (mstEl) {
-        var slots = [];
-        if (S.modelTurf)  slots.push('🌿 Turf');
-        if (S.modelAW)    slots.push('🏟 AW');
-        if (S.modelJumps) slots.push('🏇 Jumps');
-        mstEl.innerHTML = '<div class="al als" style="font-family:var(--mono);font-size:.65rem">⚡ Auto-loaded ' + slots.length + ' model' + (slots.length>1?'s':'') + ' from device: ' + slots.join(', ') + '</div>';
+      if (stored) {
+        setSlot(slot, stored, false);
+        slotsFromStorage.push(slot);
+      } else {
+        slotsToFetch.push(slot);
       }
-    }
-    // Migration: if legacy single model is in storage, move it to turf slot
-    if (!S.modelTurf && !S.modelAW && !S.modelJumps) {
+    });
+
+    // Migration: legacy single-key model goes into turf slot
+    if (!slotsFromStorage.length) {
       try {
         var legacy = localStorage.getItem(MODEL_KEY);
         if (legacy) {
-          var m = JSON.parse(legacy);
-          m._fromStorage = true;
-          S.modelTurf = m;
-          S.model = m;
-          updateModelLabel('turf', m);
-          saveModelToStorage(m, 'turf');
+          var lm = JSON.parse(legacy);
+          setSlot('turf', lm, true); // re-save to new key
           localStorage.removeItem(MODEL_KEY);
           localStorage.removeItem(MODEL_META_KEY);
-          onModelLoaded(m);
+          slotsFromStorage.push('turf');
+          slotsToFetch = slotsToFetch.filter(function(s){return s !== 'turf';});
         }
       } catch(migErr) {}
     }
-  }, 200);
+
+    // Step 2: fetch any missing slots from GitHub
+    Promise.all(slotsToFetch.map(loadSlotFromGitHub))
+      .then(function(results) {
+        if (S.model) {
+          try { onModelLoaded(S.model); } catch(loadErr) {
+            console.error('onModelLoaded failed:', loadErr);
+          }
+        }
+        // Update status
+        var loaded = [];
+        if (S.modelTurf)  loaded.push('🌿 Turf');
+        if (S.modelAW)    loaded.push('🏟 AW');
+        if (S.modelJumps) loaded.push('🏇 Jumps');
+        if (mstEl) {
+          if (loaded.length) {
+            var fromCache = slotsFromStorage.length;
+            var fromGH    = results.filter(Boolean).length;
+            var src = [];
+            if (fromCache) src.push(fromCache + ' from device');
+            if (fromGH)    src.push(fromGH + ' from GitHub');
+            mstEl.innerHTML = '<div class="al als" style="font-family:var(--mono);font-size:.65rem">✓ Loaded: ' + loaded.join(', ') + '<br><span style="opacity:.6">' + src.join(' · ') + '</span></div>';
+          } else {
+            mstEl.innerHTML = '<div class="al alw" style="font-family:var(--mono);font-size:.65rem">⚠ No models loaded. Check models/ folder on GitHub or upload manually below.</div>';
+          }
+        }
+      });
+  }, 100);
 
   // Legacy single model input (kept for compatibility)
   var mInEl = document.getElementById('mIn');
