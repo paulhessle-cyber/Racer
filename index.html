@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.2 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.4 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2976,23 +2976,86 @@ function toggleMV(stall) {
 
 // ── Model loading ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+  // Auto-load model from localStorage if previously saved
+  setTimeout(function() {
+    var stored = loadModelFromStorage();
+    if (stored && !S.model) {
+      stored._fromStorage = true; // prevent re-saving
+      S.model = stored;
+      try {
+        onModelLoaded(stored);
+        var mstEl = document.getElementById('mst');
+        if (mstEl) {
+          var meta = {};
+          try { meta = JSON.parse(localStorage.getItem(MODEL_META_KEY) || '{}'); } catch(e){}
+          mstEl.innerHTML += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--green);margin-top:6px">⚡ Auto-loaded from device · saved ' + new Date(meta.savedAt || Date.now()).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) + (meta.trimmed ? ' (trimmed)' : '') + '</div><button onclick="forgetStoredModel()" style="margin-top:8px;padding:6px 10px;font-family:var(--mono);font-size:.58rem;background:transparent;border:1px solid var(--bd);color:var(--mt);border-radius:4px;cursor:pointer">🗑 Forget saved model</button>';
+        }
+      } catch(autoErr) {
+        console.warn('Auto-load failed:', autoErr);
+        S.model = null;
+        try { localStorage.removeItem(MODEL_KEY); } catch(e){}
+      }
+    }
+  }, 200);
+
   var mInEl = document.getElementById('mIn');
   if (mInEl) mInEl.addEventListener('change', function(e) {
-    var f = e.target.files[0]; if (!f) return;
+    var stEl = document.getElementById('mst');
+    function log(msg, isErr) {
+      if (!stEl) { alert(msg); return; }
+      var cls = isErr ? 'alw' : 'als';
+      stEl.innerHTML = '<div class="al ' + cls + '" style="font-family:var(--mono);font-size:.65rem;line-height:1.6;text-align:left">' + msg + '</div>';
+    }
+
+    var f = e.target.files[0];
+    if (!f) { log('Step 1: No file selected', true); return; }
+    log('Step 1: File selected — ' + f.name + ' (' + Math.round(f.size/1024) + ' KB)');
+
     var reader = new FileReader();
+
+    reader.onerror = function() {
+      log('Step 2 FAILED: FileReader error reading file', true);
+    };
+
     reader.onload = function(ev) {
       try {
-        var m = JSON.parse(ev.target.result);
+        log('Step 2: File read OK (' + ev.target.result.length + ' chars). Parsing JSON...');
+      } catch(e1) {}
+
+      var m;
+      try {
+        m = JSON.parse(ev.target.result);
+      } catch(parseErr) {
+        log('Step 3 FAILED: JSON parse error<br>' + parseErr.message, true);
+        return;
+      }
+
+      try {
+        log('Step 3: JSON parsed. Keys: ' + Object.keys(m).slice(0,8).join(', ') + '<br>Surface: ' + (m.surface||'?') + ' · Records: ' + (m.trainingRecords||'?'));
+      } catch(e2) {}
+
+      try {
         S.model = m;
+      } catch(setErr) {
+        log('Step 4 FAILED: Could not assign S.model<br>' + setErr.message, true);
+        return;
+      }
+
+      // Try onModelLoaded with full error catching
+      try {
         onModelLoaded(m);
-      } catch(err) {
-        // Show error to user instead of silent failure
-        var stEl = document.getElementById('mst');
-        if (stEl) stEl.innerHTML = '<div class="al alw">❌ Load failed: ' + err.message + '<br><span style="font-size:.62rem;opacity:.7">' + (err.stack||'').split('\n')[1] + '</span></div>';
-        console.error('Model load error:', err);
+      } catch(loadErr) {
+        var detail = loadErr.message + '<br>' + (loadErr.stack||'').split('\n').slice(0,3).join('<br>');
+        log('Step 5 FAILED in onModelLoaded:<br>' + detail, true);
+        return;
       }
     };
-    reader.readAsText(f);
+
+    try {
+      reader.readAsText(f);
+    } catch(readErr) {
+      log('Step 2 FAILED: Could not start file read<br>' + readErr.message, true);
+    }
   });
   var pdfInEl = document.getElementById('pdfIn');
   if (pdfInEl) pdfInEl.addEventListener('change', function(e){ var f=e.target.files[0]; if(f) loadPDF(f); });
@@ -3012,6 +3075,70 @@ document.addEventListener('DOMContentLoaded', function() {
     pd.addEventListener('drop', function(e){ e.preventDefault(); pd.classList.remove('ov'); var f=e.dataTransfer.files[0]; if(f) loadPDF(f); });
   }
 });
+
+
+// ── Model persistence ────────────────────────────────────────
+// Saves loaded model to localStorage so it auto-loads next time.
+// 20MB+ models may exceed localStorage quota — handled gracefully.
+var MODEL_KEY = 'rq_model_v1';
+var MODEL_META_KEY = 'rq_model_meta_v1';
+
+function saveModelToStorage(m) {
+  try {
+    var serialised = JSON.stringify(m);
+    var sizeKB = Math.round(serialised.length / 1024);
+    try {
+      localStorage.setItem(MODEL_KEY, serialised);
+      localStorage.setItem(MODEL_META_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        sizeKB:  sizeKB,
+        surface: m.surface || 'unknown',
+        records: m.trainingRecords || 0
+      }));
+      return { ok: true, sizeKB: sizeKB };
+    } catch(quotaErr) {
+      // Quota exceeded - try saving without horseStats (largest field)
+      try {
+        var trimmed = Object.assign({}, m);
+        delete trimmed.horseStats;
+        delete trimmed.jockeyStats;
+        localStorage.setItem(MODEL_KEY, JSON.stringify(trimmed));
+        localStorage.setItem(MODEL_META_KEY, JSON.stringify({
+          savedAt: new Date().toISOString(),
+          sizeKB:  Math.round(JSON.stringify(trimmed).length / 1024),
+          surface: m.surface || 'unknown',
+          records: m.trainingRecords || 0,
+          trimmed: true
+        }));
+        return { ok: true, sizeKB: Math.round(JSON.stringify(trimmed).length / 1024), trimmed: true };
+      } catch(retryErr) {
+        return { ok: false, error: 'Model too large for browser storage (' + sizeKB + ' KB)' };
+      }
+    }
+  } catch(err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function loadModelFromStorage() {
+  try {
+    var raw = localStorage.getItem(MODEL_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(err) {
+    console.warn('Stored model corrupted:', err);
+    return null;
+  }
+}
+
+function forgetStoredModel() {
+  try {
+    localStorage.removeItem(MODEL_KEY);
+    localStorage.removeItem(MODEL_META_KEY);
+    var stEl = document.getElementById('mst');
+    if (stEl) stEl.innerHTML = '<div class="al alw">🗑 Stored model removed. Reload page to use default mode.</div>';
+  } catch(e) {}
+}
 
 function onModelLoaded(m) {
   var surf = m.surface==='aw'?'AW':m.surface==='jumps'?'JUMPS':'TURF';
@@ -3039,6 +3166,19 @@ function onModelLoaded(m) {
         +'<div class="fwb"><div class="fwf" style="width:'+Math.round(p[1]/mx*100)+'%"></div></div></div>';
     });
     document.getElementById('fw').innerHTML = fw;
+  }
+  // Save to localStorage for auto-load next time
+  if (!m._fromStorage) {
+    var saveResult = saveModelToStorage(m);
+    if (saveResult.ok) {
+      var note = saveResult.trimmed ?
+        ' (trimmed for storage)' :
+        ' · Auto-loads next time';
+      var mstEl = document.getElementById('mst');
+      if (mstEl) {
+        mstEl.innerHTML += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:6px">💾 Saved to device (' + saveResult.sizeKB + ' KB)' + note + '</div>';
+      }
+    }
   }
   initAC();
 }
