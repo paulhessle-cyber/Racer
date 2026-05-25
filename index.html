@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.7 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.8 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2054,7 +2054,12 @@ function rawScoreDef(r, race, ctx) {
 function showTravelDebug() {
   if (!S.currentRaces || !S.currentRaces.length) { alert('Load a race first'); return; }
   var msg = '🔍 TRAVEL ALERT DIAGNOSTIC\n\n';
-  msg += 'Model loaded: ' + (S.model ? 'YES (' + (S.model.surface||'?') + ')' : 'NO') + '\n';
+  var race0 = S.sel || S.currentRaces[0];
+  // Always use the right model for the race being inspected
+  var diagModel = getModelForRace(race0);
+  if (diagModel) S.model = diagModel;
+  msg += 'Race surface detected: ' + (race0.surface || '?') + '\n';
+  msg += 'Active model: ' + (S.model ? S.model.surface + ' (' + Math.round((S.model.winAccuracy||0)*100) + '%)' : 'NONE') + '\n';
   if (S.model) {
     msg += 'horseStats: ' + Object.keys(S.model.horseStats||{}).length + ' horses\n';
     msg += 'trainerCourses: ' + Object.keys(S.model.trainerCourses||{}).length + ' trainers\n\n';
@@ -2842,6 +2847,9 @@ function selRace(i) {
   var el = document.getElementById('ri_'+i); if (el) el.classList.add('sel');
   var raceList = S.currentRaces || S.races;
   S.sel = raceList[i];
+  // Switch S.model to the appropriate model for this race's surface
+  var raceModel = getModelForRace(S.sel);
+  if (raceModel) S.model = raceModel;
   if (typeof updateModelPill === 'function') updateModelPill();
   renderPredict(S.sel);
   if (S.model) setTimeout(initAC, 0);
