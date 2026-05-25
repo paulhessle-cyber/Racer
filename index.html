@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.1 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.2 · 25 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2981,8 +2981,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var f = e.target.files[0]; if (!f) return;
     var reader = new FileReader();
     reader.onload = function(ev) {
-      try { var m = JSON.parse(ev.target.result); S.model = m; onModelLoaded(m); }
-      catch(err) { document.getElementById('mst').innerHTML = '<div class="al alw">❌ Invalid JSON: '+err.message+'</div>'; }
+      try {
+        var m = JSON.parse(ev.target.result);
+        S.model = m;
+        onModelLoaded(m);
+      } catch(err) {
+        // Show error to user instead of silent failure
+        var stEl = document.getElementById('mst');
+        if (stEl) stEl.innerHTML = '<div class="al alw">❌ Load failed: ' + err.message + '<br><span style="font-size:.62rem;opacity:.7">' + (err.stack||'').split('\n')[1] + '</span></div>';
+        console.error('Model load error:', err);
+      }
     };
     reader.readAsText(f);
   });
@@ -3045,9 +3053,21 @@ function useDefault() {
 // ── Autocomplete ───────────────────────────────────────────
 var AC = { horses: [], jockeys: [],
   build: function(m) {
+    // Lazy label generation - only generate when shown in search results
     var hs = m.horseStats||{}, js = m.jockeyStats||{};
-    this.horses  = Object.keys(hs).sort().map(function(k){ var s=hs[k]; return {key:k,label:k.replace(/\w/g,function(c){return c.toUpperCase();}),r:s.r||0,w:s.w||0}; });
-    this.jockeys = Object.keys(js).sort().map(function(k){ var s=js[k]; return {key:k,label:k.replace(/\w/g,function(c){return c.toUpperCase();}),r:s.r||0,w:s.w||0}; });
+    function titleCase(s) {
+      return s.split(' ').map(function(w){
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+    this.horses  = Object.keys(hs).sort().map(function(k){
+      var s = hs[k];
+      return { key:k, label:titleCase(k), r:s.r||0, w:s.w||0 };
+    });
+    this.jockeys = Object.keys(js).sort().map(function(k){
+      var s = js[k];
+      return { key:k, label:titleCase(k), r:s.r||0, w:s.w||0 };
+    });
   },
   search: function(list, query, max) {
     if (!query||query.length<2) return [];
@@ -3092,9 +3112,17 @@ function setupAC(inputId, dropId, list, onSelect, statusId) {
 }
 function initAC() {
   if (!S.model) return;
-  AC.build(S.model);
-  setupAC('arHorse','horseDrop',AC.horses,function(){},'horseStatus');
-  setupAC('arJockey','jockeyDrop',AC.jockeys,function(){},'jockeyStatus');
+  // Defer the heavy autocomplete build so the model UI updates first
+  // With 94k+ horses this can take 1-2s on a phone
+  setTimeout(function(){
+    try {
+      AC.build(S.model);
+      setupAC('arHorse','horseDrop',AC.horses,function(){},'horseStatus');
+      setupAC('arJockey','jockeyDrop',AC.jockeys,function(){},'jockeyStatus');
+    } catch(e) {
+      console.warn('AC init failed:', e.message);
+    }
+  }, 100);
 }
 
 // ── Paste Odds ─────────────────────────────────────────────
