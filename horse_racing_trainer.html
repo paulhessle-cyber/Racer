@@ -153,7 +153,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER · v3.1 · 25 May 2026</span>
+  <span class="sub">DESKTOP MODEL BUILDER · v3.2 · 26 May 2026</span>
 </header>
 
 <div class="container">
@@ -531,11 +531,27 @@ function isValidRow(row) {
     var isAWGoing  = AW_GOING_VALS[going];
     return isAWCourse || isAWGoing;
   } else {
-    // Turf flat — exclude AW courses/goings, accept ALL other courses
-    // The Kaggle raceform CSV is UK/Ireland only, so no need to whitelist courses
+    // Turf flat — exclude AW courses/goings and known jumps-only courses
     if (course.indexOf('(aw)') !== -1) return false;
     if (AW_GOING_VALS[going]) return false;
-    return true; // accept any turf course
+
+    // If type field IS populated, reject any non-flat race type
+    // (catches bumpers/hurdles/chases when CSV has a type column)
+    if (type && type !== 'flat' && type !== 'flat turf') return false;
+
+    // If type field is MISSING (common in Kaggle CSV), use course name
+    // to exclude dedicated jumps-only venues from the turf flat model
+    if (!type) {
+      var jumpsOnlyCourses = ['fontwell','plumpton','huntingdon','ludlow','fakenham',
+        'market rasen','sedgefield','hexham','kelso','wetherby','newton abbot',
+        'exeter','taunton','wincanton','stratford','bangor on dee','perth',
+        'cartmel','uttoxeter','towcester'];
+      // Mixed courses (cheltenham, ascot, sandown etc) can run both flat & jumps
+      // so we allow them through and let the type field filter if available
+      if (jumpsOnlyCourses.some(function(c){ return course.indexOf(c) > -1; })) return false;
+    }
+
+    return true; // accept turf flat race
   }
 }
 
@@ -606,6 +622,13 @@ function parseCSVText(text) {
     'weight':          'wgt',
     'race_class':      'class',
     'race class':      'class',
+    // Race type — critical for surface filtering
+    'race_type':       'type',
+    'racetype':        'type',
+    'type_of_race':    'type',
+    'discipline':      'type',
+    'race_discipline': 'type',
+    'race kind':       'type',
   };
   return data.map(function(row) {
     var out = {};
