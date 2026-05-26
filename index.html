@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.2 · 26 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.3 · 26 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -824,6 +824,27 @@ var S = {
   modelJumps: null,
   races: [], meetings: [], currentRaces: [], sel: null
 };
+
+// ── Model pill display ───────────────────────────────────────────
+function updateModelPill() {
+  var pill = document.getElementById('mpill');
+  if (!pill) return;
+  var m = S.sel ? getModelForRace(S.sel) : (S.modelTurf || S.modelAW || S.modelJumps || S.model);
+  if (!m) {
+    // Show count of loaded models
+    var loaded = [];
+    if (S.modelTurf)  loaded.push('\uD83C\uDF3F'); // 🌿
+    if (S.modelAW)    loaded.push('\uD83C\uDFDF'); // 🏟
+    if (S.modelJumps) loaded.push('\uD83C\uDFC7'); // 🏇
+    pill.textContent = loaded.length ? loaded.join(' ') + ' ' + loaded.length + ' MODEL' + (loaded.length > 1 ? 'S' : '') : 'NO MODEL';
+    pill.className = loaded.length ? 'mpill ok' : 'mpill';
+    return;
+  }
+  var surfLabel = m.surface === 'aw' ? 'AW' : m.surface === 'jumps' ? 'JUMPS' : 'TURF';
+  var acc = m.winAccuracy ? Math.round(m.winAccuracy * 100) + '%' : '';
+  pill.textContent = surfLabel + ' MODEL \u2713 ' + acc;
+  pill.className = 'mpill ok';
+}
 
 // Get the right model for a given race surface
 function getModelForRace(race) {
