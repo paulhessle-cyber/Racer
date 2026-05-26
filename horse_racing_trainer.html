@@ -153,7 +153,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER v2</span>
+  <span class="sub">DESKTOP MODEL BUILDER · v3.1 · 25 May 2026</span>
 </header>
 
 <div class="container">
@@ -834,7 +834,7 @@ async function trainModel() {
     horseLastRun[h] = r.date;
 
     // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0 };
     HS[h].r++;
     if (pos === 1)                     HS[h].w++;
     if (pos <= 3 && pos > 0)           HS[h].p++;
@@ -842,6 +842,17 @@ async function trainModel() {
       HS[h].gw[gs]   = (HS[h].gw[gs]   || 0) + 1;
       HS[h].dw[dist] = (HS[h].dw[dist] || 0) + 1;
       HS[h].cw[c]    = (HS[h].cw[c]    || 0) + 1;
+    }
+
+    // Beaten odds-on favourite tracking
+    var spVal = parseSP(r.sp);
+    if (spVal > 1.0 && spVal < 2.0 && pos > 1 && r.date) {
+      if (!HS[h].bfDate || r.date > HS[h].bfDate) {
+        HS[h].bfDate   = r.date;
+        HS[h].bfCourse = c;
+        HS[h].bfSP     = spVal;
+        HS[h].bfPos    = pos;
+      }
     }
 
     // Jockey stats
@@ -1038,7 +1049,7 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw };
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0 };
   });
 
   trainedModel = {
