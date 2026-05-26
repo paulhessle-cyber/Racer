@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.0 · 26 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.1 · 26 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -943,12 +943,25 @@ function parseATR(txt) {
     var runners = extractRunners(block);
     var tipM = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
     var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
-    // Detect surface from course name
+    // Detect surface from course name and race title/block keywords
     var cName = h[3].trim().toLowerCase();
     var awCourses = ['southwell','wolverhampton','kempton','lingfield','chelmsford','newcastle','dundalk'];
     var isAWrace  = awCourses.some(function(c){ return cName.indexOf(c) > -1; })
                  || cName.indexOf('(a.w)') > -1 || cName.indexOf('(aw)') > -1;
-    var raceSurface = isAWrace ? 'aw' : 'turf';
+
+    // Jumps: jumps course + jumps keyword in block
+    var jumpsCourses = ['cheltenham','aintree','fontwell','plumpton','huntingdon',
+      'ludlow','fakenham','market rasen','sedgefield','hexham','kelso','wetherby',
+      'newton abbot','exeter','taunton','wincanton','warwick','stratford',
+      'bangor','ffos las','perth','cartmel','uttoxeter','worcester','towcester'];
+    var jumpsKW = ['hurdle','chase','steeplechase','bumper','nh flat','novices',
+                   'national hunt','handicap hurdle','handicap chase','maiden hurdle'];
+    var blockLow = block.toLowerCase();
+    var isJumpsRace = !isAWrace
+                   && jumpsCourses.some(function(c){ return cName.indexOf(c) > -1; })
+                   && jumpsKW.some(function(k){ return blockLow.indexOf(k) > -1; });
+
+    var raceSurface = isJumpsRace ? 'jumps' : (isAWrace ? 'aw' : 'turf');
     races.push({ rnum: parseInt(h[1]), time: h[2], course: h[3].trim(), dist: h[4].trim(),
       surface: raceSurface,
       title: titleM ? titleM[1].replace(/\s+/g, ' ').trim() : '',
