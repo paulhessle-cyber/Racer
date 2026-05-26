@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.9 · 26 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.0 · 26 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -930,8 +930,16 @@ function parseATR(txt) {
     var h = headers[i], hn = headers[i + 1];
     var block = txt.slice(h.index, hn ? hn.index : txt.length);
     var clsM = block.match(/Class\s*(\d+)/);
-    var titleRx = /\d+[mfy\s\d]+\s+([A-Z][^(]+?)\s*(?:\(Class|No Silk)/;
-    var titleM = block.match(titleRx);
+    // Extract race title: second non-empty line of block (line after "17:37 PLUMPTON 2m...")
+    var titleM = null;
+    var _bLines = block.split('\n');
+    for (var _li = 1; _li < _bLines.length; _li++) {
+      var _bl = _bLines[_li].trim();
+      if (_bl.length > 5 && /^[A-Z]/.test(_bl) && !/^No Silk|^ATR|^Top Tip|^Watch/.test(_bl)) {
+        titleM = [_bl, _bl]; // titleM[1] = the title string
+        break;
+      }
+    }
     var runners = extractRunners(block);
     var tipM = block.match(/Top Tip:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
     var watchM = block.match(/Watch out for:\s*([A-Z][A-Z\s'\-()+]+?)(?:\s*\(\d+\))?\s*$/m);
