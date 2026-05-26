@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.8 · 25 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v2.9 · 26 May 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3048,9 +3048,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ── Multi-model file inputs ─────────────────────────────────
   ['turf','aw','jumps'].forEach(function(slot){
-    var inputId  = 'mIn' + slot.charAt(0).toUpperCase() + slot.slice(1);
-    var labelId  = 'mLabel' + slot.charAt(0).toUpperCase() + slot.slice(1);
-    var infoId   = 'mInfo' + slot.charAt(0).toUpperCase() + slot.slice(1);
+    var cap2     = slot === 'aw' ? 'AW' : (slot.charAt(0).toUpperCase() + slot.slice(1));
+    var inputId  = 'mIn' + cap2;
+    var labelId  = 'mLabel' + cap2;
+    var infoId   = 'mInfo' + cap2;
     var el = document.getElementById(inputId);
     if (!el) return;
     el.addEventListener('change', function(e) {
@@ -3079,7 +3080,8 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   function updateModelLabel(slot, m) {
-    var cap = slot.charAt(0).toUpperCase() + slot.slice(1);
+    // AW needs special casing — 'aw' → 'AW' not 'Aw'
+    var cap = slot === 'aw' ? 'AW' : (slot.charAt(0).toUpperCase() + slot.slice(1));
     var labelEl = document.getElementById('mLabel' + cap);
     var infoEl  = document.getElementById('mInfo' + cap);
     if (labelEl) labelEl.textContent = '✓ ' + cap + ' model loaded';
