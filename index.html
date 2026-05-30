@@ -846,6 +846,11 @@ function updateModelPill() {
   pill.className = 'mpill ok';
 }
 
+// HTML escape helper - prevents XSS and display issues with special chars in names
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // Get the right model for a given race surface
 function getModelForRace(race) {
   if (!race) return S.modelTurf || S.model;
