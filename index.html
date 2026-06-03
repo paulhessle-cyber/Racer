@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.5 · 30 May 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.6 · 03 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2053,7 +2053,19 @@ function rawScoreMdl(r, race, ctx) {
   var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
   r._trackDrawMult     = trackDrawMult;
   r._trackProfileMult  = trackProfileMult;
-  r._formScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult * trackProfileMult;
+  var rawScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult * trackProfileMult;
+
+  // Market cap: if bookmakers collectively give a horse < 2% chance,
+  // cap its score proportionally. A 200/1 shot cannot rank above 4/1 shots
+  // regardless of other features — the market knows something we don't.
+  // Scale: <2% implied → cap at 40% of raw score; 2-4% → 60-80% of raw score
+  var mktCapMult = 1.0;
+  if (mktProbMdl > 0 && mktProbMdl < 0.04) {
+    // Linear scale: 0% → ×0.3, 4% → ×1.0
+    mktCapMult = 0.3 + (mktProbMdl / 0.04) * 0.7;
+    mktCapMult = Math.min(mktCapMult, 1.0);
+  }
+  r._formScore = rawScore * mktCapMult;
   return r._formScore;
 }
 
