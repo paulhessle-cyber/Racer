@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.6 · 03 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.7 · 03 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -1916,6 +1916,83 @@ var TRACK_PROFILES = {
     galloping: 0.4,
     paceBonus: { front: 0.03, mid: 0.02, closer: -0.02 },
     note: 'Right-handed, fairly flat. Reasonable front-runner advantage'
+  },
+
+  // ── Jumps courses ───────────────────────────────────────────
+  'uttoxeter': {
+    sharp: 0.5, uphill: 0.1, undulate: 0.3, straight: 0.2, galloping: 0.4,
+    paceBonus: { front: 0.03, mid: 0.02, closer: -0.02 },
+    note: 'Left-handed, fairly sharp. Suit pace-positive horses in shorter trips'
+  },
+  'worcester': {
+    sharp: 0.3, uphill: 0, undulate: 0.1, straight: 0.4, galloping: 0.6,
+    paceBonus: { front: -0.01, mid: 0.02, closer: 0.02 },
+    note: 'Flat, galloping left-handed. Fair track, form reliable'
+  },
+  'exeter': {
+    sharp: 0.2, uphill: 0.8, undulate: 0.5, straight: 0.3, galloping: 0.5,
+    paceBonus: { front: -0.06, mid: 0.03, closer: 0.07 },
+    note: 'Stiff uphill finish, undulating. Stamina essential. Closers thrive'
+  },
+  'taunton': {
+    sharp: 0.4, uphill: 0.3, undulate: 0.4, straight: 0.3, galloping: 0.3,
+    paceBonus: { front: 0.02, mid: 0.02, closer: -0.01 },
+    note: 'Right-handed, undulating. Fairly sharp with slight uphill'
+  },
+  'newton abbot': {
+    sharp: 0.7, uphill: 0, undulate: 0.3, straight: 0.2, galloping: 0.2,
+    paceBonus: { front: 0.07, mid: 0.02, closer: -0.05 },
+    note: 'Very sharp left-handed. Pace and jumping technique crucial'
+  },
+  'wincanton': {
+    sharp: 0.3, uphill: 0.4, undulate: 0.4, straight: 0.3, galloping: 0.4,
+    paceBonus: { front: -0.02, mid: 0.03, closer: 0.03 },
+    note: 'Right-handed, undulating with uphill finish. Suits stayers'
+  },
+  'bangor': {
+    sharp: 0.6, uphill: 0.2, undulate: 0.4, straight: 0.2, galloping: 0.3,
+    paceBonus: { front: 0.05, mid: 0.02, closer: -0.03 },
+    note: 'Left-handed, sharp and undulating. Pace helps considerably'
+  },
+  'perth': {
+    sharp: 0.5, uphill: 0.1, undulate: 0.2, straight: 0.3, galloping: 0.4,
+    paceBonus: { front: 0.04, mid: 0.02, closer: -0.02 },
+    note: 'Right-handed, fairly sharp. Jumping ability key on turns'
+  },
+  'cartmel': {
+    sharp: 0.9, uphill: 0.2, undulate: 0.3, straight: 0.1, galloping: 0.1,
+    paceBonus: { front: 0.09, mid: 0.02, closer: -0.07 },
+    note: 'Extremely sharp left-handed loop. Most unusual jumps track in UK. Front-runners dominate'
+  },
+  'ludlow': {
+    sharp: 0.4, uphill: 0.3, undulate: 0.3, straight: 0.3, galloping: 0.4,
+    paceBonus: { front: 0.02, mid: 0.02, closer: -0.01 },
+    note: 'Right-handed, undulating. Fairly fair track'
+  },
+  'market rasen': {
+    sharp: 0.5, uphill: 0, undulate: 0.2, straight: 0.3, galloping: 0.4,
+    paceBonus: { front: 0.04, mid: 0.02, closer: -0.02 },
+    note: 'Right-handed, fairly sharp. Front-runners competitive'
+  },
+  'fakenham': {
+    sharp: 0.8, uphill: 0.1, undulate: 0.3, straight: 0.1, galloping: 0.1,
+    paceBonus: { front: 0.08, mid: 0.02, closer: -0.06 },
+    note: 'Very sharp square left-handed track. Almost all bends. Pace essential'
+  },
+  'hexham': {
+    sharp: 0.4, uphill: 0.7, undulate: 0.6, straight: 0.2, galloping: 0.3,
+    paceBonus: { front: -0.04, mid: 0.03, closer: 0.05 },
+    note: 'Left-handed, very hilly and undulating. Stamina test. Stayers excel'
+  },
+  'kelso': {
+    sharp: 0.4, uphill: 0.2, undulate: 0.3, straight: 0.2, galloping: 0.5,
+    paceBonus: { front: 0.02, mid: 0.02, closer: 0.01 },
+    note: 'Left-handed, fair galloping track in Scotland'
+  },
+  'wetherby': {
+    sharp: 0.3, uphill: 0.3, undulate: 0.3, straight: 0.4, galloping: 0.6,
+    paceBonus: { front: -0.01, mid: 0.03, closer: 0.03 },
+    note: 'Left-handed galloping track. Long straight. Fair test'
   }
 };
 
