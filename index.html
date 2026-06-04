@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.7 · 03 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.8 · 03 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -5110,9 +5110,12 @@ function saveRaceResult(raceKey) {
   var topPickWon    = !!(topPick && topPick === winner);
   // "Placed" only counts if field has place terms (5+) AND top pick was in placed horses
   var topPickPlaced = !!(placesAvail >= 2 && topPick && !topPickWon && actualPlaced.indexOf(topPick) > -1);
-  var anyTop3Placed = preds.slice(0,3).filter(function(p){
+  // Only meaningful if field is large enough that top 3 isn't trivial
+  // In a 3-runner race, top 3 = entire field — not a useful metric
+  var fieldSize = (race.runners || []).filter(function(r){ return !r._nr; }).length;
+  var anyTop3Placed = (fieldSize >= 6) ? preds.slice(0,3).filter(function(p){
     return actualPlaced.indexOf(p.name) > -1;
-  }).length;
+  }).length : 0;
   var winnerRank    = preds.findIndex(function(p){ return p.name === winner; }) + 1;
 
   // Find market favourite (lowest odds runner with odds entered)
