@@ -421,7 +421,7 @@ function renderBacktest(sorted) {
   h += ctrl('Stake (£)', 'bt-stake', '1', 'number', '0.1', '100', '0.5');
   h += '</div>';
 
-  h += '<button class="bt-run" id="bt-run-btn" data-action="runBacktest">▶ Run Simulation</button>';
+  h += '<button class="bt-run" onclick="runBacktest()">▶ Run Simulation</button>';
   h += '</div>';
   h += '<div id="bt-results"></div>';
   h += '</div>';
@@ -473,13 +473,13 @@ function simulateStrategy(log, minConf, minOdds, maxOdds, valueOnly, stake) {
   var chron = log.slice().reverse();
 
   chron.forEach(function(e) {
-    var conf = (e.topPickConf||0)*100;
+    var conf = (e.topPickConf||0); // stored as percentage (0-100), not decimal
     var odds = e.topPickOdds||0;
     if (conf < minConf) return;
     if (odds < minOdds || odds > maxOdds) return;
     if (valueOnly) {
       var implied = odds>0 ? 1/odds : 0;
-      if ((e.topPickConf||0) < implied) return; // model doesn't beat market
+      if ((e.topPickConf||0)/100 < implied) return; // model doesn't beat market
     }
     bets++;
     var staked = stake;
