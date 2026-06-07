@@ -859,6 +859,7 @@ async function trainModel() {
     // Horse stats
     if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0 };
     HS[h].r++;
+    if (t && !HS[h].tr) HS[h].tr = t; // store trainer name for travel alert
     if (pos === 1)                     HS[h].w++;
     if (pos <= 3 && pos > 0)           HS[h].p++;
     if (pos === 1) {
@@ -875,6 +876,7 @@ async function trainModel() {
         HS[h].bfCourse = c;
         HS[h].bfSP     = spVal;
         HS[h].bfPos    = pos;
+        HS[h].bfCls    = parseInt(r['class'] || r.class_num || r.race_class || 0) || 0;
       }
     }
 
@@ -1072,7 +1074,7 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0 };
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0, bfCls:s.bfCls||0||0 };
   });
 
   trainedModel = {
