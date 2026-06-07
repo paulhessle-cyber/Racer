@@ -181,6 +181,7 @@
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
+  <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
 </div>
 
 <div id="app">
@@ -239,7 +240,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -249,6 +250,7 @@ function showTab(tab) {
   // Always re-render bets tab so it picks up localStorage saves from predictor
   if (tab === 'bets') renderBets();
   if (tab === 'insights') renderInsights();
+  if (tab === 'bf') renderBFWatch();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -287,7 +289,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
     '<div class="tab-content" id="tab-bets"></div>' +
-    '<div class="tab-content" id="tab-insights"></div>';
+    '<div class="tab-content" id="tab-insights"></div>' +
+    '<div class="tab-content" id="tab-bf"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -1515,6 +1518,155 @@ else renderImport();
 // Always render bets tab on load — bet data is independent of prediction log
 // Small delay to ensure tab-bets div exists in DOM
 setTimeout(function(){ renderBets(); }, 50);
+
+// ══ BF NEXT TIME OUT ANALYSIS ═══════════════════════════════════════════════
+function renderBFWatch() {
+  var el = document.getElementById('tab-bf');
+  if (!el) return;
+  if (!loadedLog || !loadedLog.length) {
+    el.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:.75rem;color:var(--mt)">Load a results JSON to see BF analysis.</div>';
+    return;
+  }
+
+  // Sort log chronologically
+  var sorted = loadedLog.slice().sort(function(a,b){
+    return (a.date+a.time) < (b.date+b.time) ? -1 : 1;
+  });
+
+  // Build lookup: horse name -> array of race appearances (in order)
+  // We track every horse that appeared in predictions across all races
+  var horseRaces = {}; // name -> [{date, course, cls, won, placed, hadBF, bfDrop, odds}]
+  sorted.forEach(function(entry) {
+    (entry.predictions || []).forEach(function(p) {
+      var n = p.name;
+      if (!horseRaces[n]) horseRaces[n] = [];
+      horseRaces[n].push({
+        date:   entry.date,
+        course: entry.course,
+        cls:    entry.cls || 0,
+        won:    entry.actual && entry.actual[0] === n,
+        placed: entry.actual && entry.actual.slice(0,3).indexOf(n) > -1,
+        odds:   p.odds || 0
+      });
+    });
+    // Tag any BF horses in this entry
+    (entry.bfHorses || []).forEach(function(bf) {
+      if (horseRaces[bf.name]) {
+        var last = horseRaces[bf.name][horseRaces[bf.name].length - 1];
+        if (last && last.date === entry.date) {
+          last.hadBF  = true;
+          last.bfDrop = bf.bfDrop || false;
+        }
+      }
+    });
+  });
+
+  // Find all race appearances AFTER a BF signal
+  var nextTimeResults = []; // {name, bfDate, bfCourse, bfCls, nextDate, nextCourse, nextCls, dropped, won, placed, odds}
+  Object.keys(horseRaces).forEach(function(name) {
+    var races = horseRaces[name];
+    for (var i = 0; i < races.length - 1; i++) {
+      if (races[i].hadBF) {
+        var next = races[i + 1];
+        var dropped = races[i].cls > 0 && next.cls > 0 && next.cls > races[i].cls;
+        nextTimeResults.push({
+          name:      name,
+          bfDate:    races[i].date,
+          bfCourse:  races[i].course,
+          bfCls:     races[i].cls,
+          nextDate:  next.date,
+          nextCourse:next.course,
+          nextCls:   next.cls,
+          dropped:   dropped,
+          won:       next.won,
+          placed:    next.placed,
+          odds:      next.odds,
+          bfDrop:    races[i].bfDrop
+        });
+      }
+    }
+  });
+
+  var h = '<div style="padding:16px">';
+  h += '<div style="font-family:var(--mono);font-size:.75rem;color:var(--mt);margin-bottom:16px">Tracks horses that showed the 👀 BF signal, then checks if they won or placed next time — especially if they dropped in class.</div>';
+
+  if (nextTimeResults.length === 0) {
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--mt)">';
+    h += '<div style="font-size:2rem;margin-bottom:10px">👀</div>';
+    h += 'No BF next-time-out data yet.<br><br>';
+    h += 'This populates automatically as you log more races with the updated predictor. A horse needs to appear in your log <strong>twice</strong> — once with a BF signal, once next time out.';
+    h += '</div>';
+  } else {
+    // Summary stats
+    var total     = nextTimeResults.length;
+    var wins      = nextTimeResults.filter(function(r){ return r.won; }).length;
+    var places    = nextTimeResults.filter(function(r){ return !r.won && r.placed; }).length;
+    var dropWins  = nextTimeResults.filter(function(r){ return r.dropped && r.won; }).length;
+    var dropTotal = nextTimeResults.filter(function(r){ return r.dropped; }).length;
+    var sameWins  = nextTimeResults.filter(function(r){ return !r.dropped && r.won; }).length;
+    var sameTotal = nextTimeResults.filter(function(r){ return !r.dropped; }).length;
+
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">';
+
+    // All BF horses next time
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:8px">ALL BF → NEXT TIME</div>';
+    h += '<div style="font-size:1.6rem;font-weight:700;color:var(--g)">' + wins + '/' + total + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-top:2px">won (' + Math.round(wins/total*100) + '% SR)</div>';
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--gold);margin-top:2px">+' + places + ' placed</div>';
+    h += '</div>';
+
+    // BF + class drop
+    h += '<div style="background:var(--card);border:1px solid rgba(255,140,0,.3);border-radius:10px;padding:14px">';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--gold);letter-spacing:1px;margin-bottom:8px">👀⬇ BF + CLASS DROP</div>';
+    if (dropTotal > 0) {
+      h += '<div style="font-size:1.6rem;font-weight:700;color:var(--gold)">' + dropWins + '/' + dropTotal + '</div>';
+      h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-top:2px">won (' + Math.round(dropWins/dropTotal*100) + '% SR)</div>';
+      h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-top:2px">vs ' + Math.round(sameWins/Math.max(sameTotal,1)*100) + '% same/higher class</div>';
+    } else {
+      h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--mt)">No class drops logged yet</div>';
+    }
+    h += '</div>';
+    h += '</div>';
+
+    // Individual results table
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);letter-spacing:1px;margin-bottom:8px">INDIVIDUAL RESULTS</div>';
+
+    // Sort: class drops first, then by date
+    nextTimeResults.sort(function(a,b){
+      if (a.dropped !== b.dropped) return a.dropped ? -1 : 1;
+      return a.bfDate < b.bfDate ? -1 : 1;
+    });
+
+    nextTimeResults.forEach(function(r) {
+      var resultCol   = r.won ? 'var(--g)' : r.placed ? 'var(--gold)' : 'var(--re)';
+      var resultLabel = r.won ? '✓ WON' : r.placed ? '▲ PLACED' : '✗ UNPLACED';
+      var borderCol   = r.dropped ? 'rgba(255,140,0,.4)' : 'var(--bd)';
+
+      h += '<div style="background:var(--card);border:1px solid ' + borderCol + ';border-radius:8px;padding:12px;margin-bottom:8px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+      h += '<div>';
+      h += '<span style="font-weight:700;font-size:.82rem">' + esc(r.name) + '</span>';
+      if (r.dropped) h += ' <span style="font-family:var(--mono);font-size:.62rem;background:rgba(255,140,0,.15);color:#ffaa00;border:1px solid rgba(255,140,0,.4);padding:1px 5px;border-radius:4px">👀⬇ BF DROP</span>';
+      h += '</div>';
+      h += '<span style="font-family:var(--mono);font-size:.7rem;color:' + resultCol + ';font-weight:700">' + resultLabel + '</span>';
+      h += '</div>';
+
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px;font-family:var(--mono);font-size:.62rem;color:var(--mt)">';
+      h += '<div>BF run: ' + r.bfDate + (r.bfCls ? ' · Cls ' + r.bfCls : '') + '<br>' + esc(r.bfCourse) + '</div>';
+      h += '<div>Next: ' + r.nextDate + (r.nextCls ? ' · Cls ' + r.nextCls : '') + '<br>' + esc(r.nextCourse);
+      if (r.dropped) h += ' <span style="color:#ffaa00">⬇ dropped</span>';
+      h += '</div>';
+      h += '</div>';
+
+      if (r.odds) {
+        h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:4px">Ran at ' + r.odds.toFixed(1) + ' next time</div>';
+      }
+      h += '</div>';
+    });
+  }
+
+  h += '</div>';
+  el.innerHTML = h;
+}
 </script>
-</body>
-</html>
