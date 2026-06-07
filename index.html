@@ -2750,6 +2750,12 @@ function showResults(scored, val, race, paceInfo) {
             : '';
           var bfLabel = bfSpStr ? bfSpStr + 'F' : 'odds-on';
           bfAlert = ' <span class="mk" style="background:rgba(255,82,82,.12);color:var(--re);border:1px solid rgba(255,82,82,.3)" title="Beaten ' + bfLabel + ' at ' + esc(hStat2.bfCourse) + ' ' + daysSinceBf + ' days ago (finished ' + hStat2.bfPos + ')">👀 BF</span>';
+          // Tag runner for result logging
+          r._bfAlert  = true;
+          r._bfCourse = hStat2.bfCourse || '';
+          r._bfSP     = hStat2.bfSP     || 0;
+          r._bfPos    = hStat2.bfPos    || 0;
+          r._bfDays   = daysSinceBf;
         }
       }
     }
@@ -5140,7 +5146,20 @@ function saveRaceResult(raceKey) {
     topPickConf:   preds[0] ? preds[0].score : 0,
     favName:       fav ? fav.name : '',
     favOdds:       fav ? fav.odds : 0,
-    favWon:        favWon
+    favWon:        favWon,
+    cls:           (S.sel && S.sel.cls) || 0,
+    bfHorses:      (S._logRace && S._logRace.runners || []).filter(function(r){
+                     return !r._nr && r._bfAlert;
+                   }).map(function(r){
+                     return {
+                       name:    r.name,
+                       odds:    r.odds  || 0,
+                       cls:     (S._logRace && S._logRace.cls) || 0,
+                       bfDrop:  r._bfDrop  || false,
+                       won:     actual[0] === r.name,
+                       placed:  actual.slice(0,3).indexOf(r.name) > -1
+                     };
+                   })
   };
 
   // Save to log (update if exists)
