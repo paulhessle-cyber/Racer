@@ -153,7 +153,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER · v3.2 · 26 May 2026</span>
+  <span class="sub">DESKTOP MODEL BUILDER · v3.3 · 09 Jun 2026</span>
 </header>
 
 <div class="container">
@@ -489,7 +489,7 @@ function setSurface(s) {
   document.getElementById('dlSection').style.display = 'none';
 }
 
-var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1};
+var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1,'jump':1,'jumps':1,'national hunt':1};
 
 function isValidRow(row) {
   // ── Date filter ──────────────────────────────────────────
@@ -640,6 +640,51 @@ function parseCSVText(text) {
   });
 }
 
+function parseDataTablesHTML(text) {
+  // Extract columns and data from DataTables HTML (Racing Research / similar)
+  try {
+    // Find column titles
+    var colMatch = text.match(/"columns":\s*(\[.*?\])\s*,\s*"data"/s);
+    if (!colMatch) {
+      // Try without dotAll
+      var ci = text.indexOf('"columns":');
+      var di = text.indexOf('"data":[[', ci);
+      if (ci === -1 || di === -1) return [];
+      colMatch = [null, text.slice(ci+10, di).replace(/,\s*$/, '')];
+    }
+    var cols = JSON.parse(colMatch[1]).map(function(c){ return (c.title||c.data||'').toLowerCase().trim(); });
+
+    // Find data array — it's a large nested array
+    var dataStart = text.indexOf('"data":[[');
+    if (dataStart === -1) return [];
+    dataStart += 7; // skip "data":
+
+    // Extract the full array by brace matching
+    var depth = 0, i = dataStart, start = -1;
+    while (i < text.length) {
+      if (text[i] === '[') { if (depth === 0) start = i; depth++; }
+      else if (text[i] === ']') { depth--; if (depth === 0) break; }
+      i++;
+    }
+    if (start === -1) return [];
+    var arr = JSON.parse(text.slice(start, i+1));
+
+    // Convert to row objects
+    var rows = arr.map(function(row) {
+      var r = {};
+      cols.forEach(function(col, idx) {
+        r[col] = String(row[idx] || '').trim();
+      });
+      return r;
+    });
+    console.log('DataTables HTML parsed: ' + rows.length + ' rows, cols: ' + cols.join(', '));
+    return rows;
+  } catch(e) {
+    console.error('parseDataTablesHTML error:', e);
+    return [];
+  }
+}
+
 function loadFile(f) {
   var reader = new FileReader();
   reader.onload = function(ev) {
@@ -647,13 +692,14 @@ function loadFile(f) {
       var data;
       var name = f.name.toLowerCase();
       if (name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')) {
-        // Use our own parser so tab-separated files work correctly
         data = parseCSVText(ev.target.result);
+      } else if (name.endsWith('.html') || name.endsWith('.htm')) {
+        // DataTables HTML format — extract columns and data array from embedded JS
+        data = parseDataTablesHTML(ev.target.result);
       } else {
-        // Excel file - use XLSX library
+        // Excel - use XLSX library
         var wb = XLSX.read(ev.target.result, {type:'array'});
         var raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-        // Normalise column names to lowercase
         data = raw.map(function(row) {
           var r = {};
           Object.keys(row).forEach(function(k) {
@@ -857,9 +903,20 @@ async function trainModel() {
     horseLastRun[h] = r.date;
 
     // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0 };
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0, bfCls:0, sex:'', gelded:false };
     HS[h].r++;
     if (t && !HS[h].tr) HS[h].tr = t; // store trainer name for travel alert
+
+    // Sex / gelding tracking
+    var sexVal = (r.sex || '').toUpperCase().trim();
+    if (sexVal) {
+      // If horse was previously a Colt (C) and is now a Gelding (G) = recently gelded
+      if (HS[h].sex === 'C' && sexVal === 'G') {
+        HS[h].gelded    = true;
+        HS[h].geldedDate = r.date || '';
+      }
+      HS[h].sex = sexVal; // keep most recent sex code
+    }
     if (pos === 1)                     HS[h].w++;
     if (pos <= 3 && pos > 0)           HS[h].p++;
     if (pos === 1) {
@@ -876,7 +933,7 @@ async function trainModel() {
         HS[h].bfCourse = c;
         HS[h].bfSP     = spVal;
         HS[h].bfPos    = pos;
-        HS[h].bfCls    = parseInt(r['class'] || r.class_num || r.race_class || 0) || 0;
+        HS[h].bfCls    = (function(){ var cv=String(r['class']||r.class_num||r.race_class||''); return parseInt(cv.replace(/^class\s*/i,'').trim())||0; })() || 0;
       }
     }
 
@@ -1074,7 +1131,7 @@ async function trainModel() {
   Object.keys(HS).forEach(function(h) {
     var s = HS[h];
     if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0, bfCls:s.bfCls||0||0 };
+    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0, bfCls:s.bfCls||0, sex:s.sex||'', gelded:s.gelded||false, geldedDate:s.geldedDate||'' };
   });
 
   trainedModel = {
