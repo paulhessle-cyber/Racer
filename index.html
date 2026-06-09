@@ -2192,6 +2192,35 @@ function showSurfaceDebug() {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
 
+  // Allow horse-specific lookup by tapping after entering name
+  var horseName = prompt('Horse to inspect (blank = race summary):', '');
+  if (horseName && horseName.trim()) {
+    var hk = horseName.trim().toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i,'').trim();
+    var m  = S.model;
+    var hs = m && m.horseStats && m.horseStats[hk];
+    if (!hs) {
+      alert('"' + horseName + '" not found in model.\nKey tried: "' + hk + '"');
+      return;
+    }
+    var msg = '🔍 HORSE DATA: ' + horseName.toUpperCase() + '\n\n';
+    msg += 'Trainer:    ' + (hs.tr       || '(none)') + '\n';
+    msg += 'Sex:        ' + (hs.sex      || '(none)') + '\n';
+    msg += 'Gelded:     ' + (hs.gelded   ? 'YES (' + (hs.geldedDate||'?') + ')' : 'no') + '\n';
+    msg += 'Runs:       ' + hs.r + '  Wins: ' + hs.w + '  Places: ' + hs.p + '\n\n';
+    msg += 'BF Date:    ' + (hs.bfDate   || '(none)') + '\n';
+    msg += 'BF Course:  ' + (hs.bfCourse || '(none)') + '\n';
+    msg += 'BF SP:      ' + (hs.bfSP     || '(none)') + '\n';
+    msg += 'BF Pos:     ' + (hs.bfPos    || '(none)') + '\n';
+    msg += 'BF Cls:     ' + (hs.bfCls    || '(none — SP fallback will apply)') + '\n\n';
+    if (hs.bfDate) {
+      var days = Math.round((Date.now() - new Date(hs.bfDate).getTime()) / 86400000);
+      msg += 'Days since BF: ' + days + ' (badge shows if ≤60)\n';
+      msg += 'Badge fires: ' + (days <= 60 ? 'YES ✓' : 'NO — too old (' + days + ' days)') + '\n';
+    }
+    alert(msg);
+    return;
+  }
+
   var msg = '🔍 SURFACE & MODEL DEBUG\n\n';
   msg += 'Race: ' + race.course + ' ' + race.time + '\n';
   msg += 'Title: ' + (race.title || '(none)').slice(0, 80) + '\n';
