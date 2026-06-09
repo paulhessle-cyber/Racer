@@ -2785,6 +2785,20 @@ function showResults(scored, val, race, paceInfo) {
       }
     }
 
+    // Gelding alert — horse recently gelded (was Colt, now Gelding in training data)
+    var geldingAlert = '';
+    if (S.model && S.model.horseStats) {
+      var hKeyG  = (r.name || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i,'').trim();
+      var hStatG = S.model.horseStats[hKeyG];
+      if (hStatG && hStatG.gelded && hStatG.geldedDate) {
+        var geldMs   = new Date(hStatG.geldedDate).getTime();
+        var geldDays = Math.round((Date.now() - geldMs) / 86400000);
+        if (geldDays >= 0 && geldDays <= 180) {
+          geldingAlert = ' <span class="mk" style="background:rgba(100,180,255,.12);color:#64b4ff;border:1px solid rgba(100,180,255,.3)" title="Recently gelded ' + geldDays + ' days ago — gelding often leads to improvement">✂ GELDED</span>';
+        }
+      }
+    }
+
     // Long travel alert — look up trainer from model horseStats (tr field)
     var travelAlert = '';
     var _travDebug = ''; // diagnostic info shown on hover when alert doesn't fire
@@ -2834,7 +2848,7 @@ function showResults(scored, val, race, paceInfo) {
     h += '<div class="rrr ' + pc + '">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + bfAlert + travelAlert + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + bfAlert + geldingAlert + travelAlert + '</div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
