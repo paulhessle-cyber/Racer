@@ -3379,6 +3379,9 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch(function(err) {
         console.warn('Model fetch failed [' + slot + ']:', err.message);
+        // Show visible error on Setup tab
+        var mEl = document.getElementById('mInfo' + (slot === 'aw' ? 'AW' : slot.charAt(0).toUpperCase() + slot.slice(1)));
+        if (mEl) mEl.innerHTML = '<span style="color:var(--re);font-family:var(--mono);font-size:.65rem">✗ Failed: ' + err.message + '</span>';
         return { slot: slot, ok: false, err: err.message };
       });
   }
