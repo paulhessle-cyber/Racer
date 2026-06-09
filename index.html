@@ -995,6 +995,30 @@ function parseATR(txt) {
       cls: clsM ? parseInt(clsM[1]) : 0, runners: runners,
       topTip: tipM ? tipM[1].trim() : '', watchFor: watchM ? watchM[1].trim() : '' });
   }
+  // ── Global gelding scan ─────────────────────────────────────────────────
+  // ATR PDF includes "GELDING NOTIFICATION" in horse form history (not in race table)
+  // Scan full text for this marker and tag any runner whose name appears above it
+  var geldLines = txt.split('\n');
+  for (var gi = 0; gi < geldLines.length; gi++) {
+    if (/GELDING NOTIFICATION/i.test(geldLines[gi])) {
+      // Look up to 15 lines above for a horse name that matches a runner
+      for (var gback = 1; gback <= 15; gback++) {
+        var gline = (geldLines[gi - gback] || '').trim().toUpperCase();
+        // Check each race's runners for a name match
+        for (var ri = 0; ri < races.length; ri++) {
+          var rns = races[ri].runners || [];
+          for (var rj = 0; rj < rns.length; rj++) {
+            var rname = (rns[rj].name || '').toUpperCase()
+                          .replace(/\s*\([A-Z]{2,3}\)\s*$/, '').trim();
+            if (rname.length > 3 && gline.indexOf(rname) > -1) {
+              rns[rj]._recentlyGelded = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
   return races;
 }
 
