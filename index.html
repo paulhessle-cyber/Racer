@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.8 · 03 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v3.9 · 09 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2749,7 +2749,32 @@ function showResults(scored, val, race, paceInfo) {
               })
             : '';
           var bfLabel = bfSpStr ? bfSpStr + 'F' : 'odds-on';
-          bfAlert = ' <span class="mk" style="background:rgba(255,82,82,.12);color:var(--re);border:1px solid rgba(255,82,82,.3)" title="Beaten ' + bfLabel + ' at ' + esc(hStat2.bfCourse) + ' ' + daysSinceBf + ' days ago (finished ' + hStat2.bfPos + ')">👀 BF</span>';
+          // Class drop detection — bfCls from retrained model, or infer from PDF race class
+          var bfRaceCls = hStat2.bfCls || 0;
+          // Fallback: if bfCls not in model yet, infer from SP
+          // SP < 2.0 at a high-grade course suggests Class 1-3
+          // We use SP: if odds-on or short-priced at a quality venue, likely Class 1-3
+          if (!bfRaceCls && hStat2.bfSP > 0) {
+            var bfSpVal = hStat2.bfSP;
+            // Very short: likely competitive Class 1-2; short fav: Class 1-3
+            bfRaceCls = bfSpVal < 1.5 ? 2 : bfSpVal < 2.0 ? 3 : 0;
+          }
+          var thisCls   = (S.sel && S.sel.cls) || 0;
+          // classDropped: horse ran in a LOWER class number (better race) when BF
+          // now in a HIGHER class number (worse race) = dropped down = stronger signal
+          // e.g. BF in Class 2 (bfRaceCls=2), now Class 5 (thisCls=5) → 5>2 = dropped ✓
+          var classDropped = bfRaceCls > 0 && thisCls > 0 && thisCls > bfRaceCls;
+
+          if (classDropped) {
+            bfAlert = ' <span class="mk" style="background:rgba(255,140,0,.2);color:#ffaa00;border:1px solid rgba(255,140,0,.6);font-weight:700" title="Beaten ' + bfLabel + ' in Class ' + bfRaceCls + ' at ' + esc(hStat2.bfCourse) + ' — NOW Class ' + thisCls + ' (dropped ' + (thisCls-bfRaceCls) + ' classes)">👀⬇ BF DROP</span>';
+          } else {
+            bfAlert = ' <span class="mk" style="background:rgba(255,82,82,.12);color:var(--re);border:1px solid rgba(255,82,82,.3)" title="Beaten ' + bfLabel + ' at ' + esc(hStat2.bfCourse) + ' ' + daysSinceBf + ' days ago (finished ' + hStat2.bfPos + ')">👀 BF</span>';
+          }
+          r._bfAlert  = true;
+          r._bfCourse = hStat2.bfCourse || '';
+          r._bfSP     = hStat2.bfSP    || 0;
+          r._bfPos    = hStat2.bfPos   || 0;
+          r._bfDrop   = classDropped;
           // Tag runner for result logging
           r._bfAlert  = true;
           r._bfCourse = hStat2.bfCourse || '';
