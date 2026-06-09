@@ -1003,7 +1003,14 @@ function extractRunners(block) {
   var lines = joined.split('\n'), runners = [];
   for (var i = 0; i < lines.length; i++) {
     var r = parseRunnerLine(lines[i].trim());
-    if (r) runners.push(r);
+    if (r) {
+      // Check surrounding lines for GELDING NOTIFICATION
+      var context = lines.slice(Math.max(0,i-3), i+4).join(' ');
+      if (/GELDING NOTIFICATION/i.test(context)) {
+        r._recentlyGelded = true;
+      }
+      runners.push(r);
+    }
   }
   var seen = {};
   return runners.filter(function(r){ if (seen[r.stall]) return false; seen[r.stall] = true; return true; });
@@ -2814,9 +2821,14 @@ function showResults(scored, val, race, paceInfo) {
       }
     }
 
-    // Gelding alert — horse recently gelded (was Colt, now Gelding in training data)
+    // Gelding alert — from PDF (GELDING NOTIFICATION in form) OR model data
     var geldingAlert = '';
-    if (S.model && S.model.horseStats) {
+    // Source 1: PDF form guide contains "GELDING NOTIFICATION"
+    if (r._recentlyGelded) {
+      geldingAlert = ' <span class="mk" style="background:rgba(100,180,255,.18);color:#64b4ff;border:1px solid rgba(100,180,255,.5);font-weight:700" title="Gelding notification in recent form — first run as gelding">✂ GELDED</span>';
+    }
+    // Source 2: Model horseStats shows C→G transition
+    if (!geldingAlert && S.model && S.model.horseStats) {
       var hKeyG  = (r.name || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i,'').trim();
       var hStatG = S.model.horseStats[hKeyG];
       if (hStatG && hStatG.gelded && hStatG.geldedDate) {
