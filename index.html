@@ -3361,17 +3361,19 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   function fetchModel(slot) {
-    var mstEl = document.getElementById('mst');
-    return fetch(MODEL_URLS[slot], { cache: 'no-cache' })
+    // Use default cache (no 'no-cache') — lets browser cache large model files
+    // This is critical on Safari iOS where forced no-cache fetches can fail on large JSONs
+    return fetch(MODEL_URLS[slot])
       .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + slot);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       })
       .then(function(m) {
-        if (slot === 'turf')  S.modelTurf  = m;
-        if (slot === 'aw')    S.modelAW    = m;
-        if (slot === 'jumps') S.modelJumps = m;
-        if (!S.model || slot === 'turf') S.model = m;
+        if (slot === 'turf')  { S.modelTurf  = m; if (!S.model) S.model = m; }
+        if (slot === 'aw')    { S.modelAW    = m; }
+        if (slot === 'jumps') { S.modelJumps = m; }
+        // Always prefer turf as default model
+        if (slot === 'turf')  S.model = m;
         updateModelLabel(slot, m);
         return { slot: slot, ok: true };
       })
@@ -3385,8 +3387,18 @@ document.addEventListener('DOMContentLoaded', function() {
     var mstEl = document.getElementById('mst');
     if (mstEl) mstEl.innerHTML = '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);padding:8px">⏳ Loading models from GitHub…</div>';
 
-    Promise.all(['turf','aw','jumps'].map(fetchModel))
-      .then(function(results) {
+    // Fetch sequentially — parallel large JSON fetches can fail on Safari iOS
+    var _results = [];
+    fetchModel('turf').then(function(r1) {
+      _results.push(r1); updateModelPill();
+      return fetchModel('aw');
+    }).then(function(r2) {
+      _results.push(r2);
+      return fetchModel('jumps');
+    }).then(function(r3) {
+      _results.push(r3);
+    }).then(function() {
+      var results = _results;
         var loaded = results.filter(function(r){ return r.ok; }).map(function(r){ return r.slot; });
         var failed = results.filter(function(r){ return !r.ok; }).map(function(r){ return r.slot + ' (' + r.err + ')'; });
 
