@@ -932,7 +932,19 @@ function processPages(pages) {
     // Remove existing meeting for same course if reloaded
     S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
     S.meetings.push({ course: course, races: races });
-    // S.currentRaces = this meeting only (for Predict + Placepot)
+    // Check if any runners are tagged as recently gelded
+  var geldedCount = 0;
+  races.forEach(function(race) {
+    (race.runners || []).forEach(function(r) {
+      if (r._recentlyGelded) geldedCount++;
+    });
+  });
+  if (geldedCount === 0) {
+    // Quietly note in console - user can switch to Form PDF for gelding detection
+    console.info('ℹ No GELDING NOTIFICATION found in PDF. For ✂ GELDED badges, download "Racecards & Form + Expert View" from ATR.');
+  }
+
+  // S.currentRaces = this meeting only (for Predict + Placepot)
     S.currentRaces = races;
     // S.races = all races across all meetings (for Lucky 15)
     S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
@@ -3107,6 +3119,24 @@ function updateSetupHint(races) {
     + statusHtml
     + '</div>';
   box.style.display = 'block';
+
+  // Gelding tip — show if no gelded runners detected (means Racecards-Only PDF was used)
+  var hasGelded = races.some(function(race){
+    return (race.runners||[]).some(function(r){ return r._recentlyGelded; });
+  });
+  var geldTip = document.getElementById('geldTip');
+  if (!geldTip) {
+    geldTip = document.createElement('div');
+    geldTip.id = 'geldTip';
+    geldTip.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(100,180,255,.07);border:1px solid rgba(100,180,255,.2);font-family:var(--mono);font-size:.62rem;color:#64b4ff';
+    box.parentNode.insertBefore(geldTip, box.nextSibling);
+  }
+  if (hasGelded) {
+    geldTip.style.display = 'none';
+  } else {
+    geldTip.textContent = '✂ For GELDED badges: download "Racecards & Form + Expert View" from ATR instead of Racecards Only';
+    geldTip.style.display = 'block';
+  }
 }
 
 function renderRaceList(races) {
