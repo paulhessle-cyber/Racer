@@ -3814,6 +3814,32 @@ function togglePasteBox() {
   }
 }
 
+
+function undoLastOdds() {
+  var snap = S._oddsSnapshot;
+  if (!snap) { showPasteStatus('⚠ Nothing to undo.', 'warn'); return; }
+  var race = S.sel;
+  if (!race) return;
+  if ((race.course + '_' + race.time) !== snap.raceKey) {
+    showPasteStatus('⚠ Undo only works on the same race.', 'warn');
+    return;
+  }
+  // Restore snapshotted odds
+  snap.runners.forEach(function(s) {
+    var runner = race.runners.find(function(r){ return r.stall === s.stall; });
+    if (!runner) return;
+    runner.odds         = s.odds;
+    runner._openingOdds = s._openingOdds;
+    runner._mv          = s._mv;
+    updateOddsDisplay(runner);
+  });
+  S._oddsSnapshot = null; // can only undo once
+  showPasteStatus('↩ Odds restored to previous values.', 'ok');
+  // Re-render the runner list
+  if (typeof renderPredictTab === 'function') renderPredictTab();
+  else if (typeof renderRunners === 'function') renderRunners();
+}
+
 function applyPastedOdds() {
   var race = S.sel;
   if (!race || !race.runners.length) {
@@ -3828,6 +3854,19 @@ function applyPastedOdds() {
     showPasteStatus('❌ Could not find any stall + odds pairs. Make sure you copied the full runners section.', 'warn');
     return;
   }
+
+  // ── Snapshot current odds for undo ────────────────────────────────────
+  S._oddsSnapshot = {
+    raceKey: race.course + '_' + race.time,
+    runners: race.runners.map(function(r) {
+      return {
+        stall:        r.stall,
+        odds:         r.odds         || 0,
+        _openingOdds: r._openingOdds || 0,
+        _mv:          r._mv          || ''
+      };
+    })
+  };
 
   var matched = 0, skipped = 0, steamers = [], drifters = [];
 
@@ -3889,6 +3928,7 @@ function applyPastedOdds() {
   if (steamers.length) msg += ' · 🔵 Steaming: ' + steamers.join(', ');
   if (drifters.length) msg += ' · 🟠 Drifting: ' + drifters.join(', ');
   if (skipped) msg += ' (' + skipped + ' not matched)';
+  msg += ' &nbsp;<button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;vertical-align:middle">↩ Undo</button>';
   showPasteStatus(msg, 'ok');
 
   setTimeout(function(){
