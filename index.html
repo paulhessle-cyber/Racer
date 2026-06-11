@@ -2403,7 +2403,24 @@ function predict() {
   // Market keeps horses from going wildly wrong; form provides real differentiation
   // With no odds: pure form (still limited without model)
   // With partial odds: reduce market weight proportionally
-  var MKT_W  = noOddsMode ? 0.0 : partialOdds ? 0.25 : 0.40;
+  // Dynamic market weight — increases when a strong market leader exists
+  // If the field contains an odds-on or near-odds-on shot, the market is very
+  // confident and we should trust it more. A 1.7 shot in a 10-runner field
+  // should not be ranked behind an 11/1 shot purely on form signals.
+  var shortestOdds = Infinity;
+  activeRunners.forEach(function(r){ if (r.odds > 1 && r.odds < shortestOdds) shortestOdds = r.odds; });
+  var BASE_MKT_W = noOddsMode ? 0.0 : partialOdds ? 0.25 : 0.40;
+  // Boost market weight when a clear market leader exists:
+  //   odds <= 1.5  → market weight 0.75 (market very dominant)
+  //   odds <= 2.0  → market weight 0.60
+  //   odds <= 3.0  → market weight 0.50
+  //   odds > 3.0   → market weight 0.40 (normal — open race, form matters more)
+  var MKT_W = BASE_MKT_W;
+  if (!noOddsMode && !partialOdds) {
+    if      (shortestOdds <= 1.5) MKT_W = 0.75;
+    else if (shortestOdds <= 2.0) MKT_W = 0.60;
+    else if (shortestOdds <= 3.0) MKT_W = 0.50;
+  }
   var FORM_W = 1.0 - MKT_W;
   var blended = activeRunners.map(function(r, i) {
     var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
