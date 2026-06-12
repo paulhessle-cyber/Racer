@@ -182,6 +182,7 @@
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
   <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
+  <button class="tab-btn" onclick="showTab('value')">💰 Value</button>
 </div>
 
 <div id="app">
@@ -240,7 +241,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -251,6 +252,7 @@ function showTab(tab) {
   if (tab === 'bets') renderBets();
   if (tab === 'insights') renderInsights();
   if (tab === 'bf') renderBFWatch();
+  if (tab === 'value') renderValueTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -290,7 +292,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
     '<div class="tab-content" id="tab-bets"></div>' +
     '<div class="tab-content" id="tab-insights"></div>' +
-    '<div class="tab-content" id="tab-bf"></div>';
+    '<div class="tab-content" id="tab-bf"></div>' +
+    '<div class="tab-content" id="tab-value"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -1669,4 +1672,181 @@ function renderBFWatch() {
   h += '</div>';
   el.innerHTML = h;
 }
+
+// ══ VALUE PICK ANALYSIS ══════════════════════════════════════════════════════
+function renderValueTab() {
+  var el = document.getElementById('tab-value');
+  if (!el) return;
+  if (!loadedLog || !loadedLog.length) {
+    el.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:.75rem;color:var(--mt)">Load a results JSON to see value pick analysis.</div>';
+    return;
+  }
+
+  var sorted = loadedLog.slice().sort(function(a,b){
+    return (a.date+a.time) < (b.date+b.time) ? -1 : 1;
+  });
+
+  // Split into races with valuePick logged vs without
+  var vpRaces  = sorted.filter(function(e){ return e.valuePick; });
+  var allRaces = sorted;
+
+  var h = '<div style="padding:16px">';
+
+  // ── No data yet banner ───────────────────────────────────────────────────
+  if (!vpRaces.length) {
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center">';
+    h += '<div style="font-size:2rem;margin-bottom:10px">💰</div>';
+    h += '<div style="font-family:var(--mono);font-size:.75rem;color:var(--text);margin-bottom:8px">No value pick data yet</div>';
+    h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);line-height:1.6">';
+    h += 'The 💰 VALUE badge was added in v4.0 (10 Jun 2026).<br>';
+    h += 'Value picks are tracked automatically as you log races.<br><br>';
+    h += 'Upload a results JSON from races logged after that date to see analysis here.';
+    h += '</div></div>';
+    h += '</div>';
+    el.innerHTML = h;
+    return;
+  }
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  var vpWins    = vpRaces.filter(function(e){ return e.valuePickWon; });
+  var vpRet     = vpWins.reduce(function(s,e){ return s + (e.valuePickOdds||0); }, 0);
+  var vpPnl     = vpRet - vpRaces.length;
+  var vpRoi     = vpPnl / vpRaces.length * 100;
+
+  // Top pick stats over same period for comparison
+  var r1Wins    = vpRaces.filter(function(e){ return e.topPickWon; });
+  var r1Ret     = r1Wins.reduce(function(s,e){ return s + (e.topPickOdds||0); }, 0);
+  var r1Pnl     = r1Ret - vpRaces.length;
+  var r1Roi     = r1Pnl / vpRaces.length * 100;
+
+  // Fav stats over same period
+  var favWins   = vpRaces.filter(function(e){ return e.favWon; });
+  var favRet    = favWins.reduce(function(s,e){ return s + (e.favOdds||0); }, 0);
+  var favPnl    = favRet - vpRaces.length;
+  var favRoi    = favPnl / vpRaces.length * 100;
+
+  // How often does valuePick differ from rank 1?
+  var diffPick  = vpRaces.filter(function(e){
+    return e.valuePick && e.predictions && e.predictions[0] &&
+           e.valuePick !== e.predictions[0].name;
+  });
+
+  // Header
+  h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:14px">';
+  h += 'Tracking the 💰 VALUE badge — within the model\u2019s top 3, the runner with the biggest model-vs-market edge. Based on ' + vpRaces.length + ' races.';
+  h += '</div>';
+
+  // ── Three-way comparison ─────────────────────────────────────────────────
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">';
+
+  function statCard(label, wins, total, pnl, roi, highlight) {
+    var col = roi >= 0 ? 'var(--g)' : roi > -15 ? '#ffaa00' : 'var(--re)';
+    var border = highlight ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
+    return '<div style="background:var(--card);' + border + ';border-radius:10px;padding:12px;text-align:center">'
+      + '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">' + label + '</div>'
+      + '<div style="font-size:1.3rem;font-weight:700;color:' + col + '">' + (roi >= 0 ? '+' : '') + Math.round(roi) + '%</div>'
+      + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">ROI</div>'
+      + '<div style="font-family:var(--mono);font-size:.65rem;color:var(--text);margin-top:4px">'
+        + wins + '/' + total + ' (' + Math.round(wins/total*100) + '% SR)'
+      + '</div>'
+      + '<div style="font-family:var(--mono);font-size:.6rem;color:' + col + ';margin-top:2px">P&L £' + (pnl >= 0 ? '+' : '') + pnl.toFixed(1) + '</div>'
+      + '</div>';
+  }
+
+  var vpBetter = vpRoi > r1Roi;
+  h += statCard('💰 VALUE PICK', vpWins.length, vpRaces.length, vpPnl, vpRoi, vpBetter);
+  h += statCard('🏆 RANK 1', r1Wins.length, vpRaces.length, r1Pnl, r1Roi, !vpBetter && r1Roi > favRoi);
+  h += statCard('📊 FAVOURITE', favWins.length, vpRaces.length, favPnl, favRoi, false);
+  h += '</div>';
+
+  // ── Verdict ──────────────────────────────────────────────────────────────
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px;font-family:var(--mono);font-size:.7rem">';
+  h += '<div style="color:var(--mt);font-size:.6rem;letter-spacing:1px;margin-bottom:6px">VERDICT</div>';
+  if (vpRaces.length < 30) {
+    h += '<span style="color:#ffaa00">⚠ Sample too small (' + vpRaces.length + ' races) — need 50+ for reliable conclusions. Keep logging.</span>';
+  } else if (vpRoi > r1Roi && vpRoi > 0) {
+    h += '<span style="color:var(--g)">✓ Value picking is outperforming both rank 1 and the favourite. The edge appears real at this sample size — consider using it as your primary pick.</span>';
+  } else if (vpRoi > r1Roi && vpRoi <= 0) {
+    h += '<span style="color:#ffaa00">Value picking loses less than rank 1 but is still negative ROI. The theory is working directionally but hasn\u2019t flipped positive yet.</span>';
+  } else if (vpRoi <= r1Roi) {
+    h += '<span style="color:var(--re)">✗ Value picking is NOT outperforming rank 1 at this sample. The rank 1 strategy is better here — or both are losing and the market is just better than the model.</span>';
+  }
+  h += '</div>';
+
+  // ── When value pick differs from rank 1 ─────────────────────────────────
+  if (diffPick.length) {
+    var dpWins = diffPick.filter(function(e){ return e.valuePickWon; });
+    var dpRet  = dpWins.reduce(function(s,e){ return s + (e.valuePickOdds||0); }, 0);
+    var dpPnl  = dpRet - diffPick.length;
+    var dpRoi  = dpPnl / diffPick.length * 100;
+
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:8px">WHEN VALUE ≠ RANK 1 (' + diffPick.length + ' races)</div>';
+    h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--text)">';
+    h += dpWins.length + '/' + diffPick.length + ' wins (' + Math.round(dpWins.length/diffPick.length*100) + '% SR)';
+    h += ' · P&L £' + (dpPnl >= 0 ? '+' : '') + dpPnl.toFixed(1);
+    h += ' · ROI ' + (dpRoi >= 0 ? '+' : '') + Math.round(dpRoi) + '%';
+    h += '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:4px">This is the purest test — races where the value pick made a different call to the model\u2019s top pick.</div>';
+    h += '</div>';
+  }
+
+  // ── Rolling 20-race trend ────────────────────────────────────────────────
+  if (vpRaces.length >= 20) {
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">ROLLING 20-RACE P&L</div>';
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px">';
+    var roll = [];
+    for (var ri = 19; ri < vpRaces.length; ri++) {
+      var window = vpRaces.slice(ri-19, ri+1);
+      var wWins = window.filter(function(e){ return e.valuePickWon; });
+      var wRet  = wWins.reduce(function(s,e){ return s + (e.valuePickOdds||0); }, 0);
+      roll.push({ date: vpRaces[ri].date, pnl: wRet - 20 });
+    }
+    var minPnl = Math.min.apply(null, roll.map(function(r){return r.pnl;}));
+    var maxPnl = Math.max.apply(null, roll.map(function(r){return r.pnl;}));
+    var range  = maxPnl - minPnl || 1;
+    var w = 100 / roll.length;
+    h += '<svg viewBox="0 0 100 40" style="width:100%;height:60px">';
+    // Zero line
+    var zeroY = 38 - ((0 - minPnl) / range) * 36;
+    h += '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY + '" stroke="var(--bd)" stroke-width="0.3"/>';
+    // P&L line
+    var pts = roll.map(function(r, i) {
+      var x = i * w + w/2;
+      var y = 38 - ((r.pnl - minPnl) / range) * 36;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    h += '<polyline points="' + pts + '" fill="none" stroke="var(--g)" stroke-width="0.8"/>';
+    h += '</svg>';
+    h += '</div>';
+  }
+
+  // ── Recent race log ──────────────────────────────────────────────────────
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">RECENT RACES</div>';
+  var recent = vpRaces.slice(-20).reverse();
+  recent.forEach(function(e) {
+    var vpName  = e.valuePick || '';
+    var vpOdds  = e.valuePickOdds || 0;
+    var vpWon   = e.valuePickWon;
+    var r1Name  = e.predictions && e.predictions[0] ? e.predictions[0].name : '';
+    var diff    = vpName !== r1Name;
+    var col     = vpWon ? 'var(--g)' : 'var(--re)';
+    var lbl     = vpWon ? '✓' : '✗';
+
+    h += '<div style="background:var(--card);border:1px solid ' + (diff ? 'rgba(255,215,0,.3)' : 'var(--bd)') + ';border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div>';
+    h += '<div style="font-size:.75rem;font-weight:700">' + esc(vpName) + ' <span style="font-weight:400;color:var(--mt)">@ ' + (vpOdds||'?') + '</span>';
+    if (diff) h += ' <span style="font-family:var(--mono);font-size:.55rem;color:#ffd700">≠ rank1</span>';
+    h += '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + e.date + ' · ' + esc(e.course) + ' · ' + esc(e.dist) + '</div>';
+    h += '</div>';
+    h += '<span style="font-family:var(--mono);font-size:.8rem;font-weight:700;color:' + col + '">' + lbl + '</span>';
+    h += '</div>';
+  });
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+
 </script>
