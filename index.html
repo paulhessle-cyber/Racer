@@ -4703,13 +4703,11 @@ function runL15(strategy) {
     var pickC = pickBest(bandC, usedRaces);
     if (pickC) usedRaces.push(pickC.raceId);
 
-    // Band D: best remaining horse from any band, different race
     var allSorted = scoredHorses.slice().sort(function(a,b){ return b._smartScore - a._smartScore; });
-    var pickD = pickBest(allSorted, usedRaces);
 
     var smartCombo = [pickA, pickB, pickC, pickD].filter(Boolean);
 
-    // If we couldn't fill all 4 bands (e.g. no 10+ runners with odds),
+    // If bands couldn't fill all 4 slots (small card, few odds entered),
     // fill remaining slots with next best from any unused race
     if (smartCombo.length < 4) {
       for (var i = 0; i < allSorted.length && smartCombo.length < 4; i++) {
@@ -4978,8 +4976,27 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     // Simpler: use breakdown probs
     var prob1win = combo.reduce(function(s,h){ return s + h.prob*(1-h.prob)*(1-h.prob)*(1-h.prob)*4; }, 0); // rough
 
+    // ── Bet quality maths — visible before betting ─────────────────────────
+    var expWinners = combo.reduce(function(s,h){ return s + h.prob; }, 0);
+    // P(2+ winners): 1 - P(0) - P(1)
+    var p0 = combo.reduce(function(s,h){ return s * (1-h.prob); }, 1);
+    var pExactly1 = 0;
+    combo.forEach(function(h, hi) {
+      var p = h.prob;
+      combo.forEach(function(x, xi){ if (xi !== hi) p *= (1-x.prob); });
+      pExactly1 += p;
+    });
+    var p2plus = Math.max(0, 1 - p0 - pExactly1);
+    var qualCol = p2plus >= 0.30 ? 'var(--g)' : p2plus >= 0.20 ? '#ffaa00' : 'var(--re)';
+    var qualLbl = p2plus >= 0.30 ? 'GOOD STRUCTURE' : p2plus >= 0.20 ? 'MARGINAL' : 'POOR — expect losses';
+
     h += '<div class="l15-card ' + cardCls[ri] + '">'
-      + '<div class="l15-rank">' + medals[ri] + ' ' + (rankLabel[ri]||'Option '+(ri+1)) + '</div>';
+      + '<div class="l15-rank">' + medals[ri] + ' ' + (rankLabel[ri]||'Option '+(ri+1)) + '</div>'
+      + '<div style="display:flex;gap:12px;font-family:var(--mono);font-size:.62rem;color:var(--mt);margin:4px 0 8px;flex-wrap:wrap">'
+        + '<span>Expected winners: <strong style="color:var(--text)">' + expWinners.toFixed(2) + '</strong></span>'
+        + '<span>P(2+ win): <strong style="color:' + qualCol + '">' + Math.round(p2plus*100) + '%</strong></span>'
+        + '<span style="color:' + qualCol + ';font-weight:700">' + qualLbl + '</span>'
+      + '</div>';
 
     combo.forEach(function(horse) {
       h += '<div class="l15-horse">'
