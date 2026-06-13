@@ -265,7 +265,7 @@ function renderAll() {
   var log = loadedLog;
   if (!log||!log.length){ renderImport(); return; }
 
-  document.getElementById('tab-bar').style.display='flex';
+  document.getElementById('tab-bar').style.display='grid';
   var sorted = log.slice().sort(function(a,b){
     return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
   });
