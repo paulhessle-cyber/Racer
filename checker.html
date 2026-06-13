@@ -1881,110 +1881,103 @@ function renderPlacepotTab() {
     return;
   }
 
-  // Build place-rate stats per course
+  // ── Aggregate place-rate by course (summary at top) ──────────────────────
   var courses = {};
   loadedLog.forEach(function(e) {
     var c = e.course || 'Unknown';
-    if (!courses[c]) courses[c] = { races:0, placed:0, won:0, recent:[] };
+    if (!courses[c]) courses[c] = { races:0, placed:0, won:0 };
     courses[c].races++;
-    var didPlace = e.topPickWon || e.topPickPlaced;
-    if (didPlace) courses[c].placed++;
+    if (e.topPickWon || e.topPickPlaced) courses[c].placed++;
     if (e.topPickWon) courses[c].won++;
-    courses[c].recent.push({
-      date: e.date, time: e.time,
-      result: e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L',
-      pick: (e.predictions && e.predictions[0]) ? e.predictions[0].name : ''
-    });
   });
-
   var courseList = Object.keys(courses).map(function(c){
     var d = courses[c];
-    var pr = d.placed / d.races;
-    return {
-      name: c, races: d.races, placed: d.placed, won: d.won,
-      placeRate: pr,
-      pp6: Math.pow(pr, 6),   // rough 6-leg placepot probability
-      recent: d.recent
-    };
-  });
-
-  // Sort by place rate desc
-  courseList.sort(function(a,b){ return b.placeRate - a.placeRate; });
+    return { name:c, races:d.races, placed:d.placed, won:d.won, placeRate:d.placed/d.races };
+  }).sort(function(a,b){ return b.placeRate - a.placeRate; });
 
   var h = '<div style="padding:16px">';
-  h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:6px">';
-  h += 'How often the model\u2019s top pick PLACED (placed or won) at each course. A placepot needs your pick to place in 6 races, so higher place rates mean better placepot prospects.';
-  h += '</div>';
-  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-bottom:14px;opacity:.8">';
-  h += 'Note: 6-leg estimate assumes consistent place rate across all 6 races \u2014 a rough guide, not a guarantee. Needs 6+ races logged per course to be meaningful.';
-  h += '</div>';
 
-  // Confidence threshold: only show courses with enough data prominently
-  var ready    = courseList.filter(function(c){ return c.races >= 6; });
-  var building = courseList.filter(function(c){ return c.races < 6; });
+  // ── Day-by-day meeting results (the main event) ──────────────────────────
+  var meetings = {};
+  loadedLog.forEach(function(e) {
+    var key = (e.course||'?') + '||' + (e.date||'?');
+    if (!meetings[key]) meetings[key] = { course:e.course, date:e.date, races:[] };
+    meetings[key].races.push(e);
+  });
 
-  if (ready.length) {
-    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin-bottom:8px">\u2713 ENOUGH DATA (6+ races)</div>';
-    ready.forEach(function(c){ h += placepotCard(c, true); });
-  }
+  var meetingList = Object.keys(meetings).map(function(k){ return meetings[k]; });
+  // Sort each meeting's races by time, then sort meetings by date desc
+  meetingList.forEach(function(m){
+    m.races.sort(function(a,b){ return (a.time||'') < (b.time||'') ? -1 : 1; });
+  });
+  meetingList.sort(function(a,b){ return (a.date+a.course) < (b.date+b.course) ? 1 : -1; });
 
-  if (building.length) {
-    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin:16px 0 8px">\u23f3 STILL BUILDING (under 6 races)</div>';
-    building.forEach(function(c){ h += placepotCard(c, false); });
-  }
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Each meeting shows the top pick result per race. A placepot needs your pick to PLACE in 6 races.</div>';
+
+  meetingList.forEach(function(m) {
+    var n = m.races.length;
+    var ppRaces = n >= 6 ? m.races.slice(0, 6) : m.races;
+    var ppPlaced = ppRaces.filter(function(e){ return e.topPickWon || e.topPickPlaced; }).length;
+    var landed = (ppPlaced === ppRaces.length) && ppRaces.length >= 6;
+    var totalPlaced = m.races.filter(function(e){ return e.topPickWon || e.topPickPlaced; }).length;
+
+    var statusCol, statusTxt;
+    if (n < 6) {
+      statusCol = 'var(--mt)';
+      statusTxt = 'Only ' + n + ' race' + (n===1?'':'s') + ' logged \u2014 need 6 for a placepot';
+    } else if (landed) {
+      statusCol = 'var(--g)';
+      statusTxt = '\u2713 PLACEPOT LANDS (all 6 placed)';
+    } else {
+      statusCol = 'var(--re)';
+      statusTxt = '\u2717 Busted \u2014 ' + ppPlaced + '/6 placed';
+    }
+
+    var border = landed ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
+    h += '<div style="background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
+    h += '<div>';
+    h += '<div style="font-weight:700;font-size:.85rem">' + esc(m.course) + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">' + m.date + ' \u00b7 ' + totalPlaced + '/' + n + ' placed</div>';
+    h += '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + statusCol + ';font-weight:700;text-align:right;max-width:140px">' + statusTxt + '</div>';
+    h += '</div>';
+
+    // Per-race result row
+    h += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+    m.races.forEach(function(e, ri) {
+      var res = e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L';
+      var rc  = res === 'W' ? 'var(--g)' : res === 'P' ? '#ffaa00' : 'var(--re)';
+      var inPP = ri < 6;
+      var pick = (e.predictions && e.predictions[0]) ? e.predictions[0].name : '';
+      var opacity = inPP ? '1' : '0.4';
+      h += '<div style="display:flex;flex-direction:column;align-items:center;opacity:' + opacity + '" title="' + e.time + ' ' + esc(pick) + (inPP?'':' (race 7+, not in placepot)') + '">';
+      h += '<div style="width:26px;height:26px;border-radius:5px;background:' + rc + ';color:#000;font-family:var(--mono);font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center">' + res + '</div>';
+      h += '<div style="font-family:var(--mono);font-size:.5rem;color:var(--mt);margin-top:2px">' + (e.time||'') + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    h += '</div>';
+  });
+
+  // ── Aggregate summary by course (collapsed at bottom) ────────────────────
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin:20px 0 8px">\ud83d\udcca PLACE RATE BY COURSE (all-time)</div>';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-bottom:10px">Average across every logged race at each course \u2014 use to spot which tracks the model reads well.</div>';
+  courseList.forEach(function(c) {
+    var pr = Math.round(c.placeRate*100);
+    var col = c.placeRate>=0.70?'var(--g)':c.placeRate>=0.55?'#ffaa00':'var(--re)';
+    var enough = c.races >= 6;
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--card);border:1px solid var(--bd);border-radius:6px;margin-bottom:5px;opacity:' + (enough?'1':'0.55') + '">';
+    h += '<span style="font-size:.72rem;font-weight:600">' + esc(c.name) + '</span>';
+    h += '<span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">' + c.placed + '/' + c.races + ' \u00b7 <strong style="color:' + col + '">' + pr + '%</strong></span>';
+    h += '</div>';
+  });
 
   h += '</div>';
   el.innerHTML = h;
 }
 
-function placepotCard(c, ready) {
-  var pr = Math.round(c.placeRate * 100);
-  // Verdict colours
-  var col, verdict;
-  if (!ready) {
-    col = 'var(--mt)'; verdict = c.races + ' race' + (c.races===1?'':'s') + ' \u2014 need more';
-  } else if (c.placeRate >= 0.70) {
-    col = 'var(--g)';   verdict = 'STRONG \u2014 worth a placepot';
-  } else if (c.placeRate >= 0.55) {
-    col = '#ffaa00';    verdict = 'DECENT \u2014 playable with cover';
-  } else {
-    col = 'var(--re)';  verdict = 'WEAK \u2014 avoid placepots here';
-  }
-
-  var border = ready && c.placeRate >= 0.70 ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
-  var h = '<div style="background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
-  h += '<div>';
-  h += '<div style="font-weight:700;font-size:.85rem">' + esc(c.name) + '</div>';
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:' + col + ';margin-top:2px">' + verdict + '</div>';
-  h += '</div>';
-  h += '<div style="text-align:right">';
-  h += '<div style="font-size:1.4rem;font-weight:700;color:' + col + '">' + pr + '%</div>';
-  h += '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt)">place rate</div>';
-  h += '</div>';
-  h += '</div>';
-
-  // Stats row
-  h += '<div style="display:flex;gap:14px;font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:8px">';
-  h += '<span>' + c.placed + '/' + c.races + ' placed</span>';
-  h += '<span>' + c.won + ' won</span>';
-  if (ready) h += '<span>6-leg est: <strong style="color:' + col + '">' + (c.pp6*100).toFixed(1) + '%</strong></span>';
-  h += '</div>';
-
-  // Recent result string (last 10)
-  if (c.recent.length) {
-    var recent = c.recent.slice(-10);
-    h += '<div style="display:flex;gap:3px;margin-top:8px">';
-    recent.forEach(function(r){
-      var rc = r.result === 'W' ? 'var(--g)' : r.result === 'P' ? '#ffaa00' : 'var(--re)';
-      h += '<span style="font-family:var(--mono);font-size:.6rem;font-weight:700;color:' + rc + ';width:14px;text-align:center" title="' + r.date + ' ' + r.time + ': ' + esc(r.pick) + '">' + r.result + '</span>';
-    });
-    h += '</div>';
-  }
-
-  h += '</div>';
-  return h;
-}
 
 
 </script>
