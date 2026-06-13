@@ -5392,10 +5392,11 @@ function saveRaceResult(raceKey) {
     favOdds:       fav ? fav.odds : 0,
     favWon:        favWon,
     cls:           (S.sel && S.sel.cls) || 0,
-    valuePick:     S._logValuePick ? S._logValuePick.name : '',
-    valuePickOdds: S._logValuePick ? S._logValuePick.odds : 0,
-    valuePickEdge: S._logValuePick ? S._logValuePick.edge : 0,
-    valuePickWon:  !!(S._logValuePick && actual[0] === S._logValuePick.name),
+    valuePick:      S._logValuePick ? S._logValuePick.name : '',
+    valuePickOdds:  S._logValuePick ? S._logValuePick.odds : 0,
+    valuePickEdge:  S._logValuePick ? S._logValuePick.edge : 0,
+    valuePickWon:   !!(S._logValuePick && actual[0] === S._logValuePick.name),
+    valuePickPlaced:!!(S._logValuePick && actual.slice(0, placesAvail).indexOf(S._logValuePick.name) > -1 && actual[0] !== S._logValuePick.name),
     bfHorses:      (S._logRace && S._logRace.runners || []).filter(function(r){
                      return !r._nr && r._bfAlert;
                    }).map(function(r){
