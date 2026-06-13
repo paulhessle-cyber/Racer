@@ -1709,9 +1709,19 @@ function renderValueTab() {
 
   // ── Stats ────────────────────────────────────────────────────────────────
   var vpWins    = vpRaces.filter(function(e){ return e.valuePickWon; });
+  var vpPlaced  = vpRaces.filter(function(e){ return e.valuePickPlaced; });
   var vpRet     = vpWins.reduce(function(s,e){ return s + (e.valuePickOdds||0); }, 0);
   var vpPnl     = vpRet - vpRaces.length;
   var vpRoi     = vpPnl / vpRaces.length * 100;
+  // Each-way ROI (assume 1/4 odds, 3 places for fields 8+)
+  var vpEwWins  = vpWins.length; var vpEwPlaces = vpPlaced.length;
+  var vpEwRet   = vpWins.reduce(function(s,e){
+    return s + (e.valuePickOdds||0) + ((e.valuePickOdds-1)*0.25 + 1); // win part + place part
+  }, 0) + vpPlaced.reduce(function(s,e){
+    return s + ((e.valuePickOdds-1)*0.25 + 1); // place part only
+  }, 0);
+  var vpEwPnl   = vpEwRet - vpRaces.length * 2; // 2 stakes per race (win + place)
+  var vpEwRoi   = vpEwPnl / (vpRaces.length * 2) * 100;
 
   // Top pick stats over same period for comparison
   var r1Wins    = vpRaces.filter(function(e){ return e.topPickWon; });
@@ -1733,7 +1743,8 @@ function renderValueTab() {
 
   // Header
   h += '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt);margin-bottom:14px">';
-  h += 'Tracking the 💰 VALUE badge — within the model\u2019s top 3, the runner with the biggest model-vs-market edge. Based on ' + vpRaces.length + ' races.';
+  h += 'Tracking the 💰 VALUE badge — within the model\u2019s top 3, the runner with the biggest model-vs-market edge. ';
+  h += vpRaces.length + ' races · ' + vpWins.length + ' wins · ' + vpPlaced.length + ' places (placed without winning).';
   h += '</div>';
 
   // ── Three-way comparison ─────────────────────────────────────────────────
@@ -1757,6 +1768,13 @@ function renderValueTab() {
   h += statCard('💰 VALUE PICK', vpWins.length, vpRaces.length, vpPnl, vpRoi, vpBetter);
   h += statCard('🏆 RANK 1', r1Wins.length, vpRaces.length, r1Pnl, r1Roi, !vpBetter && r1Roi > favRoi);
   h += statCard('📊 FAVOURITE', favWins.length, vpRaces.length, favPnl, favRoi, false);
+  h += '</div>';
+  // Each-way addendum
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-family:var(--mono);font-size:.68rem">';
+  h += '<span style="color:var(--mt)">💰 Value pick each-way (1/4 odds, 3 places): </span>';
+  h += '<strong style="color:' + (vpEwRoi>=0?'var(--g)':'var(--re)') + '">' + (vpEwRoi>=0?'+':'') + Math.round(vpEwRoi) + '% ROI</strong>';
+  h += '<span style="color:var(--mt)"> · ' + (vpEwWins+vpEwPlaces) + ' returns from ' + vpRaces.length + ' bets';
+  h += ' (' + vpEwWins + ' wins + ' + vpEwPlaces + ' places only)</span>';
   h += '</div>';
 
   // ── Verdict ──────────────────────────────────────────────────────────────
@@ -1830,8 +1848,9 @@ function renderValueTab() {
     var vpWon   = e.valuePickWon;
     var r1Name  = e.predictions && e.predictions[0] ? e.predictions[0].name : '';
     var diff    = vpName !== r1Name;
-    var col     = vpWon ? 'var(--g)' : 'var(--re)';
-    var lbl     = vpWon ? '✓' : '✗';
+    var vpPlc   = e.valuePickPlaced;
+    var col     = vpWon ? 'var(--g)' : vpPlc ? '#ffaa00' : 'var(--re)';
+    var lbl     = vpWon ? '✓ W' : vpPlc ? '▲ P' : '✗';
 
     h += '<div style="background:var(--card);border:1px solid ' + (diff ? 'rgba(255,215,0,.3)' : 'var(--bd)') + ';border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
     h += '<div>';
