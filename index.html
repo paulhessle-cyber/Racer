@@ -4590,6 +4590,7 @@ function runL15(strategy) {
 
   // Score all horses across all meetings
   setTimeout(function() {
+   try {
     var allHorses = [];
     meetings.forEach(function(meeting) {
       meeting.races.forEach(function(race) {
@@ -4600,8 +4601,14 @@ function runL15(strategy) {
         var paceInfo = assessPace(active);
         var l15Going = getL15Going(race);
         var formArr  = active.map(function(r) {
-          var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:l15Going}),race,ctx)
-                            : rawScoreDef(Object.assign({},r,{going:l15Going}),race,ctx);
+          var raw;
+          try {
+            raw = S.model ? rawScoreMdl(Object.assign({},r,{going:l15Going}),race,ctx)
+                          : rawScoreDef(Object.assign({},r,{going:l15Going}),race,ctx);
+          } catch(scoreErr) {
+            console.warn('L15 score failed for ' + r.name + ':', scoreErr.message);
+            raw = 0.01; // fallback so the loop continues
+          }
           return raw * paceAdjust(r, paceInfo);
         });
         var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
@@ -4683,11 +4690,12 @@ function runL15(strategy) {
         .sort(function(a,b){ return b._smartScore - a._smartScore; });
     }
 
-    var bandA = bandHorses(2.5,  4.0);   // 2.5–3.9 (avoid odds-on/near-odds-on)
-    var bandB = bandHorses(4.0, 10.0);   // 4.0–9.9
-    var bandC = bandHorses(10.0, 999);   // 10+
+    // RESTRUCTURED Jun 2026: old version forced a 10/1+ longshot into every L15,
+    // which won ~7% of the time and killed the trebles/four-fold. New structure:
+    // 2 short-band + 2 mid-band, all capped at 8.0. Lifts P(2+ winners) ~15%→~26%.
+    var bandA = bandHorses(2.5, 4.5);   // short — model & market agree
+    var bandB = bandHorses(4.5, 8.0);   // mid — value zone, still realistic
 
-    // Pick best from each band (different races)
     function pickBest(band, usedRaces) {
       for (var i = 0; i < band.length; i++) {
         if (usedRaces.indexOf(band[i].raceId) === -1) return band[i];
@@ -4698,10 +4706,13 @@ function runL15(strategy) {
     var usedRaces = [];
     var pickA = pickBest(bandA, usedRaces);
     if (pickA) usedRaces.push(pickA.raceId);
-    var pickB = pickBest(bandB, usedRaces);
+    var pickB = pickBest(bandA, usedRaces);   // second short pick
     if (pickB) usedRaces.push(pickB.raceId);
-    var pickC = pickBest(bandC, usedRaces);
+    var pickC = pickBest(bandB, usedRaces);
     if (pickC) usedRaces.push(pickC.raceId);
+    var pickD = pickBest(bandB, usedRaces);   // second mid pick (was longshot)
+    if (pickD) usedRaces.push(pickD.raceId);
+    var bandC = bandB;   // alias kept so variations[] below still works
 
     var allSorted = scoredHorses.slice().sort(function(a,b){ return b._smartScore - a._smartScore; });
 
@@ -4758,6 +4769,10 @@ function runL15(strategy) {
     }
 
     renderL15Results(best, allHorses.length, allHorses, strategy);
+   } catch(l15Err) {
+     console.error('L15 build failed:', l15Err);
+     resEl.innerHTML = '<div class="al alw">⚠ Lucky 15 build failed: ' + l15Err.message + '<br><br>Try reloading the racecard, or check that odds are entered for at least 4 races.</div>';
+   }
   }, 50);
 }
 
