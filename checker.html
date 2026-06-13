@@ -21,8 +21,8 @@
   .hdr-sub{font-family:var(--mono);font-size:.6rem;color:var(--mt);text-transform:uppercase;letter-spacing:2px}
 
   /* Tab bar */
-  .tabs{display:flex;border-bottom:1px solid var(--bd);background:var(--bg);position:sticky;top:57px;z-index:9}
-  .tab-btn{flex:1;padding:12px 8px;font-family:var(--mono);font-size:.6rem;text-transform:uppercase;
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;border-bottom:1px solid var(--bd);background:var(--bd);position:sticky;top:57px;z-index:9}
+  .tab-btn{padding:10px 6px;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;
            letter-spacing:1px;text-align:center;color:var(--mt);cursor:pointer;border:none;
            background:transparent;border-bottom:2px solid transparent;transition:all .2s}
   .tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
@@ -177,7 +177,7 @@
 
 <div class="tabs" id="tab-bar" style="display:none">
   <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
-  <button class="tab-btn" onclick="showTab('backtest')">Backtesting</button>
+  <button class="tab-btn" onclick="showTab('backtest')">Backtest</button>
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
@@ -1912,7 +1912,7 @@ function renderPlacepotTab() {
   });
   meetingList.sort(function(a,b){ return (a.date+a.course) < (b.date+b.course) ? 1 : -1; });
 
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Each meeting shows the top pick result per race. A placepot needs your pick to PLACE in 6 races.</div>';
 
   meetingList.forEach(function(m) {
@@ -1927,14 +1927,14 @@ function renderPlacepotTab() {
       statusCol = 'var(--mt)';
       statusTxt = 'Only ' + n + ' race' + (n===1?'':'s') + ' logged \u2014 need 6 for a placepot';
     } else if (landed) {
-      statusCol = 'var(--g)';
+      statusCol = '#00e676';
       statusTxt = '\u2713 PLACEPOT LANDS (all 6 placed)';
     } else {
-      statusCol = 'var(--re)';
+      statusCol = '#ff5252';
       statusTxt = '\u2717 Busted \u2014 ' + ppPlaced + '/6 placed';
     }
 
-    var border = landed ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
+    var border = landed ? 'border:1px solid #00e676' : 'border:1px solid var(--bd)';
     h += '<div style="background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
     h += '<div>';
@@ -1948,7 +1948,7 @@ function renderPlacepotTab() {
     h += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
     m.races.forEach(function(e, ri) {
       var res = e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L';
-      var rc  = res === 'W' ? 'var(--g)' : res === 'P' ? '#ffaa00' : 'var(--re)';
+      var rc  = res === 'W' ? '#00e676' : res === 'P' ? '#ffc107' : '#ff5252';
       var inPP = ri < 6;
       var pick = (e.predictions && e.predictions[0]) ? e.predictions[0].name : '';
       var opacity = inPP ? '1' : '0.4';
@@ -1962,11 +1962,11 @@ function renderPlacepotTab() {
   });
 
   // ── Aggregate summary by course (collapsed at bottom) ────────────────────
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin:20px 0 8px">\ud83d\udcca PLACE RATE BY COURSE (all-time)</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin:20px 0 8px">\ud83d\udcca PLACE RATE BY COURSE (all-time)</div>';
   h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-bottom:10px">Average across every logged race at each course \u2014 use to spot which tracks the model reads well.</div>';
   courseList.forEach(function(c) {
     var pr = Math.round(c.placeRate*100);
-    var col = c.placeRate>=0.70?'var(--g)':c.placeRate>=0.55?'#ffaa00':'var(--re)';
+    var col = c.placeRate>=0.70?'#00e676':c.placeRate>=0.55?'#ffaa00':'#ff5252';
     var enough = c.races >= 6;
     h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--card);border:1px solid var(--bd);border-radius:6px;margin-bottom:5px;opacity:' + (enough?'1':'0.55') + '">';
     h += '<span style="font-size:.72rem;font-weight:600">' + esc(c.name) + '</span>';
