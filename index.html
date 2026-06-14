@@ -5633,15 +5633,38 @@ function testOddsProxy() {
 }
 
 // Fetch live odds for the currently selected race and fill them in
+
+function showLiveStatus(msg, type) {
+  // Write to a visible banner at the top of the runners section (always visible,
+  // unlike the paste status which is hidden inside the paste panel)
+  var el = document.getElementById('liveOddsStatus');
+  if (!el) {
+    // Create it just below the Runners & Odds header if missing
+    var anchor = document.getElementById('runnersHdr') || document.getElementById('s-predict');
+    el = document.createElement('div');
+    el.id = 'liveOddsStatus';
+    el.style.cssText = 'margin:8px 0';
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(el, anchor.nextSibling);
+    else document.body.appendChild(el);
+  }
+  var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
+  var bg  = type === 'ok' ? 'rgba(0,230,118,.08)' : 'rgba(255,193,7,.1)';
+  el.innerHTML = '<div style="padding:8px 12px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.74rem;font-family:\'IBM Plex Mono\',monospace;line-height:1.45">'+msg+'</div>';
+  // Auto-clear success messages after 6s
+  if (type === 'ok' && /loaded/.test(msg)) {
+    setTimeout(function(){ if (el) el.innerHTML = ''; }, 8000);
+  }
+}
+
 function fetchLiveOdds() {
   var base = getProxyUrl();
-  if (!base) { showPasteStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
+  if (!base) { showLiveStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
   var race = S.sel;
-  if (!race) { showPasteStatus('⚠ Select a race first.', 'warn'); return; }
+  if (!race) { showLiveStatus('⚠ Select a race first.', 'warn'); return; }
 
   var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
   var time   = race.time || '';
-  showPasteStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
+  showLiveStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
 
   var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
   fetch(u)
@@ -5652,10 +5675,10 @@ function fetchLiveOdds() {
         if (/no betfair market found/i.test(msg)) {
           msg = '⏱ No live market for this race. It may have already run, or Betfair hasn\'t opened the market yet (markets usually appear the morning of the race). You can still paste odds manually.';
         }
-        showPasteStatus(msg, 'warn');
+        showLiveStatus(msg, 'warn');
         return;
       }
-      if (!data.runners || !data.runners.length) { showPasteStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
+      if (!data.runners || !data.runners.length) { showLiveStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
 
       // Snapshot for undo (reuse the paste undo machinery)
       S._oddsSnapshot = {
@@ -5682,12 +5705,12 @@ function fetchLiveOdds() {
         }
       });
 
-      showPasteStatus('✓ ' + matched + ' live odds loaded from Betfair' +
+      showLiveStatus('✓ ' + matched + ' live odds loaded from Betfair' +
         ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>', 'ok');
       if (typeof renderRunners === 'function') renderRunners();
     })
     .catch(function(err){
-      showPasteStatus('✗ Live odds failed: ' + err.message, 'warn');
+      showLiveStatus('✗ Live odds failed: ' + err.message, 'warn');
     });
 }
 
