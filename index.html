@@ -390,6 +390,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="fetchLiveOdds()">⬇ Live Odds</button>
         <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="togglePasteBox()">📋 Paste Odds</button>
       </div>
+      <div id="liveOddsStatus" style="margin-bottom:10px"></div>
       <!-- Paste odds panel -->
       <div id="pasteBox" style="display:none;margin-bottom:14px">
         <div style="font-size:.7rem;color:var(--mt);margin-bottom:6px;line-height:1.5">
@@ -5635,18 +5636,8 @@ function testOddsProxy() {
 // Fetch live odds for the currently selected race and fill them in
 
 function showLiveStatus(msg, type) {
-  // Write to a visible banner at the top of the runners section (always visible,
-  // unlike the paste status which is hidden inside the paste panel)
   var el = document.getElementById('liveOddsStatus');
-  if (!el) {
-    // Create it just below the Runners & Odds header if missing
-    var anchor = document.getElementById('runnersHdr') || document.getElementById('s-predict');
-    el = document.createElement('div');
-    el.id = 'liveOddsStatus';
-    el.style.cssText = 'margin:8px 0';
-    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(el, anchor.nextSibling);
-    else document.body.appendChild(el);
-  }
+  if (!el) { alert(msg); return; }  // fallback so a message is never lost
   var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
   var bg  = type === 'ok' ? 'rgba(0,230,118,.08)' : 'rgba(255,193,7,.1)';
   el.innerHTML = '<div style="padding:8px 12px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.74rem;font-family:\'IBM Plex Mono\',monospace;line-height:1.45">'+msg+'</div>';
