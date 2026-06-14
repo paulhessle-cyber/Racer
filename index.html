@@ -5657,12 +5657,11 @@ function showLiveStatus(msg, type) {
 }
 
 function fetchLiveOdds() {
-  // Visible proof the function fired — if you don't see this alert, the page is cached/old
-  console.log('fetchLiveOdds called');
   var base = getProxyUrl();
-  if (!base) { showLiveStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
+  if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
   var race = S.sel;
-  if (!race) { showLiveStatus('⚠ Select a race first.', 'warn'); return; }
+  if (!race) { alert('No race selected. Load a racecard PDF and run a prediction first — the Live Odds button works on the Predict screen after you have runners showing.'); return; }
+  alert('Fetching live odds for ' + (race.course||'?') + ' ' + (race.time||'?') + '…');
 
   var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
   var time   = race.time || '';
