@@ -5660,8 +5660,7 @@ function fetchLiveOdds() {
   var base = getProxyUrl();
   if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
   var race = S.sel;
-  if (!race) { alert('No race selected. Load a racecard PDF and run a prediction first — the Live Odds button works on the Predict screen after you have runners showing.'); return; }
-  alert('Fetching live odds for ' + (race.course||'?') + ' ' + (race.time||'?') + '…');
+  if (!race) { showLiveStatus('⚠ Select a race first (load a PDF and run a prediction).', 'warn'); return; }
 
   var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
   var time   = race.time || '';
@@ -5669,14 +5668,15 @@ function fetchLiveOdds() {
 
   var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
   fetch(u)
-    .then(function(r){ return r.json(); })
+    .then(function(r){ return r.json().catch(function(){ return { error: 'Bad response from server (status ' + r.status + ')' }; }); })
     .then(function(data){
+      // Clean "not found" (finished race / market not open) — not an error
+      if (data.notFound) {
+        showLiveStatus('⏱ ' + (data.message || 'No live market for this race.') + ' You can still paste odds manually.', 'warn');
+        return;
+      }
       if (data.error) {
-        var msg = data.error;
-        if (/no betfair market found/i.test(msg)) {
-          msg = '⏱ No live market for this race. It may have already run, or Betfair hasn\'t opened the market yet (markets usually appear the morning of the race). You can still paste odds manually.';
-        }
-        showLiveStatus(msg, 'warn');
+        showLiveStatus('⚠ ' + data.error, 'warn');
         return;
       }
       if (!data.runners || !data.runners.length) { showLiveStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
