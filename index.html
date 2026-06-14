@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.1 · 14 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.2 · 14 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -338,6 +338,15 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 <!-- RACES -->
 <div class="scr on" id="s-races">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Today's Racing</div>
+      <button class="btn bo" style="width:auto;padding:6px 14px;margin-bottom:0;font-size:.7rem" onclick="loadTodaysMeetings()">↻ Refresh</button>
+    </div>
+    <p class="mu" style="margin-bottom:12px">Live from Betfair. Tap a course to see its race times, then load that meeting's PDF below for full predictions.</p>
+    <div id="todaysMeetings"><div style="color:var(--mt);font-size:.78rem;font-family:'IBM Plex Mono',monospace;padding:8px 0">Tap ↻ Refresh to load today's meetings…</div></div>
+  </div>
+
   <div class="card">
     <div class="ct">Load Racecard PDF</div>
     <p class="mu" style="margin-bottom:12px">Load an At The Races PDF form guide. All runners will be extracted automatically.</p>
@@ -890,6 +899,13 @@ function go(n) {
   if (n === 'placepot') showPlacepotTab();
   if (n === 'l15')      showL15Tab();
   if (n === 'setup')    initCalibCount();
+  if (n === 'races') {
+    // Auto-load today's meetings on first visit if proxy configured and not already loaded
+    var box = document.getElementById('todaysMeetings');
+    if (box && getProxyUrl() && box.querySelector('div') && /Tap ↻ Refresh/.test(box.textContent)) {
+      loadTodaysMeetings();
+    }
+  }
 }
 
 // ── PDF loading ────────────────────────────────────────────
@@ -5645,6 +5661,77 @@ function showLiveStatus(msg, type) {
   if (type === 'ok' && /loaded/.test(msg)) {
     setTimeout(function(){ if (el) el.innerHTML = ''; }, 8000);
   }
+}
+
+
+// ══ TODAY'S MEETINGS (Betfair) ════════════════════════════════════════════════
+function loadTodaysMeetings() {
+  var base = getProxyUrl();
+  var box = document.getElementById('todaysMeetings');
+  if (!box) return;
+  if (!base) {
+    box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Set your odds proxy URL in Setup first.</div>';
+    return;
+  }
+  box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Loading today\'s meetings…</div>';
+
+  fetch(base + '/meetings')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.meetings || !data.meetings.length) {
+        box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">No meetings found for today.</div>';
+        return;
+      }
+      var now = new Date();
+      var nowHHMM = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false });
+
+      var h = '';
+      data.meetings.forEach(function(m, i) {
+        var times = m.times || [];
+        // Count how many races are still upcoming
+        var upcoming = times.filter(function(t){ return t > nowHHMM; }).length;
+        var allDone = upcoming === 0;
+        var mid = 'mtg_' + i;
+
+        h += '<div style="border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;overflow:hidden">';
+        // Course header — tappable
+        h += '<div onclick="toggleMeeting(\'' + mid + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;background:var(--sf2)">';
+        h += '<div>';
+        h += '<div style="font-weight:700;font-size:.92rem' + (allDone ? ';color:var(--mt)' : '') + '">' + esc(m.course) + '</div>';
+        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:2px">' + times.length + ' races · ' + (allDone ? 'all finished' : upcoming + ' upcoming') + '</div>';
+        h += '</div>';
+        h += '<span style="color:var(--mt);font-size:.8rem">▾</span>';
+        h += '</div>';
+        // Times — collapsed by default
+        h += '<div id="' + mid + '" style="display:none;padding:10px 14px;background:var(--bg)">';
+        h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+        times.forEach(function(t){
+          var past = t <= nowHHMM;
+          var col = past ? 'var(--mt)' : 'var(--g)';
+          var bg = past ? 'rgba(255,255,255,.03)' : 'rgba(0,230,118,.08)';
+          h += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:.74rem;padding:5px 10px;border-radius:5px;background:' + bg + ';color:' + col + ';border:1px solid ' + (past ? 'var(--bd)' : 'rgba(0,230,118,.3)') + '">' + t + (past ? '' : '') + '</span>';
+        });
+        h += '</div>';
+        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:10px;line-height:1.5">Load this meeting\'s PDF below to get predictions. Green = upcoming, grey = finished.</div>';
+        h += '</div>';
+        h += '</div>';
+      });
+      box.innerHTML = h;
+    })
+    .catch(function(err){
+      box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Could not load meetings: ' + err.message + '</div>';
+    });
+}
+
+function toggleMeeting(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function loadTodaysMeetings_auto() {
+  // Auto-load on first visit to Races tab if a proxy is configured
+  if (getProxyUrl()) loadTodaysMeetings();
 }
 
 function fetchLiveOdds() {
