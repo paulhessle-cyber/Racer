@@ -5,102 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>🏇 Racecourse Predictor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js">
-// ══ BETFAIR ODDS PROXY ════════════════════════════════════════════════════════
-var ODDS_PROXY_KEY = 'fi_odds_proxy_url';
-
-function getProxyUrl() {
-  var el = document.getElementById('oddsProxyUrl');
-  var fromInput = el ? el.value.trim() : '';
-  if (fromInput) {
-    try { localStorage.setItem(ODDS_PROXY_KEY, fromInput); } catch(e) {}
-    return fromInput.replace(/\/$/, '');
-  }
-  try { return (localStorage.getItem(ODDS_PROXY_KEY) || '').replace(/\/$/, ''); } catch(e) { return ''; }
-}
-
-// Restore saved URL on load
-(function restoreProxyUrl(){
-  document.addEventListener('DOMContentLoaded', function() {
-    try {
-      var saved = localStorage.getItem(ODDS_PROXY_KEY);
-      var el = document.getElementById('oddsProxyUrl');
-      if (saved && el) el.value = saved;
-    } catch(e) {}
-  });
-})();
-
-function testOddsProxy() {
-  var base = getProxyUrl();
-  var statusEl = document.getElementById('oddsProxyStatus');
-  if (!base) { statusEl.innerHTML = '<span style="color:var(--re)">Enter a URL first.</span>'; return; }
-  statusEl.innerHTML = '<span style="color:var(--mt)">Testing…</span>';
-  fetch(base + '/health')
-    .then(function(r){ return r.json(); })
-    .then(function(j){
-      if (j.ok) {
-        statusEl.innerHTML = '<span style="color:var(--g)">✓ Connected. Live odds available — look for the ⬇ button on each race.</span>';
-      } else {
-        statusEl.innerHTML = '<span style="color:#ffaa00">Reached server but got an unexpected response.</span>';
-      }
-    })
-    .catch(function(err){
-      statusEl.innerHTML = '<span style="color:var(--re)">✗ Could not reach proxy: ' + err.message + '<br>Check the URL is HTTPS and the server is running.</span>';
-    });
-}
-
-// Fetch live odds for the currently selected race and fill them in
-function fetchLiveOdds() {
-  var base = getProxyUrl();
-  if (!base) { showPasteStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
-  var race = S.sel;
-  if (!race) { showPasteStatus('⚠ Select a race first.', 'warn'); return; }
-
-  var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
-  var time   = race.time || '';
-  showPasteStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
-
-  var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
-  fetch(u)
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data.error) { showPasteStatus('⚠ ' + data.error, 'warn'); return; }
-      if (!data.runners || !data.runners.length) { showPasteStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
-
-      // Snapshot for undo (reuse the paste undo machinery)
-      S._oddsSnapshot = {
-        raceKey: race.course + '_' + race.time,
-        runners: race.runners.map(function(r){
-          return { stall: r.stall, odds: r.odds||0, _openingOdds: r._openingOdds||0, _mv: r._mv||'' };
-        })
-      };
-
-      // Match by horse name (normalise both sides)
-      function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
-      var priceByName = {};
-      data.runners.forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
-
-      var matched = 0;
-      race.runners.forEach(function(r){
-        if (r._nr) return;
-        var p = priceByName[norm(r.name)];
-        if (p && p > 1) {
-          if (!r._openingOdds) r._openingOdds = r.odds || p;
-          r.odds = p;
-          matched++;
-          if (typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
-        }
-      });
-
-      showPasteStatus('✓ ' + matched + ' live odds loaded from Betfair' +
-        ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>', 'ok');
-      if (typeof renderRunners === 'function') renderRunners();
-    })
-    .catch(function(err){
-      showPasteStatus('✗ Live odds failed: ' + err.message, 'warn');
-    });
-}
-
-
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
@@ -5684,6 +5588,104 @@ function checkLongTravel(trainerName, raceCourse) {
   }
   return null;
 }
+
+
+// ══ BETFAIR ODDS PROXY ════════════════════════════════════════════════════════
+var ODDS_PROXY_KEY = 'fi_odds_proxy_url';
+
+function getProxyUrl() {
+  var el = document.getElementById('oddsProxyUrl');
+  var fromInput = el ? el.value.trim() : '';
+  if (fromInput) {
+    try { localStorage.setItem(ODDS_PROXY_KEY, fromInput); } catch(e) {}
+    return fromInput.replace(/\/$/, '');
+  }
+  try { return (localStorage.getItem(ODDS_PROXY_KEY) || '').replace(/\/$/, ''); } catch(e) { return ''; }
+}
+
+// Restore saved URL on load
+(function restoreProxyUrl(){
+  document.addEventListener('DOMContentLoaded', function() {
+    try {
+      var saved = localStorage.getItem(ODDS_PROXY_KEY);
+      var el = document.getElementById('oddsProxyUrl');
+      if (saved && el) el.value = saved;
+    } catch(e) {}
+  });
+})();
+
+function testOddsProxy() {
+  var base = getProxyUrl();
+  var statusEl = document.getElementById('oddsProxyStatus');
+  if (!base) { statusEl.innerHTML = '<span style="color:var(--re)">Enter a URL first.</span>'; return; }
+  statusEl.innerHTML = '<span style="color:var(--mt)">Testing…</span>';
+  fetch(base + '/health')
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) {
+        statusEl.innerHTML = '<span style="color:var(--g)">✓ Connected. Live odds available — look for the ⬇ button on each race.</span>';
+      } else {
+        statusEl.innerHTML = '<span style="color:#ffaa00">Reached server but got an unexpected response.</span>';
+      }
+    })
+    .catch(function(err){
+      statusEl.innerHTML = '<span style="color:var(--re)">✗ Could not reach proxy: ' + err.message + '<br>Check the URL is HTTPS and the server is running.</span>';
+    });
+}
+
+// Fetch live odds for the currently selected race and fill them in
+function fetchLiveOdds() {
+  var base = getProxyUrl();
+  if (!base) { showPasteStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
+  var race = S.sel;
+  if (!race) { showPasteStatus('⚠ Select a race first.', 'warn'); return; }
+
+  var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  var time   = race.time || '';
+  showPasteStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
+
+  var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
+  fetch(u)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) { showPasteStatus('⚠ ' + data.error, 'warn'); return; }
+      if (!data.runners || !data.runners.length) { showPasteStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
+
+      // Snapshot for undo (reuse the paste undo machinery)
+      S._oddsSnapshot = {
+        raceKey: race.course + '_' + race.time,
+        runners: race.runners.map(function(r){
+          return { stall: r.stall, odds: r.odds||0, _openingOdds: r._openingOdds||0, _mv: r._mv||'' };
+        })
+      };
+
+      // Match by horse name (normalise both sides)
+      function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
+      var priceByName = {};
+      data.runners.forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
+
+      var matched = 0;
+      race.runners.forEach(function(r){
+        if (r._nr) return;
+        var p = priceByName[norm(r.name)];
+        if (p && p > 1) {
+          if (!r._openingOdds) r._openingOdds = r.odds || p;
+          r.odds = p;
+          matched++;
+          if (typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
+        }
+      });
+
+      showPasteStatus('✓ ' + matched + ' live odds loaded from Betfair' +
+        ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>', 'ok');
+      if (typeof renderRunners === 'function') renderRunners();
+    })
+    .catch(function(err){
+      showPasteStatus('✗ Live odds failed: ' + err.message, 'warn');
+    });
+}
+
+
 
 </script>
 </body>
