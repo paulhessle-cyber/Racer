@@ -4,7 +4,104 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>🏇 Racecourse Predictor</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js">
+// ══ BETFAIR ODDS PROXY ════════════════════════════════════════════════════════
+var ODDS_PROXY_KEY = 'fi_odds_proxy_url';
+
+function getProxyUrl() {
+  var el = document.getElementById('oddsProxyUrl');
+  var fromInput = el ? el.value.trim() : '';
+  if (fromInput) {
+    try { localStorage.setItem(ODDS_PROXY_KEY, fromInput); } catch(e) {}
+    return fromInput.replace(/\/$/, '');
+  }
+  try { return (localStorage.getItem(ODDS_PROXY_KEY) || '').replace(/\/$/, ''); } catch(e) { return ''; }
+}
+
+// Restore saved URL on load
+(function restoreProxyUrl(){
+  document.addEventListener('DOMContentLoaded', function() {
+    try {
+      var saved = localStorage.getItem(ODDS_PROXY_KEY);
+      var el = document.getElementById('oddsProxyUrl');
+      if (saved && el) el.value = saved;
+    } catch(e) {}
+  });
+})();
+
+function testOddsProxy() {
+  var base = getProxyUrl();
+  var statusEl = document.getElementById('oddsProxyStatus');
+  if (!base) { statusEl.innerHTML = '<span style="color:var(--re)">Enter a URL first.</span>'; return; }
+  statusEl.innerHTML = '<span style="color:var(--mt)">Testing…</span>';
+  fetch(base + '/health')
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) {
+        statusEl.innerHTML = '<span style="color:var(--g)">✓ Connected. Live odds available — look for the ⬇ button on each race.</span>';
+      } else {
+        statusEl.innerHTML = '<span style="color:#ffaa00">Reached server but got an unexpected response.</span>';
+      }
+    })
+    .catch(function(err){
+      statusEl.innerHTML = '<span style="color:var(--re)">✗ Could not reach proxy: ' + err.message + '<br>Check the URL is HTTPS and the server is running.</span>';
+    });
+}
+
+// Fetch live odds for the currently selected race and fill them in
+function fetchLiveOdds() {
+  var base = getProxyUrl();
+  if (!base) { showPasteStatus('⚠ No odds proxy URL set — add one in Setup.', 'warn'); return; }
+  var race = S.sel;
+  if (!race) { showPasteStatus('⚠ Select a race first.', 'warn'); return; }
+
+  var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  var time   = race.time || '';
+  showPasteStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
+
+  var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
+  fetch(u)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) { showPasteStatus('⚠ ' + data.error, 'warn'); return; }
+      if (!data.runners || !data.runners.length) { showPasteStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
+
+      // Snapshot for undo (reuse the paste undo machinery)
+      S._oddsSnapshot = {
+        raceKey: race.course + '_' + race.time,
+        runners: race.runners.map(function(r){
+          return { stall: r.stall, odds: r.odds||0, _openingOdds: r._openingOdds||0, _mv: r._mv||'' };
+        })
+      };
+
+      // Match by horse name (normalise both sides)
+      function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
+      var priceByName = {};
+      data.runners.forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
+
+      var matched = 0;
+      race.runners.forEach(function(r){
+        if (r._nr) return;
+        var p = priceByName[norm(r.name)];
+        if (p && p > 1) {
+          if (!r._openingOdds) r._openingOdds = r.odds || p;
+          r.odds = p;
+          matched++;
+          if (typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
+        }
+      });
+
+      showPasteStatus('✓ ' + matched + ' live odds loaded from Betfair' +
+        ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>', 'ok');
+      if (typeof renderRunners === 'function') renderRunners();
+    })
+    .catch(function(err){
+      showPasteStatus('✗ Live odds failed: ' + err.message, 'warn');
+    });
+}
+
+
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 :root{--g:#00e676;--gold:#ffc107;--bg:#07100a;--sf:#0e1a11;--sf2:#132017;--bd:#1c3024;--tx:#c8ddd0;--mt:#4a6a55;--bl:#40c4ff;--re:#ff5252;--pace:#ff6d00;--closer:#7c4dff}
@@ -387,6 +484,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds</div>
+        <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="fetchLiveOdds()">⬇ Live Odds</button>
         <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="togglePasteBox()">📋 Paste Odds</button>
       </div>
       <!-- Paste odds panel -->
@@ -634,6 +732,15 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <!-- Legacy input kept for backwards compat -->
     <input type="file" id="mIn" accept=".json" style="display:none">
   </div>
+
+  <div class="card">
+    <div class="ct">Live Odds (Betfair Proxy)</div>
+    <p class="mu" style="margin-bottom:12px">Optional. If you've set up the Formintel odds proxy on your server, paste its base URL here to fetch live Betfair Exchange prices with one tap instead of pasting them manually.</p>
+    <input type="text" id="oddsProxyUrl" placeholder="https://api.yourdomain.co.uk/formintel"
+      style="width:100%;box-sizing:border-box;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:var(--mono);font-size:.78rem;margin-bottom:8px">
+    <button class="btn bo" style="width:100%;font-size:.75rem" onclick="testOddsProxy()">Test connection</button>
+    <div id="oddsProxyStatus" style="margin-top:8px;font-family:var(--mono);font-size:.68rem"></div>
+  </div>
   <div class="card" id="msc" style="display:none">
     <div class="ct">Model Stats</div>
     <div class="sg" id="msg"></div>
@@ -668,6 +775,15 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 <!-- HELP -->
 <div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
   <div style="padding-bottom:4px">
+
+    <!-- Disclaimer -->
+    <div class="h-sec" style="border:1px solid #e0a800;background:#fffbe6">
+      <div class="h-sec-hdr"><div class="h-sec-num" style="background:#e0a800">!</div><div class="h-sec-ttl">Important — please read</div></div>
+      <p class="h-p"><strong>Formintel is an analysis tool, not financial or betting advice.</strong> The predictions are statistical estimates based on historical data and carry no guarantee of accuracy. Horse racing outcomes are inherently uncertain.</p>
+      <p class="h-p">Only bet what you can afford to lose. Past performance of the model does not predict future results — the model has historically run at a loss against the market on flat-stake betting. Never chase losses.</p>
+      <p class="h-p">If you or someone you know has a gambling problem, free confidential help is available from GamCare (0808 8020 133) or BeGambleAware.org. You must be 18+ to bet.</p>
+      <p class="h-p" style="font-size:.7rem;color:#888">Live odds, where shown, come from the Betfair Exchange via your own proxy and are for information only. Formintel is not affiliated with or endorsed by Betfair or At The Races.</p>
+    </div>
 
     <!-- What it does -->
     <div class="h-sec">
