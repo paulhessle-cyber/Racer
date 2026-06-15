@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.2 · 14 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.3 · 14 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -5773,20 +5773,52 @@ function fetchLiveOdds() {
       data.runners.forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
 
       var matched = 0;
+      var unmatched = [];   // horses in the card we couldn't find a price for
       race.runners.forEach(function(r){
         if (r._nr) return;
         var p = priceByName[norm(r.name)];
         if (p && p > 1) {
-          if (!r._openingOdds) r._openingOdds = r.odds || p;
+          var prevOdds = r.odds || 0;
+          // Movement detection (same logic as paste)
+          if (prevOdds > 0) {
+            var pct = (p - prevOdds) / prevOdds;
+            if (pct <= -0.10)      r._mv = 'steam';   // shortened 10%+
+            else if (pct >= 0.10)  r._mv = 'drift';   // drifted 10%+
+            else if (r._mv !== 'steam' && r._mv !== 'drift') r._mv = 'steady';
+          } else {
+            r._openingOdds = p;  // first odds = opening
+          }
           r.odds = p;
+          // Write to the visible input field (this is what paste does)
+          var inp = document.getElementById('od_' + r.stall);
+          if (inp) inp.value = p;
+          // Update movement button label
+          var mvBtn = document.getElementById('mv_' + r.stall);
+          if (mvBtn && r._mv) {
+            mvBtn.className = 'mv-btn' + (r._mv==='steam'?' steam':r._mv==='drift'?' drift':'');
+            mvBtn.textContent = r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady';
+          }
           matched++;
           if (typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
+        } else {
+          unmatched.push(r.name);
         }
       });
 
-      showLiveStatus('✓ ' + matched + ' live odds loaded from Betfair' +
-        ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>', 'ok');
+      lsSave();
+
+      var msg = '✓ ' + matched + ' live odds loaded from Betfair';
+      if (unmatched.length) {
+        msg += '<br><span style="color:var(--gold)">⚠ No price matched for: <strong>' + unmatched.map(esc).join(', ') + '</strong> — enter manually below.</span>';
+      }
+      msg += ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>';
+      showLiveStatus(msg, 'ok');
+
+      // Re-run the prediction so Model vs Market updates with the new odds
       if (typeof renderRunners === 'function') renderRunners();
+      if (typeof predict === 'function' && S.sel) {
+        try { predict(); } catch(e) { console.warn('re-predict after odds:', e); }
+      }
     })
     .catch(function(err){
       showLiveStatus('✗ Live odds failed: ' + err.message, 'warn');
