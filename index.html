@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.4 · 16 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.5 · 16 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3373,18 +3373,21 @@ function renderPredict(race) {
   var c = document.getElementById('prun'); c.innerHTML = '';
   if (!race.runners.length) { c.innerHTML = '<div class="al alw">No runners extracted.</div>'; return; }
   race.runners.forEach(function(r) {
-    var isTip   = race.topTip   && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
-    var isWatch = race.watchFor && race.watchFor.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase())===0;
+    var rName = r.name || '';
+    var rForm = r.form || '';
+    var rJock = r.jockey || '';
+    var isTip   = race.topTip   && race.topTip.toUpperCase().indexOf(rName.substring(0,6).toUpperCase())===0;
+    var isWatch = race.watchFor && race.watchFor.toUpperCase().indexOf(rName.substring(0,6).toUpperCase())===0;
     var mk = isTip ? '<span class="mk tip">ATR TIP</span>' : isWatch ? '<span class="mk wch">WATCH</span>' : '';
     var paceMk = r._pace === 'front' ? '<span class="mk front">▶ FRONT</span>' : r._pace === 'closer' ? '<span class="mk closer">◀ CLOSER</span>' : '';
-    var jClm = r.jockey.match(/(\d+)\)/), jn = r.jockey.replace(/\s*\(\d+\)/,'');
+    var jClm = rJock.match(/(\d+)\)/), jn = rJock.replace(/\s*\(\d+\)/,'');
     var claim = jClm ? ' ('+jClm[1]+'lb)' : '';
     var d = document.createElement('div');
     d.className = 're'; if (r._nr) d.classList.add('nr');
     d.innerHTML = '<div class="sn">'+r.stall+'</div>'
       +'<div class="hh"><div class="hn">'+r.name+'</div>'
       +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
-      +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
+      +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+rForm.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
       +'<div style="flex:1"><label>'+(getOddsFormat()==='fractional'?'Fractional Odds':'Decimal Odds')+'</label>'
       +(getOddsFormat()==='fractional'
@@ -5800,20 +5803,29 @@ function fmtOdds(dec) {
 
 // Toggle handler
 function toggleOddsFormat() {
-  // Before switching, capture any odds currently typed in the inputs so we don't lose them
-  if (S.sel && S.sel.runners) {
-    S.sel.runners.forEach(function(r) {
-      var el = document.getElementById('od_' + r.stall);
-      if (el && el.value) {
-        r.odds = (getOddsFormat() === 'fractional') ? fracToDec(el.value) : (parseFloat(el.value) || r.odds || 0);
-      }
-    });
+  try {
+    var curFmt = getOddsFormat();
+    // Capture any odds currently typed so we don't lose them on switch
+    if (S.sel && S.sel.runners && S.sel.runners.length) {
+      S.sel.runners.forEach(function(r) {
+        var el = document.getElementById('od_' + r.stall);
+        if (el && el.value && el.value.trim()) {
+          var dec = (curFmt === 'fractional') ? fracToDec(el.value) : (parseFloat(el.value) || 0);
+          if (dec > 0) r.odds = dec;
+        }
+      });
+    }
+    // Flip format
+    setOddsFormat(curFmt === 'decimal' ? 'fractional' : 'decimal');
+    updateOddsFormatBtn();
+    // Re-render ONLY if we have a race with runners; otherwise leave the view alone
+    if (S.sel && S.sel.runners && S.sel.runners.length && typeof renderPredict === 'function') {
+      renderPredict(S.sel);
+    }
+  } catch (err) {
+    console.error('toggleOddsFormat error:', err);
+    alert('Could not switch odds format: ' + err.message);
   }
-  var newFmt = getOddsFormat() === 'decimal' ? 'fractional' : 'decimal';
-  setOddsFormat(newFmt);
-  // Re-render the runner cards so the inputs show the new format
-  if (S.sel && typeof renderPredict === 'function') renderPredict(S.sel);
-  updateOddsFormatBtn();
 }
 
 function updateOddsFormatBtn() {
