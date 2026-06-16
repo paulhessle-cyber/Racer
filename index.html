@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.3 · 14 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.4 · 16 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -398,6 +398,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Runners &amp; Odds</div>
         <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="fetchLiveOdds()">⬇ Live Odds</button>
         <button class="btn bo" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="togglePasteBox()">📋 Paste Odds</button>
+        <button class="btn bo" id="oddsFmtBtn" style="width:auto;padding:5px 12px;margin-bottom:0;font-size:.68rem" onclick="toggleOddsFormat()" title="Switch between decimal and fractional odds">⇄ Decimal</button>
       </div>
       <div id="liveOddsStatus" style="margin-bottom:10px"></div>
       <!-- Paste odds panel -->
@@ -2405,10 +2406,14 @@ function predict() {
   });
   if (activeRunners.length < 2) { alert('Need at least 2 active runners'); return; }
 
-  // Read current odds from inputs
+  // Read current odds from inputs (handles both decimal and fractional formats)
   activeRunners.forEach(function(r) {
     var el = document.getElementById('od_' + r.stall);
-    r.odds = (el && el.value) ? parseFloat(el.value) || 0 : r.odds || 0;
+    if (el && el.value) {
+      r.odds = (getOddsFormat() === 'fractional') ? fracToDec(el.value) : (parseFloat(el.value) || 0);
+    } else {
+      r.odds = r.odds || 0;
+    }
     r.going = going;
   });
 
@@ -3357,6 +3362,7 @@ function rebuildPlattCalibration() {
 }
 
 function renderPredict(race) {
+  setTimeout(updateOddsFormatBtn, 0);
   document.getElementById('nosel').style.display = 'none';
   document.getElementById('rdet').style.display = 'block';
   document.getElementById('arCard').style.display = 'block';
@@ -3380,9 +3386,15 @@ function renderPredict(race) {
       +(r.or>0?'<div class="orb">OR '+r.or+'</div>':'')+mk+paceMk+'</div>'
       +'<div class="rm">Age '+r.age+' · '+r.wst+'-'+r.wlbs+' · '+jn+claim+(r.form?' · '+r.form.substring(0,14):'')+'</div>'
       +'<div class="oi" style="display:flex;align-items:flex-end;gap:8px;">'
-      +'<div style="flex:1"><label>Decimal Odds</label>'
-      +'<input type="number" id="od_'+r.stall+'" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"'
-      +(r.odds>0?' value="'+r.odds+'"':'')+(r._nr?' disabled':'')+'></div>'
+      +'<div style="flex:1"><label>'+(getOddsFormat()==='fractional'?'Fractional Odds':'Decimal Odds')+'</label>'
+      +(getOddsFormat()==='fractional'
+        ? '<input type="text" id="od_'+r.stall+'" placeholder="e.g. 7/2" inputmode="text"'
+            +(r.odds>0?' value="'+decToFrac(r.odds)+'"':'')+(r._nr?' disabled':'')
+            +' onchange="onOddsInput(\''+r.stall+'\')">'
+        : '<input type="number" id="od_'+r.stall+'" step="0.5" min="1.5" placeholder="e.g. 4.5" inputmode="decimal"'
+            +(r.odds>0?' value="'+r.odds+'"':'')+(r._nr?' disabled':'')
+            +' onchange="onOddsInput(\''+r.stall+'\')">')
+      +'</div>'
       +'<div style="padding-bottom:2px;"><button class="nr-btn" id="nr_'+r.stall+'" onclick="toggleNR(\''+r.stall+'\')">NR</button>'
       +'<span class="nr-badge">NON RUNNER</span></div>'
       +'<div style="padding-bottom:2px;"><button class="mv-btn'+(r._mv==='steam'?' steam':r._mv==='drift'?' drift':'')+'" id="mv_'+r.stall+'" onclick="toggleMV(\''+r.stall+'\')">'
@@ -3980,7 +3992,7 @@ function applyPastedOdds() {
     // Update odds
     runner.odds = newOdds;
     var inp = document.getElementById('od_' + runner.stall);
-    if (inp) { inp.value = newOdds; }
+    if (inp) { inp.value = (getOddsFormat()==='fractional') ? decToFrac(newOdds) : newOdds; }
 
     // Update the mv button label live if it exists
     var mvBtn = document.getElementById('mv_' + runner.stall);
@@ -5734,6 +5746,107 @@ function loadTodaysMeetings_auto() {
   if (getProxyUrl()) loadTodaysMeetings();
 }
 
+
+// ══ ODDS FORMAT (decimal ⇄ fractional) ════════════════════════════════════════
+var ODDS_FMT_KEY = 'fi_odds_format';
+function getOddsFormat() {
+  try { return localStorage.getItem(ODDS_FMT_KEY) || 'decimal'; } catch(e) { return 'decimal'; }
+}
+function setOddsFormat(fmt) {
+  try { localStorage.setItem(ODDS_FMT_KEY, fmt); } catch(e) {}
+}
+
+// Decimal → fractional string (e.g. 4.5 → "7/2", 2.0 → "1/1", 3.5 → "5/2")
+function decToFrac(dec) {
+  if (!dec || dec <= 1) return '';
+  var x = dec - 1; // fractional part as a decimal
+  // Common racing fractions — snap to the nearest standard price for clean display
+  var common = [
+    [1,100],[1,50],[1,33],[1,25],[1,20],[1,16],[1,14],[1,12],[1,10],[1,9],[1,8],[2,15],[1,7],[1,6],[1,5],
+    [2,9],[1,4],[2,7],[3,10],[1,3],[4,11],[2,5],[4,9],[1,2],[8,15],[4,7],[8,13],[3,5],[4,6],[8,11],[4,5],
+    [5,6],[10,11],[1,1],[11,10],[6,5],[5,4],[11,8],[6,4],[13,8],[7,4],[15,8],[2,1],[9,4],[5,2],[11,4],[3,1],
+    [10,3],[7,2],[4,1],[9,2],[5,1],[11,2],[6,1],[13,2],[7,1],[15,2],[8,1],[17,2],[9,1],[10,1],[11,1],[12,1],
+    [14,1],[16,1],[18,1],[20,1],[22,1],[25,1],[28,1],[33,1],[40,1],[50,1],[66,1],[80,1],[100,1]
+  ];
+  var best = common[0], bestErr = Infinity;
+  for (var i = 0; i < common.length; i++) {
+    var val = common[i][0] / common[i][1];
+    var err = Math.abs(val - x);
+    if (err < bestErr) { bestErr = err; best = common[i]; }
+  }
+  return best[0] + '/' + best[1];
+}
+
+// Fractional string → decimal (e.g. "7/2" → 4.5, "evens"/"evs" → 2.0)
+function fracToDec(str) {
+  if (!str) return 0;
+  str = String(str).trim().toLowerCase();
+  if (str === 'evens' || str === 'evs' || str === 'even') return 2.0;
+  var m = str.match(/^(\d+(?:\.\d+)?)\s*[\/\-]\s*(\d+(?:\.\d+)?)$/);
+  if (m) {
+    var num = parseFloat(m[1]), den = parseFloat(m[2]);
+    if (den > 0) return +(num / den + 1).toFixed(4);
+  }
+  // Already a decimal?
+  var dec = parseFloat(str);
+  return isNaN(dec) ? 0 : dec;
+}
+
+// Format a stored decimal odds for display in the current format
+function fmtOdds(dec) {
+  if (!dec || dec <= 0) return '';
+  return getOddsFormat() === 'fractional' ? decToFrac(dec) : (+dec).toFixed(2).replace(/\.00$/, '');
+}
+
+// Toggle handler
+function toggleOddsFormat() {
+  // Before switching, capture any odds currently typed in the inputs so we don't lose them
+  if (S.sel && S.sel.runners) {
+    S.sel.runners.forEach(function(r) {
+      var el = document.getElementById('od_' + r.stall);
+      if (el && el.value) {
+        r.odds = (getOddsFormat() === 'fractional') ? fracToDec(el.value) : (parseFloat(el.value) || r.odds || 0);
+      }
+    });
+  }
+  var newFmt = getOddsFormat() === 'decimal' ? 'fractional' : 'decimal';
+  setOddsFormat(newFmt);
+  // Re-render the runner cards so the inputs show the new format
+  if (S.sel && typeof renderPredict === 'function') renderPredict(S.sel);
+  updateOddsFormatBtn();
+}
+
+function updateOddsFormatBtn() {
+  var btn = document.getElementById('oddsFmtBtn');
+  if (btn) {
+    var f = getOddsFormat();
+    btn.textContent = f === 'fractional' ? '⇄ Fraction' : '⇄ Decimal';
+    btn.title = 'Currently showing ' + f + ' odds — tap to switch';
+  }
+}
+
+function onOddsInput(stall) {
+  var el = document.getElementById('od_' + stall);
+  if (!el) return;
+  var raw = el.value.trim();
+  if (!raw) return;
+  // Convert to decimal for storage
+  var dec = (getOddsFormat() === 'fractional') ? fracToDec(raw) : (parseFloat(raw) || 0);
+  // Store on the runner object
+  if (S.sel && S.sel.runners) {
+    var r = S.sel.runners.find(function(x){ return String(x.stall) === String(stall); });
+    if (r) {
+      if (!r._openingOdds && r.odds > 0) r._openingOdds = r.odds;
+      r.odds = dec;
+    }
+  }
+  // Normalise the displayed value (e.g. "7-2" → "7/2", or tidy "4.50" → "4.5")
+  if (getOddsFormat() === 'fractional') {
+    el.value = decToFrac(dec);
+  }
+  if (typeof lsSave === 'function') lsSave();
+}
+
 function fetchLiveOdds() {
   var base = getProxyUrl();
   if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
@@ -5789,9 +5902,9 @@ function fetchLiveOdds() {
             r._openingOdds = p;  // first odds = opening
           }
           r.odds = p;
-          // Write to the visible input field (this is what paste does)
+          // Write to the visible input field in the current display format
           var inp = document.getElementById('od_' + r.stall);
-          if (inp) inp.value = p;
+          if (inp) inp.value = (getOddsFormat()==='fractional') ? decToFrac(p) : p;
           // Update movement button label
           var mvBtn = document.getElementById('mv_' + r.stall);
           if (mvBtn && r._mv) {
