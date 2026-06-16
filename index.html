@@ -323,7 +323,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.5 · 16 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.6 · 16 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3404,7 +3404,14 @@ function renderPredict(race) {
       +(r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady')
       +'</button></div>'
       +'</button></div></div>';
-    d.querySelector('input[type=number]').addEventListener('input', (function(runner){ return function(e){ runner.odds=parseFloat(e.target.value)||0; lsSave(); }; })(r));
+    var oddsInp = d.querySelector('#od_' + r.stall);
+    if (oddsInp) {
+      oddsInp.addEventListener('input', (function(runner){ return function(e){
+        var v = e.target.value;
+        runner.odds = (getOddsFormat() === 'fractional') ? fracToDec(v) : (parseFloat(v) || 0);
+        if (typeof lsSave === 'function') lsSave();
+      }; })(r));
+    }
 
     c.appendChild(d); if (r._openingOdds) updateOddsDisplay(r);
   });
