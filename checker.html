@@ -184,6 +184,7 @@
   <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
   <button class="tab-btn" onclick="showTab('value')">💰 Value</button>
   <button class="tab-btn" onclick="showTab('placepot')">🎯 Placepot</button>
+  <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
 </div>
 
 <div id="app">
@@ -242,7 +243,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -255,6 +256,7 @@ function showTab(tab) {
   if (tab === 'bf') renderBFWatch();
   if (tab === 'value') renderValueTab();
   if (tab === 'placepot') renderPlacepotTab();
+  if (tab === 'dutch') renderDutchTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -296,7 +298,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-insights"></div>' +
     '<div class="tab-content" id="tab-bf"></div>' +
     '<div class="tab-content" id="tab-value"></div>' +
-    '<div class="tab-content" id="tab-placepot"></div>';
+    '<div class="tab-content" id="tab-placepot"></div>' +
+    '<div class="tab-content" id="tab-dutch"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -1596,6 +1599,51 @@ function renderBFWatch() {
   var h = '<div style="padding:16px">';
   h += '<div style="font-family:var(--mono);font-size:.75rem;color:var(--mt);margin-bottom:16px">Tracks horses that showed the 👀 BF signal, then checks if they won or placed next time — especially if they dropped in class.</div>';
 
+  // ── Current BF signals (every BF-flagged horse in the log, shown immediately) ──
+  var allBFSignals = [];
+  sorted.forEach(function(entry) {
+    (entry.bfHorses || []).forEach(function(bf) {
+      allBFSignals.push({
+        name:    bf.name,
+        date:    entry.date,
+        course:  entry.course,
+        cls:     bf.cls || entry.cls || 0,
+        odds:    bf.odds || 0,
+        bfDrop:  bf.bfDrop || false,
+        won:     bf.won || (entry.actual && entry.actual[0] === bf.name),
+        placed:  bf.placed || (entry.actual && entry.actual.slice(0,3).indexOf(bf.name) > -1)
+      });
+    });
+  });
+
+  if (allBFSignals.length > 0) {
+    var sigWins   = allBFSignals.filter(function(s){ return s.won; }).length;
+    var sigPlaced = allBFSignals.filter(function(s){ return !s.won && s.placed; }).length;
+    var sigDrops  = allBFSignals.filter(function(s){ return s.bfDrop; }).length;
+
+    h += '<div style="background:var(--card);border:1px solid rgba(255,140,0,.3);border-radius:10px;padding:14px;margin-bottom:16px">';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--gold);letter-spacing:1px;margin-bottom:10px">👀 BF SIGNALS LOGGED — ' + allBFSignals.length + ' total (' + sigDrops + ' with class drop)</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">';
+    h += '<div><div style="font-size:1.4rem;font-weight:700;color:var(--g)">' + sigWins + '</div><div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">won same day</div></div>';
+    h += '<div><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">' + sigPlaced + '</div><div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">placed</div></div>';
+    h += '<div><div style="font-size:1.4rem;font-weight:700;color:var(--mt)">' + (allBFSignals.length>0?Math.round(sigWins/allBFSignals.length*100):0) + '%</div><div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">win rate</div></div>';
+    h += '</div>';
+
+    // Recent BF signals list (last 15)
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin:10px 0 6px">RECENT BF-FLAGGED HORSES</div>';
+    var recent = allBFSignals.slice(-15).reverse();
+    recent.forEach(function(s) {
+      var resCol = s.won ? 'var(--g)' : s.placed ? 'var(--gold)' : 'var(--mt)';
+      var resTxt = s.won ? 'WON' : s.placed ? 'PLC' : '—';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd);font-family:var(--mono);font-size:.66rem">';
+      h += '<div><span style="color:var(--tx)">' + (s.name||'?') + '</span>' + (s.bfDrop?' <span style="color:var(--gold)">⬇</span>':'') + '</div>';
+      h += '<div style="color:var(--mt);font-size:.58rem">' + (s.course||'') + ' ' + (s.date||'') + '</div>';
+      h += '<div style="color:' + resCol + ';font-weight:700;min-width:34px;text-align:right">' + resTxt + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
   if (nextTimeResults.length === 0) {
     h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--mt)">';
     h += '<div style="font-size:2rem;margin-bottom:10px">👀</div>';
@@ -1979,5 +2027,153 @@ function renderPlacepotTab() {
 }
 
 
+
+
+// ══ DUTCHING TAB ══════════════════════════════════════════════════════════════
+// Shows £10 win-dutch performance per race, filterable by course, with a
+// daily "most profitable course" breakdown.
+var _dutchCourseFilter = 'ALL';
+
+function renderDutchTab() {
+  var el = document.getElementById('tab-dutch');
+  if (!el) return;
+  if (!loadedLog || !loadedLog.length) {
+    el.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:.75rem;color:var(--mt)">Load a results JSON to see dutching analysis.</div>';
+    return;
+  }
+
+  // Gather all races that have dutch data logged
+  var dutchRaces = loadedLog.filter(function(e){ return e.dutch && e.dutch.selections && e.dutch.selections.length; });
+
+  if (!dutchRaces.length) {
+    el.innerHTML = '<div style="padding:16px"><div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--mt)">'
+      + '<div style="font-size:2rem;margin-bottom:10px">💷</div>'
+      + 'No dutching data yet.<br><br>This populates as you log races with the updated predictor. Each race logs the £10 win-dutch result for the top 1/2/3 model selections (by field size).'
+      + '</div></div>';
+    return;
+  }
+
+  // Build per-course aggregates
+  var byCourse = {}; // course -> {races, staked, returned, profit, wins}
+  dutchRaces.forEach(function(e){
+    var c = e.course || 'Unknown';
+    if (!byCourse[c]) byCourse[c] = { races:0, staked:0, returned:0, profit:0, wins:0 };
+    byCourse[c].races++;
+    byCourse[c].staked   += e.dutch.outlay || 10;
+    byCourse[c].returned += e.dutch.returned || 0;
+    byCourse[c].profit   += e.dutch.profit || 0;
+    if (e.dutch.won) byCourse[c].wins++;
+  });
+
+  var courses = Object.keys(byCourse).sort();
+
+  // Overall totals
+  var totRaces = dutchRaces.length;
+  var totStaked = dutchRaces.reduce(function(s,e){ return s + (e.dutch.outlay||10); }, 0);
+  var totProfit = dutchRaces.reduce(function(s,e){ return s + (e.dutch.profit||0); }, 0);
+  var totWins = dutchRaces.filter(function(e){ return e.dutch.won; }).length;
+  var roi = totStaked > 0 ? (totProfit/totStaked*100) : 0;
+
+  var h = '<div style="padding:16px">';
+
+  // ── Headline stats ──
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">TOTAL P/L</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:' + (totProfit>=0?'var(--g)':'var(--re)') + '">' + (totProfit>=0?'+':'') + '£' + totProfit.toFixed(2) + '</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">' + totRaces + ' races</div>';
+  h += '</div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">ROI</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:' + (roi>=0?'var(--g)':'var(--re)') + '">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">£' + totStaked.toFixed(0) + ' staked</div>';
+  h += '</div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">STRIKE RATE</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:var(--tx)">' + Math.round(totWins/totRaces*100) + '%</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">' + totWins + '/' + totRaces + ' hit</div>';
+  h += '</div>';
+  h += '</div>';
+
+  // ── Most profitable course per day ──
+  var byDay = {}; // date -> {course -> profit}
+  dutchRaces.forEach(function(e){
+    var d = e.date || '?';
+    if (!byDay[d]) byDay[d] = {};
+    var c = e.course || 'Unknown';
+    byDay[d][c] = (byDay[d][c] || 0) + (e.dutch.profit || 0);
+  });
+  var days = Object.keys(byDay).sort().reverse();
+
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">📅 MOST PROFITABLE COURSE EACH DAY</div>';
+  days.slice(0, 14).forEach(function(d){
+    var dayCourses = byDay[d];
+    var best = null, bestP = -Infinity;
+    Object.keys(dayCourses).forEach(function(c){
+      if (dayCourses[c] > bestP) { bestP = dayCourses[c]; best = c; }
+    });
+    var dayTotal = Object.keys(dayCourses).reduce(function(s,c){ return s + dayCourses[c]; }, 0);
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)">';
+    h += '<div style="font-family:var(--mono);font-size:.66rem;color:var(--mt);min-width:78px">' + d + '</div>';
+    h += '<div style="flex:1;font-size:.74rem;color:var(--tx);padding:0 10px">🏆 ' + best + ' <span style="color:' + (bestP>=0?'var(--g)':'var(--re)') + '">' + (bestP>=0?'+':'') + '£' + bestP.toFixed(2) + '</span></div>';
+    h += '<div style="font-family:var(--mono);font-size:.66rem;color:' + (dayTotal>=0?'var(--g)':'var(--re)') + ';min-width:60px;text-align:right">' + (dayTotal>=0?'+':'') + '£' + dayTotal.toFixed(2) + '</div>';
+    h += '</div>';
+  });
+
+  // ── Per-course breakdown (sortable by profit) ──
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">🏇 PROFIT BY COURSE</div>';
+  var courseStats = courses.map(function(c){ return { course:c, s:byCourse[c] }; });
+  courseStats.sort(function(a,b){ return b.s.profit - a.s.profit; });
+  courseStats.forEach(function(cs){
+    var s = cs.s;
+    var cRoi = s.staked>0 ? (s.profit/s.staked*100) : 0;
+    var barW = Math.min(Math.abs(cRoi), 100);
+    h += '<div style="padding:8px 0;border-bottom:1px solid var(--bd)">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    h += '<div style="font-size:.74rem;color:var(--tx)">' + cs.course + ' <span style="color:var(--mt);font-size:.62rem">(' + s.races + ' races, ' + s.wins + ' hit)</span></div>';
+    h += '<div style="font-family:var(--mono);font-size:.72rem;color:' + (s.profit>=0?'var(--g)':'var(--re)') + '">' + (s.profit>=0?'+':'') + '£' + s.profit.toFixed(2) + ' <span style="color:var(--mt);font-size:.6rem">(' + (cRoi>=0?'+':'') + cRoi.toFixed(0) + '%)</span></div>';
+    h += '</div>';
+    h += '<div style="height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + (s.profit>=0?'var(--g)':'var(--re)') + '"></div></div>';
+    h += '</div>';
+  });
+
+  // ── Per-race detail with course filter ──
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">📋 EVERY DUTCHED RACE</div>';
+  h += '<div style="margin-bottom:10px"><select id="dutchCourseSel" onchange="setDutchCourseFilter(this.value)" style="width:100%;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:.74rem">';
+  h += '<option value="ALL"' + (_dutchCourseFilter==='ALL'?' selected':'') + '>All courses (' + totRaces + ' races)</option>';
+  courses.forEach(function(c){
+    h += '<option value="' + c.replace(/"/g,'') + '"' + (_dutchCourseFilter===c?' selected':'') + '>' + c + ' (' + byCourse[c].races + ')</option>';
+  });
+  h += '</select></div>';
+
+  var shown = dutchRaces.slice().sort(function(a,b){ return (a.date+a.time) < (b.date+b.time) ? 1 : -1; });
+  if (_dutchCourseFilter !== 'ALL') shown = shown.filter(function(e){ return (e.course||'Unknown') === _dutchCourseFilter; });
+
+  shown.slice(0, 60).forEach(function(e){
+    var d = e.dutch;
+    var resCol = d.won ? 'var(--g)' : 'var(--re)';
+    var sels = (d.selections || []).map(function(n, i){
+      var isWinner = d.winnerName === n;
+      return '<span style="color:' + (isWinner?'var(--g)':'var(--mt)') + '">' + n.split(' ')[0] + ' @' + (d.odds[i]?d.odds[i].toFixed(1):'?') + (isWinner?' ✓':'') + '</span>';
+    }).join(' · ');
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-left:3px solid ' + resCol + ';border-radius:8px;padding:10px 12px;margin-bottom:6px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    h += '<div style="font-size:.74rem;color:var(--tx)">' + (e.course||'?') + ' <span style="color:var(--mt);font-size:.62rem">' + (e.time||'') + ' · ' + (e.date||'') + '</span></div>';
+    h += '<div style="font-family:var(--mono);font-size:.74rem;font-weight:700;color:' + resCol + '">' + (d.profit>=0?'+':'') + '£' + d.profit.toFixed(2) + '</div>';
+    h += '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.64rem">' + sels + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:3px">' + d.nSel + ' selection' + (d.nSel>1?'s':'') + ' · ' + (d.fieldSize||'?') + ' runners · £' + (d.outlay||10) + ' staked' + (d.won ? ' · returned £' + d.returned.toFixed(2) : ' · no winner') + '</div>';
+    h += '</div>';
+  });
+  if (shown.length > 60) h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:8px">Showing latest 60 of ' + shown.length + '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function setDutchCourseFilter(c) {
+  _dutchCourseFilter = c;
+  renderDutchTab();
+}
 
 </script>
