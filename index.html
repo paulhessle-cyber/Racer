@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.8 · 18 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.9 · 18 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2609,20 +2609,34 @@ function dutchStakes(horses, totalStake) {
   });
 }
 
-function dutchHTML(candidates, totalStake) {
-  if (!candidates || candidates.length < 2) return '';
+function dutchHTML(candidates, totalStake, nSel, fieldSize) {
+  if (!candidates || candidates.length < 1) return '';
+  // Single selection = straight win bet, not a dutch
+  if (candidates.length === 1) {
+    var c = candidates[0];
+    var ret = totalStake * c.odds;
+    return '<div class="dutch-card">'
+      + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Win Bet — £' + totalStake + ' on top pick' + (fieldSize ? ' (' + fieldSize + ' runners, win only)' : '') + '</div>'
+      + '<div class="dutch-row"><span>' + c.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + c.odds.toFixed(2) + '</span></span>'
+      + '<span class="dutch-stake">£' + totalStake.toFixed(2) + '</span></div>'
+      + '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,193,7,.2)">'
+      + 'Returns £' + ret.toFixed(2) + ' if it wins — profit £' + (ret - totalStake).toFixed(2)
+      + '</div></div>';
+  }
   var results = dutchStakes(candidates, totalStake);
   if (!results.length) return '';
+  var placesTxt = nSel === 3 ? '8+ runners · 1-2-3' : nSel === 2 ? '5-7 runners · 1-2' : '';
   var h = '<div class="dutch-card">'
-    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Dutching — Split £' + totalStake + ' across ' + results.length + ' runners</div>';
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Dutching — £' + totalStake + ' across top ' + results.length + (fieldSize ? ' (' + fieldSize + ' runners' + (placesTxt ? ', ' + placesTxt.split('· ')[1] : '') + ')' : '') + '</div>';
   results.forEach(function(r) {
     h += '<div class="dutch-row">'
-      + '<span>' + r.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + r.odds.toFixed(1) + '</span></span>'
+      + '<span>' + r.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + r.odds.toFixed(2) + '</span></span>'
       + '<span class="dutch-stake">£' + r.stake.toFixed(2) + '</span>'
       + '</div>';
   });
   h += '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,193,7,.2)">'
-    + 'Any winner returns £' + (results[0].profit + totalStake).toFixed(2) + ' — profit £' + results[0].profit.toFixed(2)
+    + 'Any winner returns ~£' + (results[0].profit + totalStake).toFixed(2) + ' — profit ~£' + results[0].profit.toFixed(2)
+    + '<br><span style="color:var(--mt);font-size:.66rem">Lose £' + totalStake + ' if none of the ' + results.length + ' win</span>'
     + '</div></div>';
   return h;
 }
@@ -2786,13 +2800,30 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
 
   // Dutching: use S._lastScored (scored is out of scope here)
   var dutchSource = (typeof scored !== 'undefined') ? scored : (S._lastScored || []);
-  var dutchCandidates = dutchSource
-    .filter(function(r){ return r.odds > 1.5 && r.score > 0.08; })
-    .slice(0, 5); // top 5 gives more chance of matching a known UK/IRE course
-  var dutchHtml = dutchCandidates.length >= 2 ? dutchHTML(
-    dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }),
-    stake
-  ) : '';
+  // Field-size bands determine how many selections to dutch:
+  //   1-4 runners  -> 1 selection  (win only, no place terms)
+  //   5-7 runners  -> 2 selections (1-2 places)
+  //   8+ runners   -> 3 selections (1-2-3 places)
+  // Selections are the TOP-RANKED horses by the model (already sorted by score),
+  // and we always dutch the WIN market to a £10 total outlay.
+  var runnersWithOdds = dutchSource.filter(function(r){ return !r._nr && r.odds > 1.0; });
+  var fieldSize = dutchSource.filter(function(r){ return !r._nr; }).length;
+  var nSel = fieldSize >= 8 ? 3 : (fieldSize >= 5 ? 2 : 1);
+  var dutchCandidates = runnersWithOdds.slice(0, nSel);  // top N by model rank
+  var DUTCH_OUTLAY = 10;  // fixed £10 total stake per race
+  // Need valid odds on every selection to dutch; a single selection is just a win bet
+  var dutchHtml = (dutchCandidates.length >= 1 && dutchCandidates.every(function(r){ return r.odds > 1.0; }))
+    ? dutchHTML(
+        dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }),
+        DUTCH_OUTLAY,
+        nSel, fieldSize
+      ) : '';
+  // Stash the dutch selections for result logging
+  S._dutchSelections = dutchCandidates.map(function(r){
+    return { name: r.name, odds: r.odds };
+  });
+  S._dutchOutlay = DUTCH_OUTLAY;
+  S._dutchFieldSize = fieldSize;
 
   return '<div class="ba-card ' + cardCls + '" style="padding-top:22px">'
     + '<div class="ba-flag">' + flagTxt + '</div>'
@@ -5528,7 +5559,32 @@ function saveRaceResult(raceKey) {
                        won:     actual[0] === r.name,
                        placed:  actual.slice(0,3).indexOf(r.name) > -1
                      };
-                   })
+                   }),
+    dutch:         (function() {
+      // Dutching result: did any of the top 1/2/3 model selections win?
+      var sels = S._dutchSelections || [];
+      if (!sels.length) return null;
+      var outlay = S._dutchOutlay || 10;
+      // Recompute stakes (same logic as the display) to know the return
+      var invSum = sels.reduce(function(s, x){ return s + (x.odds > 1 ? 1/x.odds : 0); }, 0);
+      var winner = sels.find(function(x){ return actual[0] === x.name; });
+      var ret = 0;
+      if (winner && invSum > 0) {
+        var stake = (1/winner.odds) / invSum * outlay;
+        ret = stake * winner.odds;  // winning selection's stake × its odds
+      }
+      return {
+        selections:  sels.map(function(x){ return x.name; }),
+        odds:        sels.map(function(x){ return x.odds; }),
+        nSel:        sels.length,
+        fieldSize:   S._dutchFieldSize || 0,
+        outlay:      outlay,
+        won:         !!winner,
+        winnerName:  winner ? winner.name : null,
+        returned:    +ret.toFixed(2),
+        profit:      +(ret - outlay).toFixed(2)
+      };
+    })()
   };
 
   // Save to log (update if exists)
