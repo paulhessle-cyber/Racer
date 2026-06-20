@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v4.9 · 18 Jun 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v5.0 · 20 Jun 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3141,6 +3141,7 @@ function showResults(scored, val, race, paceInfo) {
     + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
     + '<button class="res-save-btn" onclick="saveRaceResult(\'' + raceKey + '\')">✓ Save Result</button>'
     + '<button class="res-save-btn" onclick="exportPredLog()" style="margin-top:6px;background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)">⬇ Export Results JSON</button>'
+    + '<div class="res-api-status" id="resApiStatus" style="font-size:.68rem;font-family:\'IBM Plex Mono\',monospace;margin-top:8px;line-height:1.4"></div>'
     + '<div class="res-saved" id="resSaved"></div>'
     + '</div>';
 
@@ -3163,6 +3164,9 @@ function showResults(scored, val, race, paceInfo) {
       if(s3) s3.value = existing.actual[2]||'';
       document.getElementById('resSaved').textContent = '✓ Already logged';
     }, 50);
+  } else {
+    // Not yet logged — auto-fetch the official result from the Racing API proxy
+    setTimeout(function(){ autoFetchResult(race, scored); }, 100);
   }
 
   // Store race key and predictions for saving
@@ -5967,6 +5971,107 @@ function onOddsInput(stall) {
     el.value = decToFrac(dec);
   }
   if (typeof lsSave === 'function') lsSave();
+}
+
+function autoFetchResult(race, scored) {
+  var statusEl = document.getElementById('resApiStatus');
+  if (!statusEl) return;
+  var base = getProxyUrl();
+  if (!base) { statusEl.innerHTML = ''; return; }  // no proxy = silent, manual entry
+
+  var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  var time   = race.time || '';
+  if (!course) { statusEl.innerHTML = ''; return; }
+
+  // Race date: use the race's date if present, else today
+  var raceDate = race.date || new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD
+
+  statusEl.style.color = 'var(--mt)';
+  statusEl.innerHTML = '⏳ Checking for official result…';
+
+  var u = base + '/result?course=' + encodeURIComponent(course)
+        + '&time=' + encodeURIComponent(time)
+        + '&date=' + encodeURIComponent(raceDate);
+
+  fetch(u)
+    .then(function(r){ return r.json().catch(function(){ return { error: 'bad response' }; }); })
+    .then(function(data){
+      if (data.notFound) {
+        statusEl.style.color = 'var(--mt)';
+        statusEl.innerHTML = '⏱ ' + (data.message || 'No official result yet.') + ' Enter manually below.';
+        return;
+      }
+      if (data.error) {
+        statusEl.style.color = 'var(--mt)';
+        statusEl.innerHTML = '⚠ Couldn\'t fetch result (' + data.error + '). Enter manually.';
+        return;
+      }
+      if (!data.finishers || !data.finishers.length) {
+        statusEl.innerHTML = '⏱ No finishing positions yet. Enter manually.';
+        return;
+      }
+
+      // Match the API's exact names to the dropdown options (which use racecard names)
+      var sels = [document.getElementById('res1'), document.getElementById('res2'), document.getElementById('res3')];
+      var filled = 0, matchInfo = [];
+      for (var i = 0; i < sels.length; i++) {
+        var sel = sels[i];
+        if (!sel) continue;  // dropdown may not exist (e.g. win-only race)
+        var apiName = data.finishers[i] ? data.finishers[i].name : null;
+        if (!apiName) continue;
+        // Find the closest matching option in the dropdown
+        var matched = matchNameToOption(sel, apiName);
+        if (matched) {
+          sel.value = matched;
+          filled++;
+          matchInfo.push((i+1) + ': ' + matched.split(' ')[0]);
+        } else {
+          matchInfo.push((i+1) + ': ' + apiName.split(' ')[0] + ' (?)');
+        }
+      }
+
+      if (filled > 0) {
+        statusEl.style.color = 'var(--g)';
+        statusEl.innerHTML = '✓ Official result loaded from Racing API — ' + matchInfo.join(', ')
+          + '<br><span style="color:var(--mt)">Check it\'s right, then tap Save Result.</span>';
+      } else {
+        // API had the result but none of the names matched the racecard dropdowns
+        statusEl.style.color = 'var(--gold)';
+        var order = data.finishers.slice(0,3).map(function(f,i){ return (i+1)+'. '+f.name; }).join('  ');
+        statusEl.innerHTML = '⚠ Official result: ' + order
+          + '<br><span style="color:var(--mt)">Names differ from the racecard — select manually from the dropdowns above.</span>';
+      }
+    })
+    .catch(function(err){
+      statusEl.style.color = 'var(--mt)';
+      statusEl.innerHTML = '⚠ Result lookup failed (' + err.message + '). Enter manually.';
+    });
+}
+
+// Fuzzy-match an API horse name to the closest <option> in a dropdown.
+// Returns the option VALUE if a confident match is found, else null.
+function matchNameToOption(selectEl, apiName) {
+  function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9]/g,''); }
+  var target = norm(apiName);
+  if (!target) return null;
+  var opts = selectEl.options;
+  // 1) exact normalised match
+  for (var i = 0; i < opts.length; i++) {
+    if (norm(opts[i].value) === target) return opts[i].value;
+  }
+  // 2) one contains the other (handles minor suffixes/punctuation)
+  for (var j = 0; j < opts.length; j++) {
+    var o = norm(opts[j].value);
+    if (o && (o.indexOf(target) !== -1 || target.indexOf(o) !== -1)) return opts[j].value;
+  }
+  // 3) first 6 chars match (catches apostrophe/spelling slips like Ka'aba vs Kaaba)
+  if (target.length >= 6) {
+    for (var k = 0; k < opts.length; k++) {
+      var ok = norm(opts[k].value);
+      if (ok.length >= 6 && ok.substring(0,6) === target.substring(0,6)) return opts[k].value;
+    }
+  }
+  return null;
 }
 
 function fetchLiveOdds() {
