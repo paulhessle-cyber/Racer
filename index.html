@@ -3185,6 +3185,19 @@ function showResults(scored, val, race, paceInfo) {
     });
     return best ? { name: best.name, odds: best.odds, edge: Math.round(bestEdge*100) } : null;
   })();
+  // Propagate BF flags from the scored copies back onto the original runners,
+  // so the result-log snapshot below actually captures them (scored is a copy of
+  // the runners, so _bfAlert was only ever set on the copies, not the originals).
+  (race.runners || []).forEach(function(_orig){
+    var _sr = scored.filter(function(s){ return s.name === _orig.name && s._bfAlert; })[0];
+    if (_sr) {
+      _orig._bfAlert  = true;
+      _orig._bfDrop   = _sr._bfDrop;
+      _orig._bfCourse = _sr._bfCourse;
+      _orig._bfSP     = _sr._bfSP;
+      _orig._bfPos    = _sr._bfPos;
+    }
+  });
   S._logRace = { course: race.course, time: race.time, dist: race.dist, going: document.getElementById('gsel').value, runners: race.runners || [] };
 }
 
