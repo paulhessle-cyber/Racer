@@ -1030,6 +1030,7 @@ function processPages(pages) {
 
   // S.currentRaces = this meeting only (for Predict + Placepot)
     S.currentRaces = races;
+    S._napLocked = null;  // fresh meeting = fresh Nap
     // S.races = all races across all meetings (for Lucky 15)
     S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
     lsRestore(races);
@@ -2532,6 +2533,10 @@ function predict() {
     return Object.assign({}, r, { score: finalProbs[i] });
   });
   scored.sort(function(a,b){ return b.score - a.score; });
+
+  // Cache for Nap consistency — Placepot uses these scores so the Nap
+  // always matches what the main prediction screen shows for this race.
+  race._mainScored = scored.slice();
 
   var valueBet = null;
   for (var i = 0; i < Math.min(3, scored.length); i++) {
@@ -4285,9 +4290,19 @@ function runPlacepot() {
     var scored=active.map(function(r,i){ return Object.assign({},r,{score:finalProbs[i]}); });
     scored.sort(function(a,b){return b.score-a.score;});
 
-    if (scored.length>=2) {
-      var gap=Math.round((scored[0].score-scored[1].score)*100);
-      if (gap>napScore) { napScore=gap; napCandidate={runner:scored[0],race,raceIdx:ri,gap,conf1:Math.round(scored[0].score*100),conf2:Math.round(scored[1].score*100)}; }
+    // Nap candidate: prefer main predict() scores if this race has been predicted,
+    // so the Nap is always consistent with the main screen ranking.
+    // Only update if the Nap isn't already locked for this session.
+    if (!S._napLocked) {
+      var napSrc = (race._mainScored && race._mainScored.length >= 2) ? race._mainScored : scored;
+      if (napSrc.length >= 2) {
+        var gap = Math.round((napSrc[0].score - napSrc[1].score) * 100);
+        if (gap > napScore) {
+          napScore = gap;
+          napCandidate = {runner: napSrc[0], race: race, raceIdx: ri, gap: gap,
+            conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100)};
+        }
+      }
     }
 
     var top3=scored.slice(0,3), maxSc=top3[0]?top3[0].score:1;
@@ -4317,7 +4332,11 @@ function runPlacepot() {
     resEl.innerHTML+='<div class="pp-race">'+hdr+rows+'</div>';
   });
 
-  // NAP
+  // NAP — lock after first calculation so it doesn't shift during the day.
+  // Cleared only when a new PDF is loaded (S._napLocked = null in loadPDF).
+  if (!S._napLocked && napCandidate) S._napLocked = napCandidate;
+  if (S._napLocked) napCandidate = S._napLocked;
+
   var napEl=document.getElementById('pp-nap');
   if (napCandidate&&napEl) {
     var nr=napCandidate.runner, nrace=napCandidate.race;
