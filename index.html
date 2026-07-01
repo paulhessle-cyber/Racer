@@ -512,6 +512,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <div style="font-size:1.8rem;color:var(--gold);letter-spacing:1px;line-height:1;margin-bottom:8px" id="nap-name">—</div>
       <div style="font-size:.75rem;color:var(--tx);margin-bottom:4px" id="nap-detail">—</div>
       <div style="font-size:.7rem;color:var(--mt)" id="nap-meta">—</div>
+      <div style="font-size:.62rem;color:var(--gold);margin-top:6px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px" id="nap-reason"></div>
       <div style="position:absolute;right:12px;top:10px;font-size:4rem;color:rgba(255,193,7,.08);line-height:1;pointer-events:none">NAP</div>
     </div>
     <div class="card" style="padding:14px 16px 10px">
@@ -4258,6 +4259,109 @@ function scoreRunnerForPP(r, race, going, ctx) {
   return raw;
 }
 
+// ── Beaten-favourite detection (reusable) ─────────────────────────
+// Sets _bfAlert/_bfDrop/etc on a runner for a GIVEN race (uses that race's
+// own class, not S.sel), so Placepot can flag BF horses per race without
+// the user having tapped Predict first. Idempotent.
+function computeBF(r, race) {
+  if (!S.model || !S.model.horseStats) return;
+  var hKey = (r.name||'').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i,'').trim();
+  var hStat = S.model.horseStats[hKey];
+  if (!hStat || !hStat.bfDate) return;
+  var days = Math.round((Date.now() - new Date(hStat.bfDate).getTime()) / 86400000);
+  if (!(days >= 0 && days <= 60)) return;
+  var bfRaceCls = hStat.bfCls || 0;
+  if (!bfRaceCls && hStat.bfSP > 0) {
+    bfRaceCls = hStat.bfSP < 1.5 ? 2 : hStat.bfSP < 2.0 ? 3 : 0;
+  }
+  var thisCls = race.cls || 0;
+  var classDropped = bfRaceCls > 0 && thisCls > 0 && thisCls > bfRaceCls;
+  r._bfAlert  = true;
+  r._bfCourse = hStat.bfCourse || '';
+  r._bfSP     = hStat.bfSP  || 0;
+  r._bfPos    = hStat.bfPos || 0;
+  r._bfDrop   = classDropped;
+  r._bfDays   = days;
+}
+
+// ── Best of the Day composite ─────────────────────────────────────
+// Scores a runner 0–100 across the factors we can actually compute from
+// the model + racecard (RPR isn't parsed, so OR carries ability).
+// Weights (sum 100): suitability 26, form 20, OR/ability 17, class 10,
+// trainer 8, pace 7, jockey 6, draw 3, long-distance 3.
+function bestOfDayScore(r, race, ctx) {
+  var m = S.model || {};
+  var hs = m.horseStats || {}, js = m.jockeyStats || {}, ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
+  var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
+  var h  = (r.name||'').toLowerCase();
+  var j  = (r.jockey||'').toLowerCase().replace(/\s*\(\d+\)/,'');
+  var t  = (r.trainer||'').toLowerCase();
+  var c  = (race.course||'').toLowerCase();
+  var dist = parseDist(race.dist);
+  var gs = gm[(r.going||'good').toLowerCase()] || 4;
+  var H = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
+  var J = js[j] || {r:1,w:0};
+  var T = ts[t] || {r:1,w:0};
+
+  // Suitability (26) — proven on going / distance / course, credited vs wins
+  var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1,1), 1);
+  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1,1), 1);
+  var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1,1), 1);
+  var suit = (gMch*0.40 + dMch*0.35 + cMch*0.25);
+
+  // Current form (20) — recency-weighted form trajectory + place rate
+  var recent = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
+  var pr = H.p / Math.max(H.r,1);
+  var form = recent*0.7 + pr*0.3;
+
+  // Ability / OR (17) — ranked within the field, discounted for big outsiders
+  var orsRaw = 0.45;
+  if (r.or > 0 && ctx.ors) {
+    var valid = ctx.ors.filter(function(x){return x>0;});
+    var mn = valid.length ? Math.min.apply(null, valid) : 0;
+    var mx = valid.length ? Math.max.apply(null, valid) : 1;
+    if (mx > mn) orsRaw = (r.or - mn) / (mx - mn);
+  }
+  var orCred = r.odds <= 0 ? 1.0 : r.odds <= 12 ? 1.0 : r.odds <= 25 ? 0.6 : 0.3;
+  var ability = orsRaw * orCred;
+
+  // Class edge (10) — dropping vs the horse's own history (BF class or best win class)
+  var clsEdge = 0.4;
+  var thisCls = race.cls || 0;
+  var priorCls = H.bfCls || 0;
+  if (thisCls > 0 && priorCls > 0) {
+    // higher number = lower grade; dropping = thisCls > priorCls
+    clsEdge = thisCls > priorCls ? Math.min(0.4 + (thisCls - priorCls)*0.2, 1) :
+              thisCls < priorCls ? 0.55 : 0.45;   // up in class = proven at higher level
+  }
+
+  // Trainer (8) & Jockey (6) — strike-rate ranked in field
+  var twr = T.w / Math.max(T.r,1);
+  var jwr = J.w / Math.max(J.r,1);
+  var trn = Math.min(twr / 0.20, 1);   // 20% SR ≈ top of scale
+  var jky = Math.min(jwr / 0.18, 1);
+
+  // Pace (7) — favour a lone leader or a strong closer in a hot pace
+  var pace = 0.4;
+  if (r._pace === 'front') pace = 0.75;
+  else if (r._pace === 'closer') pace = 0.6;
+
+  // Draw (3) — course draw bias for this stall
+  var dd = (cd[c]||{})[r.stall] || {r:1,w:0};
+  var draw = dd.r > 2 ? Math.min((dd.w/dd.r)/0.15, 1) : 0.4;
+
+  // Long-distance aptitude (3) — proven at 2m+ when today is a marathon
+  var longd = 0.4;
+  if (dist >= 16) {
+    var lw = 0; Object.keys(H.dw||{}).forEach(function(d){ if (parseFloat(d)>=16) lw += H.dw[d]; });
+    longd = lw > 0 ? Math.min(0.5 + lw*0.2, 1) : 0.25;
+  }
+
+  var score = suit*26 + form*20 + ability*17 + clsEdge*10
+            + trn*8 + pace*7 + jky*6 + draw*3 + longd*3;
+  return Math.round(score * 10) / 10;   // 0–100, 1dp
+}
+
 function runPlacepot() {
   var races=S.currentRaces||S.races; if (!races||!races.length) return;
   var going=document.getElementById('pp-going').value;
@@ -4269,6 +4373,7 @@ function runPlacepot() {
   if(nn) nn.style.display=totalOdds>0?'none':'block';
 
   var ppRaces=races.slice(0,6), allPicks=[], napCandidate=null, napScore=-1;
+  var bodCandidate=null, bodBest=-1, bfHorses=[];
 
   ppRaces.forEach(function(race,ri) {
     var active=race.runners.filter(function(r){return !r._nr;});
@@ -4303,6 +4408,20 @@ function runPlacepot() {
             conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100)};
         }
       }
+
+      // Best of the Day composite — score every active runner, track the meeting's leader
+      active.forEach(function(rr){
+        computeBF(rr, race);   // ensure BF flags exist even if Predict wasn't tapped
+        var bod = bestOfDayScore(rr, race, ctx);
+        if (bod > bodBest) {
+          bodBest = bod;
+          bodCandidate = {runner: rr, race: race, raceIdx: ri, bod: bod};
+        }
+        // Collect BF horses with their composite for the override step
+        if (rr._bfAlert) {
+          bfHorses.push({runner: rr, race: race, raceIdx: ri, bod: bod, drop: !!rr._bfDrop});
+        }
+      });
     }
 
     var top3=scored.slice(0,3), maxSc=top3[0]?top3[0].score:1;
@@ -4332,6 +4451,43 @@ function runPlacepot() {
     resEl.innerHTML+='<div class="pp-race">'+hdr+rows+'</div>';
   });
 
+  // ── Reconcile: Best of the Day composite vs BF override ──────────
+  // Runs only while the Nap is unlocked (first calculation of the session).
+  var napReason = '';
+  if (!S._napLocked && bodCandidate) {
+    var chosen = bodCandidate;
+    napReason = 'Best of the Day (composite ' + bodCandidate.bod + ')';
+
+    // BF override. Class-drop BF always wins. Plain BF wins if within 5 pts.
+    var dropBF = bfHorses.filter(function(b){ return b.drop; })
+                         .sort(function(a,b){ return b.bod - a.bod; })[0];
+    if (dropBF) {
+      chosen = dropBF;
+      napReason = 'Class-drop beaten-favourite override (composite ' + dropBF.bod + ')';
+    } else {
+      var plainBF = bfHorses.filter(function(b){ return !b.drop; })
+                           .sort(function(a,b){ return b.bod - a.bod; })[0];
+      if (plainBF && (bodBest - plainBF.bod) <= 5) {
+        chosen = plainBF;
+        napReason = 'Beaten-favourite promoted — within 5 pts of the leader (composite ' + plainBF.bod + ')';
+      }
+    }
+
+    // Build the Nap from the chosen composite runner. Pull conf1/conf2 gap from
+    // that race's main/PP scores so the display stays consistent.
+    var cr = chosen.race, crun = chosen.runner;
+    var cScored = (cr._mainScored && cr._mainScored.length >= 2) ? cr._mainScored : null;
+    var conf1 = 0, conf2 = 0, cgap = 0;
+    if (cScored) {
+      conf1 = Math.round(cScored[0].score * 100);
+      conf2 = Math.round(cScored[1].score * 100);
+      cgap  = conf1 - conf2;
+    }
+    napCandidate = {runner: crun, race: cr, raceIdx: chosen.raceIdx,
+      gap: cgap, conf1: conf1, conf2: conf2,
+      bod: chosen.bod, reason: napReason, isBF: !!crun._bfAlert, isDrop: !!crun._bfDrop};
+  }
+
   // NAP — lock after first calculation so it doesn't shift during the day.
   // Cleared only when a new PDF is loaded (S._napLocked = null in loadPDF).
   if (!S._napLocked && napCandidate) S._napLocked = napCandidate;
@@ -4342,8 +4498,25 @@ function runPlacepot() {
     var nr=napCandidate.runner, nrace=napCandidate.race;
     var jn=nr.jockey?nr.jockey.replace(/\s*\(\d+\)/,''):'—';
     document.getElementById('nap-name').textContent=nr.name;
+    // BF badge next to the name when the Nap came via a beaten-favourite
+    var napNameEl = document.getElementById('nap-name');
+    var oldBadge = document.getElementById('nap-bf-badge');
+    if (oldBadge) oldBadge.remove();
+    if (napCandidate.isBF) {
+      var b = document.createElement('span');
+      b.id = 'nap-bf-badge';
+      b.style.cssText = 'font-size:.6rem;margin-left:8px;padding:2px 7px;border-radius:4px;vertical-align:middle;font-family:\'IBM Plex Mono\',monospace;font-weight:700;'
+        + (napCandidate.isDrop
+            ? 'background:rgba(255,140,0,.2);color:#ffaa00;border:1px solid rgba(255,140,0,.6)'
+            : 'background:rgba(255,82,82,.15);color:#ff5252;border:1px solid rgba(255,82,82,.5)');
+      b.textContent = napCandidate.isDrop ? '👀⬇ BF DROP' : '👀 BF';
+      napNameEl.appendChild(b);
+    }
     document.getElementById('nap-detail').textContent=nrace.time+' '+nrace.course+(nr.odds>0?' — '+nr.odds.toFixed(1)+' decimal':' — odds not entered');
-    document.getElementById('nap-meta').textContent='Draw '+nr.stall+(nr.or>0?' · OR '+nr.or:'')+' · '+jn+' · '+napCandidate.conf1+'% vs '+napCandidate.conf2+'% (+'+napCandidate.gap+'% gap)';
+    var confBit = napCandidate.conf1 ? ' · '+napCandidate.conf1+'% vs '+napCandidate.conf2+'% (+'+napCandidate.gap+'% gap)' : '';
+    document.getElementById('nap-meta').textContent='Draw '+nr.stall+(nr.or>0?' · OR '+nr.or:'')+' · '+jn+confBit;
+    var reasonEl = document.getElementById('nap-reason');
+    if (reasonEl) reasonEl.textContent = napCandidate.reason || '';
     napEl.style.display='block';
   } else if (napEl) napEl.style.display='none';
 
