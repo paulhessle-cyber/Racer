@@ -1031,13 +1031,18 @@ function processPages(pages) {
 
   // S.currentRaces = this meeting only (for Predict + Placepot)
     S.currentRaces = races;
-    S._napLocked = null;  // fresh meeting = fresh Nap
+    // Restore today's locked Nap for this meeting (survives Safari reloads).
+    // Genuinely new meeting/day = no stored Nap = starts unlocked.
+    S._napLocked = napRestore(races);
     // S.races = all races across all meetings (for Lucky 15)
     S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
     lsRestore(races);
     document.getElementById('pp').style.display = 'none';
     renderRaceList(S.currentRaces);
     renderMeetingsList();
+    // One-time full-card odds fetch for this meeting (then Nap locks on
+    // the complete snapshot). Subsequent refreshes are manual via Live Odds.
+    autoFetchAllOdds(S.currentRaces);
   } catch(err) { setPS('❌ Error: ' + err.message); console.error(err); }
 }
 
@@ -3242,9 +3247,46 @@ function lsRestore(races) {
   } catch(e){}
 }
 function lsPurgeOld() {
-  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if(k.indexOf('rp_odds_')===0&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
+  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
 }
 lsPurgeOld();
+
+// ── Nap lock persistence ────────────────────────────────────
+// The Nap must survive Safari iOS page reloads, so the lock is stored
+// per meeting per day and reconstituted against the reloaded card.
+function napKey(races) {
+  var today = new Date().toISOString().slice(0,10);
+  var c = (races&&races[0]&&races[0].course) ? races[0].course.replace(/[^a-z0-9]/gi,'_') : 'unknown';
+  return 'rp_nap_' + today + '_' + c;
+}
+function napSave(races, nap) {
+  try {
+    localStorage.setItem(napKey(races), JSON.stringify({
+      time: nap.race.time, name: nap.runner.name,
+      gap: nap.gap, conf1: nap.conf1, conf2: nap.conf2,
+      bod: nap.bod||0, reason: nap.reason||'', isBF: !!nap.isBF, isDrop: !!nap.isDrop
+    }));
+  } catch(e){}
+}
+function napRestore(races) {
+  try {
+    var raw = localStorage.getItem(napKey(races));
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    for (var ri = 0; ri < races.length; ri++) {
+      if (races[ri].time !== d.time) continue;
+      var rs = races[ri].runners || [];
+      for (var i = 0; i < rs.length; i++) {
+        if (rs[i].name === d.name) {
+          return {runner: rs[i], race: races[ri], raceIdx: ri,
+            gap: d.gap, conf1: d.conf1, conf2: d.conf2,
+            bod: d.bod, reason: d.reason, isBF: d.isBF, isDrop: d.isDrop};
+        }
+      }
+    }
+  } catch(e){}
+  return null;
+}
 
 // ── Race list ──────────────────────────────────────────────
 function updateSetupHint(races) {
@@ -4489,8 +4531,9 @@ function runPlacepot() {
   }
 
   // NAP — lock after first calculation so it doesn't shift during the day.
-  // Cleared only when a new PDF is loaded (S._napLocked = null in loadPDF).
-  if (!S._napLocked && napCandidate) S._napLocked = napCandidate;
+  // Persisted to localStorage so it survives Safari iOS page reloads.
+  if (!S._napLocked) S._napLocked = napRestore(races);
+  if (!S._napLocked && napCandidate) { S._napLocked = napCandidate; napSave(races, napCandidate); }
   if (S._napLocked) napCandidate = S._napLocked;
 
   var napEl=document.getElementById('pp-nap');
@@ -6279,6 +6322,99 @@ function matchNameToOption(selectEl, apiName) {
   return null;
 }
 
+// ── Live odds: shared fetch + apply machinery ─────────────────────
+// applyLiveOdds: writes prices from proxy data onto a race's runners.
+// Safe to call for a race that isn't currently rendered (DOM guards).
+function applyLiveOdds(race, data) {
+  function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
+  var priceByName = {};
+  (data.runners||[]).forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
+  var matched = 0, unmatched = [];
+  race.runners.forEach(function(r){
+    if (r._nr) return;
+    var p = priceByName[norm(r.name)];
+    if (p && p > 1) {
+      var prevOdds = r.odds || 0;
+      if (prevOdds > 0) {
+        var pct = (p - prevOdds) / prevOdds;
+        if (pct <= -0.10)      r._mv = 'steam';
+        else if (pct >= 0.10)  r._mv = 'drift';
+        else if (r._mv !== 'steam' && r._mv !== 'drift') r._mv = 'steady';
+      } else {
+        r._openingOdds = p;
+      }
+      r.odds = p;
+      // Update visible inputs only if this race is on screen
+      var inp = document.getElementById('od_' + r.stall);
+      if (inp && S.sel === race) inp.value = (getOddsFormat()==='fractional') ? decToFrac(p) : p;
+      var mvBtn = document.getElementById('mv_' + r.stall);
+      if (mvBtn && S.sel === race && r._mv) {
+        mvBtn.className = 'mv-btn' + (r._mv==='steam'?' steam':r._mv==='drift'?' drift':'');
+        mvBtn.textContent = r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady';
+      }
+      matched++;
+      if (S.sel === race && typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
+    } else {
+      unmatched.push(r.name);
+    }
+  });
+  return {matched: matched, unmatched: unmatched};
+}
+
+// fetchOddsForRace: fetch + apply for one race. Resolves with a result
+// object; never rejects (errors return {error}) so batch loops keep going.
+function fetchOddsForRace(race) {
+  var base = getProxyUrl();
+  if (!base) return Promise.resolve({error: 'no-proxy'});
+  var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(race.time || '');
+  return fetch(u)
+    .then(function(r){ return r.json().catch(function(){ return { error: 'Bad response (status ' + r.status + ')' }; }); })
+    .then(function(data){
+      if (data.notFound) return {notFound: true, message: data.message};
+      if (data.error)    return {error: data.error};
+      if (!data.runners || !data.runners.length) return {error: 'no prices yet'};
+      return Object.assign({ok: true}, applyLiveOdds(race, data));
+    })
+    .catch(function(err){ return {error: err.message}; });
+}
+
+// autoFetchAllOdds: one-time full-card fetch when a meeting's PDF loads.
+// Runs once per meeting per day (localStorage guard), sequential with a
+// short gap between races. When done: saves odds, computes + locks the Nap.
+function autoFetchAllOdds(races) {
+  if (!races || !races.length) return;
+  if (!getProxyUrl()) return;                 // no proxy configured — skip silently
+  if (S._napLocked) return;                   // Nap already locked today — nothing to do
+  var afKey = 'rp_af_' + new Date().toISOString().slice(0,10) + '_' +
+              (races[0].course||'unknown').replace(/[^a-z0-9]/gi,'_');
+  try { if (localStorage.getItem(afKey)) return; } catch(e){}
+  if (S._autoFetching) return;
+  S._autoFetching = true;
+
+  var i = 0, got = 0;
+  showLiveStatus('⬇ Auto-loading live odds for all ' + races.length + ' races…', 'ok');
+  function next() {
+    if (i >= races.length) {
+      S._autoFetching = false;
+      try { localStorage.setItem(afKey, '1'); } catch(e){}
+      lsSave();
+      showLiveStatus('✓ Auto-loaded odds for ' + got + '/' + races.length + ' races. Nap locked on this snapshot — further refreshes are manual via Live Odds.', 'ok');
+      if (S.sel && typeof renderRunners === 'function') renderRunners();
+      // Compute + lock the Nap on the complete odds snapshot
+      try { runPlacepot(); } catch(e) { console.warn('nap after autofetch:', e); }
+      return;
+    }
+    var race = races[i++];
+    fetchOddsForRace(race).then(function(res){
+      if (res && res.ok) got++;
+      setTimeout(next, 450);   // be gentle on the proxy
+    });
+  }
+  next();
+}
+
+// Manual per-race button — unchanged behaviour, now built on the shared core.
 function fetchLiveOdds() {
   var base = getProxyUrl();
   if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
@@ -6286,88 +6422,31 @@ function fetchLiveOdds() {
   if (!race) { showLiveStatus('⚠ Select a race first (load a PDF and run a prediction).', 'warn'); return; }
 
   var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
-  var time   = race.time || '';
-  showLiveStatus('⬇ Fetching live odds for ' + course + ' ' + time + '…', 'ok');
+  showLiveStatus('⬇ Fetching live odds for ' + course + ' ' + (race.time||'') + '…', 'ok');
 
-  var u = base + '/odds?course=' + encodeURIComponent(course) + '&time=' + encodeURIComponent(time);
-  fetch(u)
-    .then(function(r){ return r.json().catch(function(){ return { error: 'Bad response from server (status ' + r.status + ')' }; }); })
-    .then(function(data){
-      // Clean "not found" (finished race / market not open) — not an error
-      if (data.notFound) {
-        showLiveStatus('⏱ ' + (data.message || 'No live market for this race.') + ' You can still paste odds manually.', 'warn');
-        return;
-      }
-      if (data.error) {
-        showLiveStatus('⚠ ' + data.error, 'warn');
-        return;
-      }
-      if (!data.runners || !data.runners.length) { showLiveStatus('⚠ No prices returned for this race yet.', 'warn'); return; }
-
-      // Snapshot for undo (reuse the paste undo machinery)
-      S._oddsSnapshot = {
-        raceKey: race.course + '_' + race.time,
-        runners: race.runners.map(function(r){
-          return { stall: r.stall, odds: r.odds||0, _openingOdds: r._openingOdds||0, _mv: r._mv||'' };
-        })
-      };
-
-      // Match by horse name (normalise both sides)
-      function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
-      var priceByName = {};
-      data.runners.forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
-
-      var matched = 0;
-      var unmatched = [];   // horses in the card we couldn't find a price for
-      race.runners.forEach(function(r){
-        if (r._nr) return;
-        var p = priceByName[norm(r.name)];
-        if (p && p > 1) {
-          var prevOdds = r.odds || 0;
-          // Movement detection (same logic as paste)
-          if (prevOdds > 0) {
-            var pct = (p - prevOdds) / prevOdds;
-            if (pct <= -0.10)      r._mv = 'steam';   // shortened 10%+
-            else if (pct >= 0.10)  r._mv = 'drift';   // drifted 10%+
-            else if (r._mv !== 'steam' && r._mv !== 'drift') r._mv = 'steady';
-          } else {
-            r._openingOdds = p;  // first odds = opening
-          }
-          r.odds = p;
-          // Write to the visible input field in the current display format
-          var inp = document.getElementById('od_' + r.stall);
-          if (inp) inp.value = (getOddsFormat()==='fractional') ? decToFrac(p) : p;
-          // Update movement button label
-          var mvBtn = document.getElementById('mv_' + r.stall);
-          if (mvBtn && r._mv) {
-            mvBtn.className = 'mv-btn' + (r._mv==='steam'?' steam':r._mv==='drift'?' drift':'');
-            mvBtn.textContent = r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady';
-          }
-          matched++;
-          if (typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
-        } else {
-          unmatched.push(r.name);
-        }
-      });
-
-      lsSave();
-
-      var msg = '✓ ' + matched + ' live odds loaded from Betfair';
-      if (unmatched.length) {
-        msg += '<br><span style="color:var(--gold)">⚠ No price matched for: <strong>' + unmatched.map(esc).join(', ') + '</strong> — enter manually below.</span>';
-      }
-      msg += ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>';
-      showLiveStatus(msg, 'ok');
-
-      // Re-run the prediction so Model vs Market updates with the new odds
-      if (typeof renderRunners === 'function') renderRunners();
-      if (typeof predict === 'function' && S.sel) {
-        try { predict(); } catch(e) { console.warn('re-predict after odds:', e); }
-      }
+  // Snapshot for undo (reuse the paste undo machinery)
+  S._oddsSnapshot = {
+    raceKey: race.course + '_' + race.time,
+    runners: race.runners.map(function(r){
+      return { stall: r.stall, odds: r.odds||0, _openingOdds: r._openingOdds||0, _mv: r._mv||'' };
     })
-    .catch(function(err){
-      showLiveStatus('✗ Live odds failed: ' + err.message, 'warn');
-    });
+  };
+
+  fetchOddsForRace(race).then(function(res){
+    if (res.notFound) { showLiveStatus('⏱ ' + (res.message || 'No live market for this race.') + ' You can still paste odds manually.', 'warn'); return; }
+    if (res.error)    { showLiveStatus('⚠ ' + res.error, 'warn'); return; }
+    lsSave();
+    var msg = '✓ ' + res.matched + ' live odds loaded from Betfair';
+    if (res.unmatched.length) {
+      msg += '<br><span style="color:var(--gold)">⚠ No price matched for: <strong>' + res.unmatched.map(esc).join(', ') + '</strong> — enter manually below.</span>';
+    }
+    msg += ' <button onclick="undoLastOdds()" style="background:transparent;border:1px solid var(--g);color:var(--g);font-family:var(--mono);font-size:.65rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:6px">↩ Undo</button>';
+    showLiveStatus(msg, 'ok');
+    if (typeof renderRunners === 'function') renderRunners();
+    if (typeof predict === 'function' && S.sel) {
+      try { predict(); } catch(e) { console.warn('re-predict after odds:', e); }
+    }
+  });
 }
 
 </script>
