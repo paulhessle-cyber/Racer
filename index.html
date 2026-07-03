@@ -1153,7 +1153,7 @@ function parseRunnerLine(line) {
   var age = parseInt(tailM[1]), wst = parseInt(tailM[2]), wlbs = parseInt(tailM[3].replace(/\D/g,''));
   var jockey = tailM[4].trim(), OR = tailM[5] === '-' ? 0 : parseInt(tailM[5]);
   var pre = rest.slice(0, tailM.index).trim(), form = '';
-  var formM = pre.match(/^([\d/\-PFpUuRr]+(?:\s*\d+)?)\s+/);
+  var formM = pre.match(/^((?=[^\s]*\d)[\d/\-PFpUuRrBbDdCcSsVvOoLl]+(?:\s*\d+)?)\s+/);
   if (formM && !/^[A-Z]{2}/.test(pre)) { form = formM[1].trim(); pre = pre.slice(formM[0].length); }
   var name = pre.replace(/\s+\([^)]{3,}\)\s*$/, '').replace(/\s+\d+\s*(?:[A-Z]{1,2}\s*)*$/, '').replace(/\s+(?:BF|CD|D|C)\s*$/, '').trim();
   if (!name || !/[A-Z]{2}/.test(name)) return null;
@@ -6325,40 +6325,86 @@ function matchNameToOption(selectEl, apiName) {
 // ── Live odds: shared fetch + apply machinery ─────────────────────
 // applyLiveOdds: writes prices from proxy data onto a race's runners.
 // Safe to call for a race that isn't currently rendered (DOM guards).
+// Dice bigram similarity for fuzzy name matching (0..1)
+function nameSim(a, b) {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  var big = function(s){ var m={},i; for(i=0;i<s.length-1;i++){var g=s.substr(i,2); m[g]=(m[g]||0)+1;} return m; };
+  var A = big(a), B = big(b), inter = 0, tot = 0, g;
+  for (g in A) { tot += A[g]; if (B[g]) inter += Math.min(A[g], B[g]); }
+  for (g in B) tot += B[g];
+  return tot ? (2*inter)/tot : 0;
+}
+
 function applyLiveOdds(race, data) {
   function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
-  var priceByName = {};
-  (data.runners||[]).forEach(function(rn){ priceByName[norm(rn.name)] = rn.back; });
-  var matched = 0, unmatched = [];
+  var bf = (data.runners||[]).map(function(rn){ return {name: rn.name, back: rn.back, used: false}; });
+  var byName = {};
+  bf.forEach(function(x){ byName[norm(x.name)] = x; });
+
+  function setPrice(r, p) {
+    var prevOdds = r.odds || 0;
+    if (prevOdds > 0) {
+      var pct = (p - prevOdds) / prevOdds;
+      if (pct <= -0.10)      r._mv = 'steam';
+      else if (pct >= 0.10)  r._mv = 'drift';
+      else if (r._mv !== 'steam' && r._mv !== 'drift') r._mv = 'steady';
+    } else {
+      r._openingOdds = p;
+    }
+    r.odds = p;
+    var inp = document.getElementById('od_' + r.stall);
+    if (inp && S.sel === race) inp.value = (getOddsFormat()==='fractional') ? decToFrac(p) : p;
+    var mvBtn = document.getElementById('mv_' + r.stall);
+    if (mvBtn && S.sel === race && r._mv) {
+      mvBtn.className = 'mv-btn' + (r._mv==='steam'?' steam':r._mv==='drift'?' drift':'');
+      mvBtn.textContent = r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady';
+    }
+    if (S.sel === race && typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
+  }
+
+  var matched = 0, unmatchedPdf = [], fixed = [], added = [];
+
+  // Pass 1 — exact match on normalised name
   race.runners.forEach(function(r){
     if (r._nr) return;
-    var p = priceByName[norm(r.name)];
-    if (p && p > 1) {
-      var prevOdds = r.odds || 0;
-      if (prevOdds > 0) {
-        var pct = (p - prevOdds) / prevOdds;
-        if (pct <= -0.10)      r._mv = 'steam';
-        else if (pct >= 0.10)  r._mv = 'drift';
-        else if (r._mv !== 'steam' && r._mv !== 'drift') r._mv = 'steady';
-      } else {
-        r._openingOdds = p;
-      }
-      r.odds = p;
-      // Update visible inputs only if this race is on screen
-      var inp = document.getElementById('od_' + r.stall);
-      if (inp && S.sel === race) inp.value = (getOddsFormat()==='fractional') ? decToFrac(p) : p;
-      var mvBtn = document.getElementById('mv_' + r.stall);
-      if (mvBtn && S.sel === race && r._mv) {
-        mvBtn.className = 'mv-btn' + (r._mv==='steam'?' steam':r._mv==='drift'?' drift':'');
-        mvBtn.textContent = r._mv==='steam'?'▲ Steam':r._mv==='drift'?'▽ Drift':'~ Steady';
-      }
-      matched++;
-      if (S.sel === race && typeof updateOddsDisplay === 'function') updateOddsDisplay(r);
-    } else {
-      unmatched.push(r.name);
+    var hit = byName[norm(r.name)];
+    if (hit && hit.back > 1) { setPrice(r, hit.back); hit.used = true; matched++; }
+    else unmatchedPdf.push(r);
+  });
+
+  // Pass 2 — fuzzy: misparsed PDF names adopt Betfair's official name.
+  // Catches names with leaked form strings ("D1324 Silver Arrow") etc.
+  unmatchedPdf.forEach(function(r){
+    var rn = norm(r.name), best = null, bestS = 0;
+    bf.forEach(function(x){
+      if (x.used) return;
+      var s = nameSim(rn, norm(x.name));
+      if (s > bestS) { bestS = s; best = x; }
+    });
+    if (best && bestS >= 0.55) {
+      if (norm(best.name) !== rn) { fixed.push(r.name + ' → ' + best.name); r.name = best.name; }
+      if (best.back > 1) { setPrice(r, best.back); matched++; }
+      best.used = true;
     }
   });
-  return {matched: matched, unmatched: unmatched};
+
+  // Pass 3 — Betfair runners the PDF parse missed entirely → add them.
+  bf.forEach(function(x){
+    if (x.used) return;
+    var maxStall = race.runners.reduce(function(m,r){ return Math.max(m, r.stall||0); }, 0);
+    var nr = { stall: maxStall+1, draw: maxStall+1, form: '', name: x.name,
+               age: 0, wst: 0, wlbs: 0, jockey: '', or: 0, daysSince: 21,
+               rf: parseForm(''), odds: 0, _pace: '', _addedFromBetfair: true };
+    if (x.back > 1) { nr.odds = x.back; nr._openingOdds = x.back; }
+    race.runners.push(nr);
+    added.push(x.name);
+    x.used = true;
+  });
+  if (added.length && S.sel === race && typeof renderRunners === 'function') renderRunners();
+
+  var stillUnmatched = race.runners.filter(function(r){ return !r._nr && !(r.odds > 0) && !r._addedFromBetfair; }).map(function(r){ return r.name; });
+  return {matched: matched, unmatched: stillUnmatched, fixed: fixed, added: added};
 }
 
 // fetchOddsForRace: fetch + apply for one race. Resolves with a result
@@ -6392,14 +6438,18 @@ function autoFetchAllOdds(races) {
   if (S._autoFetching) return;
   S._autoFetching = true;
 
-  var i = 0, got = 0;
+  var i = 0, got = 0, fixedN = 0, addedN = 0;
   showLiveStatus('⬇ Auto-loading live odds for all ' + races.length + ' races…', 'ok');
   function next() {
     if (i >= races.length) {
       S._autoFetching = false;
       try { localStorage.setItem(afKey, '1'); } catch(e){}
       lsSave();
-      showLiveStatus('✓ Auto-loaded odds for ' + got + '/' + races.length + ' races. Nap locked on this snapshot — further refreshes are manual via Live Odds.', 'ok');
+      var doneMsg = '✓ Auto-loaded odds for ' + got + '/' + races.length + ' races.';
+      if (fixedN) doneMsg += ' ✎ ' + fixedN + ' name' + (fixedN>1?'s':'') + ' corrected from Betfair.';
+      if (addedN) doneMsg += ' ➕ ' + addedN + ' missing runner' + (addedN>1?'s':'') + ' added.';
+      doneMsg += ' Nap locked on this snapshot — further refreshes are manual via Live Odds.';
+      showLiveStatus(doneMsg, 'ok');
       if (S.sel && typeof renderRunners === 'function') renderRunners();
       // Compute + lock the Nap on the complete odds snapshot
       try { runPlacepot(); } catch(e) { console.warn('nap after autofetch:', e); }
@@ -6408,6 +6458,8 @@ function autoFetchAllOdds(races) {
     var race = races[i++];
     fetchOddsForRace(race).then(function(res){
       if (res && res.ok) got++;
+      if (res && res.fixed) fixedN += res.fixed.length;
+      if (res && res.added) addedN += res.added.length;
       setTimeout(next, 450);   // be gentle on the proxy
     });
   }
@@ -6437,6 +6489,12 @@ function fetchLiveOdds() {
     if (res.error)    { showLiveStatus('⚠ ' + res.error, 'warn'); return; }
     lsSave();
     var msg = '✓ ' + res.matched + ' live odds loaded from Betfair';
+    if (res.fixed && res.fixed.length) {
+      msg += '<br><span style="color:var(--g)">✎ Name corrected: <strong>' + res.fixed.map(esc).join(' · ') + '</strong></span>';
+    }
+    if (res.added && res.added.length) {
+      msg += '<br><span style="color:var(--gold)">➕ Added from Betfair (missing in PDF): <strong>' + res.added.map(esc).join(', ') + '</strong> — no form/OR data, enter if known.</span>';
+    }
     if (res.unmatched.length) {
       msg += '<br><span style="color:var(--gold)">⚠ No price matched for: <strong>' + res.unmatched.map(esc).join(', ') + '</strong> — enter manually below.</span>';
     }
