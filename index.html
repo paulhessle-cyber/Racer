@@ -1530,15 +1530,19 @@ var TRACK_DRAW_BIAS = {
     return 0.88; // high draws at Chester are a serious disadvantage
   },
 
-  // ── Beverley: high draw favoured in sprints ──
+  // ── Beverley: LOW draw strongly favoured in sprints (own-data verified:
+  // 5f LOW third 14.6%w vs HIGH 4.1%w over 2,052 rows; stalls 1-2 = 22%/17%,
+  // stalls 9+ = 2 wins from 95). Previous entry had this inverted. ──
   'beverley': function(draw, n, dist) {
-    if (dist > 9) return 1.0;
-    var pos = draw / n;
-    if (pos >= 0.8)  return 1.10;
-    if (pos >= 0.6)  return 1.04;
-    if (pos <= 0.2)  return 0.93;
-    if (pos <= 0.4)  return 0.97;
-    return 1.0;
+    if (dist > 8.5) return 1.0;
+    var eff = dist <= 6 ? 1.0 : 0.6;   // full effect at 5-6f, partial to 8.5f
+    var pos = draw / n, m;
+    if (pos <= 0.33)      m = 1.14;
+    else if (pos <= 0.66) m = 1.06;
+    else                  m = 0.84;
+    if (draw <= 2) m += 0.04;          // stalls 1-2 are the golden spots
+    if (draw >= 9) m -= 0.05;          // 9+ near-winless at 5f
+    return 1 + (m - 1) * eff;
   },
 
   // ── Catterick: low draw favoured, sharp left-handed ──
@@ -1792,8 +1796,8 @@ var TRACK_PROFILES = {
     undulate: 0.4,
     straight: 0.3,
     galloping: 0.3,
-    paceBonus: { front: -0.04, mid: 0.04, closer: 0.06 },
-    note: 'Stiff uphill finish. Stayers and hold-up horses outperform. Speedballs often run out of puff'
+    paceBonus: { front: 0.05, mid: 0.01, closer: -0.03 },
+    note: 'Stiff uphill finish but LEADERS dominate (own data: front-runners 24.5% win vs 10.5% baseline, 2.3x). Low draw + forward-going is the profile'
   },
   'sandown': {
     sharp: 0.2,
@@ -2223,6 +2227,16 @@ function rawScoreMdl(r, race, ctx) {
     distBonus = longDistWins > 0 ? Math.min(longDistWins / Math.max(H.w,1), 0.3) * 0.08 : 0;
   }
 
+  // Speed figures (TS/RPR from model supplement) — ranked within today's field.
+  // Only active once model_supplement.py has enriched the models.
+  var spdScore = 0.45, spdOn = !!(m.speedSupplement);
+  if (spdOn) {
+    var sc = speedCtx(race), sTot = 0, sW = 0;
+    if (H.ts && sc.ts.length >= 2) { sTot += rankIn(H.ts, sc.ts, 'desc') * 0.6; sW += 0.6; }
+    if (H.rp && sc.rp.length >= 2) { sTot += rankIn(H.rp, sc.rp, 'desc') * 0.4; sW += 0.4; }
+    spdScore = sW ? sTot / sW : 0.45;
+  }
+
   var w = m.weights || [];
   // Form score from model-enhanced signals (no market signal here)
   var formScore = wr      * (w[0]||0.08)
@@ -2236,6 +2250,7 @@ function rawScoreMdl(r, race, ctx) {
                + fr      * (w[8]||0.07)
                + recentScore * 0.08
                + orsAdj  * 0.06
+               + (spdOn ? spdScore * 0.10 : 0)
                + distBonus;
 
   var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
@@ -4301,6 +4316,25 @@ function scoreRunnerForPP(r, race, going, ctx) {
   return raw;
 }
 
+// ── Speed figure context (from model supplement) ──────────────────
+// Per-race cache of the field's TS/RPR figures so runners can be ranked
+// against today's actual opposition. Populated only when the models have
+// been enriched by model_supplement.py (model.speedSupplement present).
+function speedCtx(race) {
+  if (race._spdCtx) return race._spdCtx;
+  var hs = (S.model && S.model.horseStats) || {};
+  var tsArr = [], rpArr = [];
+  (race.runners || []).forEach(function(r){
+    if (r._nr) return;
+    var k = (r.name||'').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i,'').trim();
+    var H = hs[k] || {};
+    if (H.ts) tsArr.push(H.ts);
+    if (H.rp) rpArr.push(H.rp);
+  });
+  race._spdCtx = {ts: tsArr, rp: rpArr};
+  return race._spdCtx;
+}
+
 // ── Beaten-favourite detection (reusable) ─────────────────────────
 // Sets _bfAlert/_bfDrop/etc on a runner for a GIVEN race (uses that race's
 // own class, not S.sel), so Placepot can flag BF horses per race without
@@ -4356,7 +4390,8 @@ function bestOfDayScore(r, race, ctx) {
   var pr = H.p / Math.max(H.r,1);
   var form = recent*0.7 + pr*0.3;
 
-  // Ability / OR (17) — ranked within the field, discounted for big outsiders
+  // Ability (17) — ranked within the field, discounted for big outsiders.
+  // With the speed supplement loaded, true figures lead: TS 50% / RPR 30% / OR 20%.
   var orsRaw = 0.45;
   if (r.or > 0 && ctx.ors) {
     var valid = ctx.ors.filter(function(x){return x>0;});
@@ -4366,6 +4401,12 @@ function bestOfDayScore(r, race, ctx) {
   }
   var orCred = r.odds <= 0 ? 1.0 : r.odds <= 12 ? 1.0 : r.odds <= 25 ? 0.6 : 0.3;
   var ability = orsRaw * orCred;
+  if (m.speedSupplement) {
+    var sc2 = speedCtx(race), aTot = ability * 0.2, aW = 0.2;
+    if (H.ts && sc2.ts.length >= 2) { aTot += rankIn(H.ts, sc2.ts, 'desc') * 0.5; aW += 0.5; }
+    if (H.rp && sc2.rp.length >= 2) { aTot += rankIn(H.rp, sc2.rp, 'desc') * 0.3; aW += 0.3; }
+    ability = aTot / aW;
+  }
 
   // Class edge (10) — dropping vs the horse's own history (BF class or best win class)
   var clsEdge = 0.4;
