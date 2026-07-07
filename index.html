@@ -6122,6 +6122,7 @@ function loadTodaysMeetings() {
       var nowHHMM = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false });
 
       var h = '';
+      S._todayMeetings = data.meetings;
       data.meetings.forEach(function(m, i) {
         var times = m.times || [];
         // Count how many races are still upcoming
@@ -6148,7 +6149,8 @@ function loadTodaysMeetings() {
           h += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:.74rem;padding:5px 10px;border-radius:5px;background:' + bg + ';color:' + col + ';border:1px solid ' + (past ? 'var(--bd)' : 'rgba(0,230,118,.3)') + '">' + t + (past ? '' : '') + '</span>';
         });
         h += '</div>';
-        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:10px;line-height:1.5">Load this meeting\'s PDF below to get predictions. Green = upcoming, grey = finished.</div>';
+        h += '<button class="btn bg" style="width:100%;margin-top:12px;margin-bottom:0;padding:10px;font-size:.72rem" onclick="predictFromLiveCard(' + i + ')">⚡ Predict from live card — no PDF needed</button>';
+        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:10px;line-height:1.5">One tap: builds the full card from Betfair (runners, jockeys, OR, draw, weights, form + live odds), predicts every race and locks the Nap. Or load an ATR PDF below as usual.</div>';
         h += '</div>';
         h += '</div>';
       });
@@ -6163,6 +6165,150 @@ function toggleMeeting(id) {
   var el = document.getElementById(id);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ── One-tap live card: build the meeting entirely from Betfair ──────
+// Uses /odds runner metadata (jockey, trainer, OR, draw, weight, form,
+// days-since) — today's declared values, no PDF required. Note: race
+// class isn't in Betfair data, so class-based badges (e.g. BF class-drop)
+// stay dormant on live cards; everything else runs at full strength.
+var LIVE_AW_COURSES = ['wolverhampton','southwell','kempton','newcastle','lingfield','chelmsford','dundalk'];
+
+function bfRunnerToAppRunner(r, i) {
+  var lbs = r.lbs || 0;
+  var wst = lbs ? Math.floor(lbs / 14) : 0;
+  var wlbs = lbs ? lbs - wst * 14 : 0;
+  var form = (r.form || '').trim();
+  var fClean = form.replace(/[^0-9PFpUuRr/\-]/g, '');
+  var jockey = r.jockey || '';
+  if (r.claim) jockey += ' (' + r.claim + ')';
+  var odds = (r.back && r.back > 1) ? r.back : 0;
+  var run = { stall: r.cloth || (i + 1), draw: r.draw || r.cloth || (i + 1),
+    form: form, name: r.name, age: r.age || 0, wst: wst, wlbs: wlbs,
+    jockey: jockey, or: r.or || 0,
+    daysSince: (r.daysSince === 0 || r.daysSince) ? r.daysSince : 21,
+    rf: parseForm(fClean), odds: odds, _pace: classifyPace(fClean),
+    trainer: r.trainer || '', _liveCard: true };
+  if (odds) run._openingOdds = odds;
+  if (r.wearing) run._headgear = r.wearing;
+  return run;
+}
+
+function liveSurface(course, marketName) {
+  var mn = (marketName || '').toLowerCase();
+  if (/hrd|hurdle|chs|chase|nhf|bumper|hunt/.test(mn)) return 'jumps';
+  var c = (course || '').toLowerCase();
+  for (var i = 0; i < LIVE_AW_COURSES.length; i++) {
+    if (c.indexOf(LIVE_AW_COURSES[i]) > -1) return 'aw';
+  }
+  return 'turf';
+}
+
+function predictFromLiveCard(idx) {
+  var base = getProxyUrl();
+  if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
+  var m = (S._todayMeetings || [])[idx];
+  if (!m || !m.times || !m.times.length) return;
+  if (S._liveCardBusy) return;
+  S._liveCardBusy = true;
+
+  var times = m.times.slice();
+  var races = [], done = 0, failed = [];
+  showLiveStatus('⚡ Building live card for ' + esc(m.course) + ' — race 1/' + times.length + '…', 'ok');
+
+  function finish() {
+    S._liveCardBusy = false;
+    if (!races.length) {
+      showLiveStatus('⚠ Could not build the live card — no races returned prices. Markets may not be open yet; try nearer the first race, or load the PDF as usual.', 'warn');
+      return;
+    }
+    races.sort(function(a, b){ return a.time < b.time ? -1 : 1; });
+    races.forEach(function(r, i){ r.rnum = i + 1; });
+
+    S.meetings.push({ course: m.course, races: races });
+    S.currentRaces = races;
+    S._napLocked = napRestore(races);
+    S.races = S.meetings.reduce(function(all, mm){ return all.concat(mm.races); }, []);
+    document.getElementById('hint').style.display = 'none';
+    renderRaceList(S.currentRaces);
+    renderMeetingsList();
+    lsSave();
+
+    var msg = '✓ Live card built: ' + races.length + '/' + times.length + ' races with runners, jockeys, OR, draws & live odds.';
+    if (failed.length) msg += ' Skipped (no market yet): ' + failed.join(', ') + '.';
+    msg += ' Nap locking on this snapshot…';
+    showLiveStatus(msg, 'ok');
+
+    // Going, then Nap — same cascade as a PDF load
+    try {
+      var gCourse = (m.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+      fetch(base + '/going?course=' + encodeURIComponent(gCourse))
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){ if (d && d.going) applyAutoGoing(d.going); })
+        .catch(function(){})
+        .then(function(){ try { runPlacepot(); } catch(e){} });
+    } catch(e) { try { runPlacepot(); } catch(e2){} }
+  }
+
+  function next(i) {
+    if (i >= times.length) { finish(); return; }
+    showLiveStatus('⚡ Building live card for ' + esc(m.course) + ' — race ' + (i + 1) + '/' + times.length + '…', 'ok');
+    fetchOddsRaw(m.course, times[i]).then(function(data){
+      if (data && data.runners && data.runners.length) {
+        var runners = data.runners.map(bfRunnerToAppRunner);
+        var mn = data.marketName || '';
+        var distM = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
+        races.push({ rnum: 0, time: times[i], course: m.course,
+          dist: distM ? distM[1] : '1m',
+          surface: liveSurface(m.course, mn),
+          title: mn, cls: 0, runners: runners, topTip: '', watchFor: '' });
+      } else {
+        failed.push(times[i]);
+      }
+      done++;
+      setTimeout(function(){ next(i + 1); }, 350);
+    });
+  }
+  next(0);
+}
+
+// Raw odds fetch for a course+time (returns the proxy JSON, never rejects)
+function fetchOddsRaw(course, time) {
+  var base = getProxyUrl();
+  var c = (course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+  var u = base + '/odds?course=' + encodeURIComponent(c) + '&time=' + encodeURIComponent(time || '');
+  return fetch(u)
+    .then(function(r){ return r.json().catch(function(){ return null; }); })
+    .catch(function(){ return null; });
+}
+
+// ── One-tap racecard: fetch the ATR PDF via the proxy and load it ──
+// Needs the proxy's /racecard endpoint. Falls back with a manual-download
+// hint if the endpoint is missing or ATR's page layout changes.
+function loadRacecardFromATR(idx) {
+  var base = getProxyUrl();
+  if (!base) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
+  var m = (S._todayMeetings || [])[idx];
+  if (!m) return;
+  showLiveStatus('⬇ Fetching racecard for ' + esc(m.course) + ' from At The Races…', 'ok');
+  fetch(base + '/racecard?course=' + encodeURIComponent(m.course))
+    .then(function(r){
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (r.ok && ct.indexOf('pdf') > -1) return r.arrayBuffer();
+      return r.json().then(function(j){ throw new Error(j.error || ('proxy returned ' + r.status)); })
+                     .catch(function(e){ throw (e instanceof Error ? e : new Error('proxy returned ' + r.status)); });
+    })
+    .then(function(ab){
+      if (!ab || ab.byteLength < 10000) throw new Error('PDF looked empty');
+      var blob = new Blob([ab], { type: 'application/pdf' });
+      try { blob.name = m.course.replace(/[^a-z0-9]/gi, '_') + '.pdf'; } catch(e){}
+      showLiveStatus('✓ Racecard fetched (' + Math.round(ab.byteLength/1024) + ' KB) — parsing…', 'ok');
+      loadPDF(blob);
+    })
+    .catch(function(e){
+      showLiveStatus('⚠ Racecard fetch failed: ' + esc(e.message) +
+        '. Download it manually from <strong>m.attheraces.com/racecards</strong> and load it below.', 'warn');
+    });
 }
 
 function loadTodaysMeetings_auto() {
