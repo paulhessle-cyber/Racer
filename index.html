@@ -3224,7 +3224,11 @@ function showResults(scored, val, race, paceInfo) {
       _orig._bfPos    = _sr._bfPos;
     }
   });
-  S._logRace = { course: race.course, time: race.time, dist: race.dist, going: document.getElementById('gsel').value, runners: race.runners || [] };
+  var _napHere = (S._napLocked && S._napLocked.race &&
+                  S._napLocked.race.time === race.time &&
+                  (S._napLocked.race.course||'') === (race.course||''))
+                 ? S._napLocked.runner.name : null;
+  S._logRace = { course: race.course, time: race.time, dist: race.dist, going: document.getElementById('gsel').value, runners: race.runners || [], napName: _napHere };
 }
 
 // ── localStorage ───────────────────────────────────────────
@@ -4483,25 +4487,37 @@ function runPlacepot() {
     // Only update if the Nap isn't already locked for this session.
     if (!S._napLocked) {
       var napSrc = (race._mainScored && race._mainScored.length >= 2) ? race._mainScored : scored;
+      var oddsInG = active.filter(function(x){ return x.odds > 0; }).map(function(x){ return x.odds; });
+      var minOddsG = oddsInG.length ? Math.min.apply(null, oddsInG) : 0;
       if (napSrc.length >= 2) {
         var gap = Math.round((napSrc[0].score - napSrc[1].score) * 100);
-        if (gap > napScore) {
+        var agreeG = minOddsG <= 0 || (napSrc[0].odds > 0 && napSrc[0].odds <= minOddsG * 1.15);
+        if (gap > napScore && agreeG) {
           napScore = gap;
           napCandidate = {runner: napSrc[0], race: race, raceIdx: ri, gap: gap,
             conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100)};
         }
       }
 
-      // Best of the Day composite — score every active runner, track the meeting's leader
+      // Best of the Day composite — score every active runner, track the meeting's leader.
+      // NAP ELIGIBILITY (from 885-race log): picks that agree with the market win 36%,
+      // divergent picks only 13%. So a Nap candidate must be (a) its race's #1 ranked
+      // runner and (b) the favourite or within 15% of the favourite's price.
+      var rank1Name = napSrc.length ? napSrc[0].name : null;
+      var oddsIn = active.filter(function(x){ return x.odds > 0; }).map(function(x){ return x.odds; });
+      var minOdds = oddsIn.length ? Math.min.apply(null, oddsIn) : 0;
       active.forEach(function(rr){
         computeBF(rr, race);   // ensure BF flags exist even if Predict wasn't tapped
         var bod = bestOfDayScore(rr, race, ctx);
-        if (bod > bodBest) {
+        var eligible = rr.name === rank1Name &&
+                       (minOdds <= 0 || (rr.odds > 0 && rr.odds <= minOdds * 1.15));
+        if (eligible && bod > bodBest) {
           bodBest = bod;
           bodCandidate = {runner: rr, race: race, raceIdx: ri, bod: bod};
         }
-        // Collect BF horses with their composite for the override step
-        if (rr._bfAlert) {
+        // Collect BF horses for the override — same eligibility gate applies,
+        // so a BF Nap is still coherent with the race's own prediction.
+        if (rr._bfAlert && eligible) {
           bfHorses.push({runner: rr, race: race, raceIdx: ri, bod: bod, drop: !!rr._bfDrop});
         }
       });
@@ -5836,6 +5852,8 @@ function saveRaceResult(raceKey) {
     favOdds:       fav ? fav.odds : 0,
     favWon:        favWon,
     cls:           (S.sel && S.sel.cls) || 0,
+    napName:       (S._logRace && S._logRace.napName) || '',
+    napWon:        !!(S._logRace && S._logRace.napName && actual[0] === S._logRace.napName),
     valuePick:      S._logValuePick ? S._logValuePick.name : '',
     valuePickOdds:  S._logValuePick ? S._logValuePick.odds : 0,
     valuePickEdge:  S._logValuePick ? S._logValuePick.edge : 0,
@@ -6469,6 +6487,34 @@ function fetchOddsForRace(race) {
 // autoFetchAllOdds: one-time full-card fetch when a meeting's PDF loads.
 // Runs once per meeting per day (localStorage guard), sequential with a
 // short gap between races. When done: saves odds, computes + locks the Nap.
+
+// Map an ATR-style going string onto the app's going options and set it.
+// Only fires if the user hasn't manually chosen a going this session.
+function applyAutoGoing(raw) {
+  if (!raw) return false;
+  var main = String(raw).split('(')[0].trim().toLowerCase();
+  var gsel = document.getElementById('gsel');
+  if (!gsel) return false;
+  var surface = S._currentSurface === 'aw' ? 'aw' : 'turf';
+  if (surface === 'aw' ? S._goingChosenAW : S._goingChosenTurf) return false; // user's choice wins
+  var hit = null;
+  for (var i = 0; i < gsel.options.length; i++) {
+    var o = gsel.options[i];
+    if (!o.disabled && o.value.toLowerCase() === main) { hit = o.value; break; }
+  }
+  if (!hit) return false;
+  gsel.value = hit;
+  if (surface === 'aw') S._goingChosenAW = true; else S._goingChosenTurf = true;
+  var pp = document.getElementById('pp-going');
+  if (pp) {
+    for (var j = 0; j < pp.options.length; j++) {
+      if (!pp.options[j].disabled && pp.options[j].value.toLowerCase() === main) { pp.value = pp.options[j].value; break; }
+    }
+  }
+  showLiveStatus('🌱 Going set automatically: <strong>' + hit + '</strong> (from racecourse data — change it if conditions differ)', 'ok');
+  return true;
+}
+
 function autoFetchAllOdds(races) {
   if (!races || !races.length) return;
   if (!getProxyUrl()) return;                 // no proxy configured — skip silently
@@ -6478,6 +6524,16 @@ function autoFetchAllOdds(races) {
   try { if (localStorage.getItem(afKey)) return; } catch(e){}
   if (S._autoFetching) return;
   S._autoFetching = true;
+
+  // Going first — if the proxy has a /going endpoint, use it. Fails silently
+  // if the endpoint doesn't exist yet, so this is safe to ship ahead of it.
+  try {
+    var gCourse = (races[0].course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+    fetch(getProxyUrl() + '/going?course=' + encodeURIComponent(gCourse))
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.going) applyAutoGoing(d.going); })
+      .catch(function(){});
+  } catch(e){}
 
   var i = 0, got = 0, fixedN = 0, addedN = 0;
   showLiveStatus('⬇ Auto-loading live odds for all ' + races.length + ' races…', 'ok');
