@@ -3245,6 +3245,7 @@ function lsSave() {
       ? [{course: S.currentRaces[0].course, races: S.currentRaces}]
       : [];
   if (!meetingsToSave.length) return;
+  persistTodaysCards(meetingsToSave);
   try {
     meetingsToSave.forEach(function(meeting) {
       var data = {};
@@ -3266,9 +3267,59 @@ function lsRestore(races) {
   } catch(e){}
 }
 function lsPurgeOld() {
-  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
+  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
 }
 lsPurgeOld();
+
+// ── Full-card persistence ───────────────────────────────────
+// Live cards can't be re-fetched once races run (Betfair drops closed
+// markets), so the whole card is stored per meeting per day. This is what
+// makes evening result-logging possible after the meetings disappear.
+function cardKey(course) {
+  var today = new Date().toISOString().slice(0,10);
+  return 'rp_card_' + today + '_' + (course||'unknown').replace(/[^a-z0-9]/gi,'_');
+}
+function persistTodaysCards(meetings) {
+  (meetings || S.meetings || []).forEach(function(m){
+    if (!m || !m.races || !m.races.length) return;
+    try {
+      var slim = JSON.stringify({ course: m.course, going: (document.getElementById('gsel')||{}).value || '', races: m.races },
+        function(k, v){ return (k === '_mainScored' || k === '_spdCtx') ? undefined : v; });
+      localStorage.setItem(cardKey(m.course), slim);
+    } catch(e) { /* storage full — odds-level persistence still works */ }
+  });
+}
+function restoreTodaysCards() {
+  if (S.meetings && S.meetings.length) return 0;
+  var today = new Date().toISOString().slice(0,10), restored = 0;
+  try {
+    Object.keys(localStorage).forEach(function(k){
+      if (k.indexOf('rp_card_' + today + '_') !== 0) return;
+      try {
+        var d = JSON.parse(localStorage.getItem(k));
+        if (d && d.races && d.races.length) {
+          S.meetings.push({ course: d.course, races: d.races });
+          if (d.going && !S._goingChosenTurf && !S._goingChosenAW) {
+            var g = document.getElementById('gsel');
+            if (g) g.value = d.going;
+          }
+          restored++;
+        }
+      } catch(e){}
+    });
+  } catch(e){}
+  if (restored) {
+    S.races = S.meetings.reduce(function(all, m){ return all.concat(m.races); }, []);
+    S.currentRaces = S.meetings[0].races;
+    S._napLocked = napRestore(S.currentRaces);
+    var hint = document.getElementById('hint');
+    if (hint) hint.style.display = 'none';
+    renderRaceList(S.currentRaces);
+    renderMeetingsList();
+    showLiveStatus('↻ Restored ' + restored + ' meeting' + (restored>1?'s':'') + ' from earlier today — predictions and result logging work as usual, even for races that have already run.', 'ok');
+  }
+  return restored;
+}
 
 // ── Nap lock persistence ────────────────────────────────────
 // The Nap must survive Safari iOS page reloads, so the lock is stored
@@ -3385,6 +3436,10 @@ function renderRaceList(races) {
   document.getElementById('rcTitle').textContent = (races[0]?races[0].course:'Races') + ' — ' + races.length + ' Races';
   updateSetupHint(races);
   var list = document.getElementById('rl'); list.innerHTML = '';
+  // Evening workflow: one tap fetches + logs every finished race's result
+  var bulkBtn = document.createElement('div');
+  bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.25);color:var(--g);border-radius:8px;cursor:pointer" onclick="fetchAndLogAllResults()">📋 Fetch &amp; log all results (after racing)</button>';
+  list.appendChild(bulkBtn);
   renderMeetingsList();
   races.forEach(function(r,i) {
     var d = document.createElement('div');
@@ -3621,6 +3676,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try { localStorage.removeItem(MODEL_KEY); } catch(e){}
       }
     }
+    // Bring back today's meetings (live cards + PDF loads) so evening
+    // result-logging works even after the Betfair markets have closed.
+    try { restoreTodaysCards(); } catch(e) { console.warn('card restore:', e); }
   }, 200);
 
   // ── Multi-model file inputs ─────────────────────────────────
@@ -4942,6 +5000,7 @@ function renderMeetingsList() {
 
 function clearMeeting(course) {
   S.meetings = S.meetings.filter(function(m){ return m.course !== course; });
+  try { localStorage.removeItem(cardKey(course)); } catch(e){}
   S.races    = S.meetings.reduce(function(all,m){ return all.concat(m.races); }, []);
   // If we removed the current meeting, switch to the last remaining one
   if (S.currentRaces && S.currentRaces.length && S.currentRaces[0].course === course) {
@@ -6428,13 +6487,13 @@ function onOddsInput(stall) {
 
 function autoFetchResult(race, scored) {
   var statusEl = document.getElementById('resApiStatus');
-  if (!statusEl) return;
+  if (!statusEl) return Promise.resolve();
   var base = getProxyUrl();
-  if (!base) { statusEl.innerHTML = ''; return; }  // no proxy = silent, manual entry
+  if (!base) { statusEl.innerHTML = ''; return Promise.resolve(); }  // no proxy = silent, manual entry
 
   var course = (race.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
   var time   = race.time || '';
-  if (!course) { statusEl.innerHTML = ''; return; }
+  if (!course) { statusEl.innerHTML = ''; return Promise.resolve(); }
 
   // Race date: use the race's date if present, else today
   var raceDate = race.date || new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD
@@ -6446,7 +6505,7 @@ function autoFetchResult(race, scored) {
         + '&time=' + encodeURIComponent(time)
         + '&date=' + encodeURIComponent(raceDate);
 
-  fetch(u)
+  return fetch(u)
     .then(function(r){ return r.json().catch(function(){ return { error: 'bad response' }; }); })
     .then(function(data){
       if (data.notFound) {
@@ -6499,6 +6558,62 @@ function autoFetchResult(race, scored) {
       statusEl.style.color = 'var(--mt)';
       statusEl.innerHTML = '⚠ Result lookup failed (' + err.message + '). Enter manually.';
     });
+}
+
+// ── Bulk: fetch official results and log every finished race ───────
+// One tap after racing: walks the loaded meeting, opens each race,
+// pulls the settled result from the proxy, and saves it to the log.
+// Skips races not yet run, races already logged, and any race whose
+// result isn't fully settled (those get flagged for manual entry).
+function fetchAndLogAllResults() {
+  var races = S.currentRaces || [];
+  if (!races.length) { showLiveStatus('⚠ No meeting loaded.', 'warn'); return; }
+  if (!getProxyUrl()) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
+  if (S._bulkLogging) return;
+  S._bulkLogging = true;
+
+  var i = 0, logged = 0, already = 0, notRun = 0, manual = [];
+  var now = new Date();
+  var nowHM = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+
+  function step() {
+    if (i >= races.length) {
+      S._bulkLogging = false;
+      var msg = '📋 Auto-log complete: <strong>' + logged + ' logged</strong>';
+      if (already) msg += ' · ' + already + ' already logged';
+      if (notRun)  msg += ' · ' + notRun + ' not yet run';
+      if (manual.length) msg += '<br>⚠ Needs manual entry (result not settled or names unmatched): <strong>' + manual.join(', ') + '</strong> — rerun this later or fill in by hand.';
+      msg += '<br>Tap <strong>⬇ Export Results JSON</strong> on any race to export the log.';
+      showLiveStatus(msg, logged ? 'ok' : 'warn');
+      return;
+    }
+    var idx = i++, race = races[idx];
+    if ((race.time || '') > nowHM) { notRun++; step(); return; }
+
+    showLiveStatus('📋 Fetching results — ' + esc(race.time) + ' (' + (idx + 1) + '/' + races.length + ')…', 'ok');
+    selRace(idx);   // renders prediction + log section, sets S._logRaceKey
+
+    setTimeout(function(){
+      var key = S._logRaceKey;
+      var ex = key ? getPredictionLog(key) : null;
+      if (ex && ex.actual) { already++; setTimeout(step, 150); return; }
+
+      autoFetchResult(race, null).then(function(){
+        var s1 = document.getElementById('res1');
+        var s2 = document.getElementById('res2');
+        var s3 = document.getElementById('res3');
+        var complete = s1 && s1.value && (!s2 || s2.value) && (!s3 || s3.value);
+        if (complete && key) {
+          try { saveRaceResult(key); logged++; }
+          catch(e) { manual.push(race.time); }
+        } else {
+          manual.push(race.time);
+        }
+        setTimeout(step, 350);
+      });
+    }, 250);
+  }
+  step();
 }
 
 // Fuzzy-match an API horse name to the closest <option> in a dropdown.
