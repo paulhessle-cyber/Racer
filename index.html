@@ -6639,7 +6639,15 @@ function fetchAndLogAllResults() {
     if ((race.time || '') > nowHM) { notRun++; step(); return; }
 
     showLiveStatus('📋 Fetching results — ' + esc(race.time) + ' (' + (idx + 1) + '/' + races.length + ')…', 'ok');
-    selRace(idx);   // renders prediction + log section, sets S._logRaceKey
+    // One bad race must not kill the whole run — open it defensively.
+    try {
+      selRace(idx);   // renders prediction + log section, sets S._logRaceKey
+    } catch(e) {
+      manual.push(race.time);
+      if (!S._bulkReason) S._bulkReason = 'could not open ' + race.time + ': ' + e.message;
+      setTimeout(step, 150);
+      return;
+    }
 
     setTimeout(function(){
       var key = S._logRaceKey;
