@@ -3280,14 +3280,33 @@ function cardKey(course) {
   return 'rp_card_' + today + '_' + (course||'unknown').replace(/[^a-z0-9]/gi,'_');
 }
 function persistTodaysCards(meetings) {
+  var failed = [];
   (meetings || S.meetings || []).forEach(function(m){
     if (!m || !m.races || !m.races.length) return;
+    // Whitelist only the fields needed to rebuild the card for evening
+    // logging — full race objects are far too big to sit in localStorage
+    // next to the saved model and the prediction log (Safari ~5MB cap).
+    var races = m.races.map(function(r){
+      return { rnum: r.rnum, time: r.time, course: r.course, dist: r.dist,
+        surface: r.surface, title: r.title || '', cls: r.cls || 0,
+        runners: (r.runners || []).map(function(x){
+          return { stall: x.stall, draw: x.draw, form: x.form || '',
+            name: x.name, age: x.age || 0, wst: x.wst || 0, wlbs: x.wlbs || 0,
+            jockey: x.jockey || '', or: x.or || 0, odds: x.odds || 0,
+            daysSince: x.daysSince, trainer: x.trainer || '',
+            nr: x._nr ? 1 : 0, op: x._openingOdds || 0 };
+        }) };
+    });
     try {
-      var slim = JSON.stringify({ course: m.course, going: (document.getElementById('gsel')||{}).value || '', races: m.races },
-        function(k, v){ return (k === '_mainScored' || k === '_spdCtx') ? undefined : v; });
-      localStorage.setItem(cardKey(m.course), slim);
-    } catch(e) { /* storage full — odds-level persistence still works */ }
+      localStorage.setItem(cardKey(m.course),
+        JSON.stringify({ course: m.course, going: (document.getElementById('gsel')||{}).value || '', races: races }));
+    } catch(e) { failed.push(m.course); }
   });
+  if (failed.length && !S._quotaWarned) {
+    S._quotaWarned = true;
+    showLiveStatus('⚠ Device storage is full — could not save ' + failed.map(esc).join(', ') +
+      ' for evening logging. Export your results JSON now as a safeguard.', 'warn');
+  }
 }
 function restoreTodaysCards() {
   if (S.meetings && S.meetings.length) return 0;
@@ -3298,6 +3317,16 @@ function restoreTodaysCards() {
       try {
         var d = JSON.parse(localStorage.getItem(k));
         if (d && d.races && d.races.length) {
+          // Rehydrate derived fields the slim store drops
+          d.races.forEach(function(r){
+            (r.runners || []).forEach(function(x){
+              var fClean = (x.form || '').replace(/[^0-9PFpUuRr\/\-]/g, '');
+              x.rf = parseForm(fClean);
+              x._pace = classifyPace(fClean);
+              if (x.nr) { x._nr = true; } delete x.nr;
+              if (x.op) { x._openingOdds = x.op; } delete x.op;
+            });
+          });
           S.meetings.push({ course: d.course, races: d.races });
           if (d.going && !S._goingChosenTurf && !S._goingChosenAW) {
             var g = document.getElementById('gsel');
@@ -4988,14 +5017,24 @@ function renderMeetingsList() {
     var oddsLabel    = noOdds ? '⚠ No odds — enter in Predict tab first' : oddsCount + ' odds entered ✓';
     var borderStyle  = noOdds ? 'border-color:rgba(255,82,82,.35)' : '';
     return '<div class="l15-meeting" style="' + borderStyle + '">'
-      + '<div>'
-        + '<div class="l15-meeting-name">' + m.course + '</div>'
+      + '<div onclick="switchToMeeting(\'' + m.course + '\')" style="cursor:pointer">'
+        + '<div class="l15-meeting-name">' + m.course + ' <span style="font-size:.55rem;color:var(--mt)">tap to view ›</span></div>'
         + '<div class="l15-meeting-info">' + totalRaces + ' races · ' + totalRunners + ' runners</div>'
         + '<div class="l15-meeting-info" style="color:' + oddsColor + ';margin-top:2px;font-weight:600">' + oddsLabel + '</div>'
       + '</div>'
       + '<button class="l15-clear" onclick="clearMeeting(\'' + m.course + '\')">✕ Remove</button>'
     + '</div>';
   }).join('');
+}
+
+function switchToMeeting(course) {
+  var m = (S.meetings || []).filter(function(x){ return x.course === course; })[0];
+  if (!m) return;
+  S.currentRaces = m.races;
+  S._napLocked = napRestore(m.races);
+  var hint = document.getElementById('hint');
+  if (hint) hint.style.display = 'none';
+  renderRaceList(S.currentRaces);
 }
 
 function clearMeeting(course) {
@@ -5828,7 +5867,12 @@ function getPredLog() {
 }
 
 function savePredLog(log) {
-  try { localStorage.setItem(PRED_LOG_KEY, JSON.stringify(log)); } catch(e) {}
+  try { localStorage.setItem(PRED_LOG_KEY, JSON.stringify(log)); }
+  catch(e) {
+    alert('⚠ Could not save this result — device storage is full.\n\n' +
+          'Your existing log is safe. Export your results JSON now, then ' +
+          'consider clearing old data (Setup tab) to free space.');
+  }
 }
 
 function getPredictionLog(raceKey) {
@@ -5850,6 +5894,7 @@ function exportPredLog() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showLiveStatus('✓ Exported ' + log.length + ' logged races. On iPhone the file lands in the Downloads folder of the Files app (Safari may flash a blue download arrow, top right).', 'ok');
   } catch(e) { alert('Export failed: ' + e.message); }
 }
 
@@ -6571,6 +6616,7 @@ function fetchAndLogAllResults() {
   if (!getProxyUrl()) { alert('No odds proxy URL set. Go to Setup and enter your proxy URL.'); return; }
   if (S._bulkLogging) return;
   S._bulkLogging = true;
+  S._bulkReason = '';
 
   var i = 0, logged = 0, already = 0, notRun = 0, manual = [];
   var now = new Date();
@@ -6582,7 +6628,9 @@ function fetchAndLogAllResults() {
       var msg = '📋 Auto-log complete: <strong>' + logged + ' logged</strong>';
       if (already) msg += ' · ' + already + ' already logged';
       if (notRun)  msg += ' · ' + notRun + ' not yet run';
-      if (manual.length) msg += '<br>⚠ Needs manual entry (result not settled or names unmatched): <strong>' + manual.join(', ') + '</strong> — rerun this later or fill in by hand.';
+      if (manual.length) msg += '<br>⚠ Needs manual entry: <strong>' + manual.join(', ') + '</strong>' +
+        (S._bulkReason ? '<br><span style="color:var(--mt)">First failure reason: ' + esc(S._bulkReason) + '</span>' : '') +
+        ' — rerun this later or fill in by hand.';
       msg += '<br>Tap <strong>⬇ Export Results JSON</strong> on any race to export the log.';
       showLiveStatus(msg, logged ? 'ok' : 'warn');
       return;
@@ -6604,10 +6652,21 @@ function fetchAndLogAllResults() {
         var s3 = document.getElementById('res3');
         var complete = s1 && s1.value && (!s2 || s2.value) && (!s3 || s3.value);
         if (complete && key) {
-          try { saveRaceResult(key); logged++; }
-          catch(e) { manual.push(race.time); }
+          try {
+            saveRaceResult(key);
+            // verify it actually persisted (storage-full makes saves silent no-ops)
+            var chk = getPredictionLog(key);
+            if (chk && chk.actual) { logged++; }
+            else { manual.push(race.time); if (!S._bulkReason) S._bulkReason = 'result filled but could not be saved (device storage full?)'; }
+          }
+          catch(e) { manual.push(race.time); if (!S._bulkReason) S._bulkReason = e.message; }
         } else {
           manual.push(race.time);
+          if (!S._bulkReason) {
+            var st = document.getElementById('resApiStatus');
+            S._bulkReason = !s1 ? 'log panel did not render (prediction failed?)'
+                                : (st ? st.textContent.slice(0, 140) : 'result not returned');
+          }
         }
         setTimeout(step, 350);
       });
