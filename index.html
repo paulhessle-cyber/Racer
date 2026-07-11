@@ -764,26 +764,26 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <div class="h-sec">
       <div class="h-sec-hdr"><div class="h-sec-num">2</div><div class="h-sec-ttl">Making a prediction</div></div>
       <ol class="h-steps">
-        <li>Download the free form guide PDF from <strong>attheraces.com</strong> for your meeting.</li>
-        <li>Tap <strong>Races</strong>, load the PDF — all runners extract automatically.</li>
-        <li>Tap the race, then go to <strong>Predict</strong>.</li>
-        <li>Enter decimal odds for each runner (or paste them — see section 3).</li>
-        <li>Set the going, tap <strong>Predict This Race</strong>.</li>
+        <li>Tap <strong>Races</strong> → in <strong>Today's Racing</strong>, tap <strong>↻ Refresh</strong> and open a meeting.</li>
+        <li>Tap <strong>⚡ Predict from live card</strong>. The full card builds itself from Betfair — runners, jockeys, official ratings, draws, weights, form and live odds. The going sets automatically and the Nap of the Day locks.</li>
+        <li>Tap any race to see its prediction. No PDF, no typing.</li>
       </ol>
-      <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Enter as close to race time as possible.</div></div>
-      <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>No odds entered?</strong> The app will warn you and switch to form-only mode. Without odds it is little better than sorting by Official Rating.</div></div>
+      <div class="h-callout h-info"><span class="ci">📄</span><div><strong>PDF alternative:</strong> the classic flow still works — load an attheraces.com racecard PDF in the drop zone; odds then auto-load for every race. Useful offline or when Betfair markets aren't open yet (early morning).</div></div>
+      <div class="h-callout h-tip"><span class="ci">🔒</span><div><strong>Final prediction at T-5:</strong> about five minutes before each off (while the app is open) the race's odds refresh and its final prediction locks. That locked pick is what gets judged against the official result.</div></div>
+      <div class="h-callout h-gold"><span class="ci">💰</span><div><strong>Decimal odds:</strong> 7/2 = (7÷2)+1 = <strong>4.5</strong>. Evens = 2.0. Live Odds and Paste Odds both handle this for you.</div></div>
     </div>
 
     <!-- Pasting odds -->
     <div class="h-sec">
-      <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Pasting odds from ATR</div></div>
-      <p class="h-p">Instead of typing odds one by one, copy the entire runners section from the <strong>attheraces.com</strong> race page and paste it in one go.</p>
+      <div class="h-sec-hdr"><div class="h-sec-num">3</div><div class="h-sec-ttl">Results, badges &amp; exporting</div></div>
+      <p class="h-p">Results are handled automatically. The server reads each official result about <strong>10 minutes after the off</strong>, and the app logs whether the locked prediction <strong>won</strong>, <strong>placed</strong> or <strong>lost</strong> — no manual entry needed.</p>
       <ol class="h-steps">
-        <li>On ATR, select all the runner text for the race and copy it.</li>
-        <li>In the Predict tab, tap <strong>📋 Paste Odds</strong> at the top of the Runners card.</li>
-        <li>Paste the text and tap <strong>✓ Apply Odds</strong>.</li>
+        <li>In the race list, races that have run turn <strong>grey</strong>; upcoming races stay <strong>green</strong>.</li>
+        <li>Each finished race gets a <strong>✓ WON</strong> / <strong>PLACED</strong> / <strong>LOST</strong> badge beside its time once the result is in.</li>
+        <li><strong>🔄 Sync results now</strong> (top of the race list) force-checks anything that settled while the app was closed — the first thing to tap in the evening.</li>
+        <li><strong>⬇ Export Results JSON</strong> (bottom of the race list) downloads your complete log for the Results Dashboard (checker.html). On iPhone the file lands in Files → Downloads.</li>
       </ol>
-      <div class="h-callout h-tip"><span class="ci">💡</span><div><strong>Steam & Drift detection:</strong> Paste odds a second time nearer the off and the app automatically detects which horses have shortened (▲ Steam) or drifted (▽ Drift) by 10%+. Steamers and drifters feed directly into the scoring.</div></div>
+      <div class="h-callout h-tip"><span class="ci">💡</span><div><strong>Manual logging still works:</strong> open any race and scroll to 📋 Log the Result — the dropdowns pre-fill from the official result and you can adjust before saving. Pasting odds twice still shows ▲ Steam / ▽ Drift moves.</div></div>
     </div>
 
     <!-- Reading results -->
@@ -845,6 +845,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <div class="h-sec">
       <div class="h-sec-hdr"><div class="h-sec-num">9</div><div class="h-sec-ttl">Setting the going</div></div>
       <p class="h-p">Always check the official going report on race day — racingpost.com or the racecourse website. Going can change between morning and race time. Your going selection is remembered between races and is not reset when you switch races.</p>
+      <div class="h-callout h-info"><span class="ci">🌱</span><div><strong>Auto-going:</strong> when a card loads, the going is fetched from live racecourse data and set for you. You can change it any time — a manual choice always wins for the rest of the session.</div></div>
       <table class="h-going">
         <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
         <tbody>
@@ -3281,6 +3282,28 @@ function cardKey(course) {
   var today = new Date().toISOString().slice(0,10);
   return 'rp_card_' + today + '_' + (course||'unknown').replace(/[^a-z0-9]/gi,'_');
 }
+// Rebuild derived runner fields that the slim card store drops
+function rehydrateCardRaces(races) {
+  (races || []).forEach(function(r){
+    (r.runners || []).forEach(function(x){
+      var fClean = (x.form || '').replace(/[^0-9PFpUuRr\/\-]/g, '');
+      x.rf = parseForm(fClean);
+      x._pace = classifyPace(fClean);
+      if (x.nr) { x._nr = true; } delete x.nr;
+      if (x.op) { x._openingOdds = x.op; } delete x.op;
+    });
+  });
+  return races;
+}
+function loadStoredCard(course) {
+  try {
+    var raw = localStorage.getItem(cardKey(course));
+    if (!raw) return null;
+    var d = JSON.parse(raw);
+    return (d && d.races && d.races.length) ? rehydrateCardRaces(d.races) : null;
+  } catch(e) { return null; }
+}
+
 function persistTodaysCards(meetings) {
   var failed = [];
   (meetings || S.meetings || []).forEach(function(m){
@@ -3300,6 +3323,16 @@ function persistTodaysCards(meetings) {
         }) };
     });
     try {
+      // Never shrink a stored card: keep any previously-stored races
+      // (e.g. ones that have already run) that this save doesn't include.
+      var prevRaw = localStorage.getItem(cardKey(m.course));
+      if (prevRaw) {
+        var prev = JSON.parse(prevRaw);
+        var have = {};
+        races.forEach(function(r){ have[r.time] = 1; });
+        (prev.races || []).forEach(function(r){ if (!have[r.time]) races.push(r); });
+        races.sort(function(a,b){ return a.time < b.time ? -1 : 1; });
+      }
       localStorage.setItem(cardKey(m.course),
         JSON.stringify({ course: m.course, going: (document.getElementById('gsel')||{}).value || '', races: races }));
     } catch(e) { failed.push(m.course); }
@@ -3319,16 +3352,7 @@ function restoreTodaysCards() {
       try {
         var d = JSON.parse(localStorage.getItem(k));
         if (d && d.races && d.races.length) {
-          // Rehydrate derived fields the slim store drops
-          d.races.forEach(function(r){
-            (r.runners || []).forEach(function(x){
-              var fClean = (x.form || '').replace(/[^0-9PFpUuRr\/\-]/g, '');
-              x.rf = parseForm(fClean);
-              x._pace = classifyPace(fClean);
-              if (x.nr) { x._nr = true; } delete x.nr;
-              if (x.op) { x._openingOdds = x.op; } delete x.op;
-            });
-          });
+          rehydrateCardRaces(d.races);
           S.meetings.push({ course: d.course, races: d.races });
           if (d.going && !S._goingChosenTurf && !S._goingChosenAW) {
             var g = document.getElementById('gsel');
@@ -6341,11 +6365,23 @@ function predictFromLiveCard(idx) {
       showLiveStatus('⚠ Could not build the live card — no races returned prices. Markets may not be open yet; try nearer the first race, or load the PDF as usual.', 'warn');
       return;
     }
-    races.sort(function(a, b){ return a.time < b.time ? -1 : 1; });
-    races.forEach(function(r, i){ r.rnum = i + 1; });
+    // MERGE with what we already know about this meeting: Betfair only
+    // lists OPEN markets, so an evening rebuild would otherwise wipe the
+    // day's earlier races. Existing/stored races are kept; fresh ones win
+    // on overlapping times (newest odds).
+    var byTime = {};
+    var existing = (S.meetings || []).filter(function(x){ return x.course === m.course; })[0];
+    var baseRaces = existing ? existing.races : (loadStoredCard(m.course) || []);
+    baseRaces.forEach(function(r){ byTime[r.time] = r; });
+    races.forEach(function(r){ byTime[r.time] = r; });
+    var merged = Object.keys(byTime).map(function(t){ return byTime[t]; });
+    merged.sort(function(a, b){ return a.time < b.time ? -1 : 1; });
+    merged.forEach(function(r, i){ r.rnum = i + 1; });
 
-    S.meetings.push({ course: m.course, races: races });
-    S.currentRaces = races;
+    if (existing) { existing.races = merged; }
+    else { S.meetings.push({ course: m.course, races: merged }); }
+    S.currentRaces = merged;
+    races = merged;
     S._napLocked = napRestore(races);
     S.races = S.meetings.reduce(function(all, mm){ return all.concat(mm.races); }, []);
     document.getElementById('hint').style.display = 'none';
