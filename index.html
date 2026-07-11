@@ -2558,6 +2558,8 @@ function predict() {
   // Cache for Nap consistency — Placepot uses these scores so the Nap
   // always matches what the main prediction screen shows for this race.
   race._mainScored = scored.slice();
+  // Lock this prediction for automatic result judging
+  try { plockSave(race, scored, going); } catch(e){}
 
   var valueBet = null;
   for (var i = 0; i < Math.min(3, scored.length); i++) {
@@ -3267,7 +3269,7 @@ function lsRestore(races) {
   } catch(e){}
 }
 function lsPurgeOld() {
-  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
+  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0||k.indexOf('rp_plock_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
 }
 lsPurgeOld();
 
@@ -3467,7 +3469,7 @@ function renderRaceList(races) {
   var list = document.getElementById('rl'); list.innerHTML = '';
   // Evening workflow: one tap fetches + logs every finished race's result
   var bulkBtn = document.createElement('div');
-  bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.25);color:var(--g);border-radius:8px;cursor:pointer" onclick="fetchAndLogAllResults()">📋 Fetch &amp; log all results (after racing)</button>';
+  bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.25);color:var(--g);border-radius:8px;cursor:pointer" onclick="syncResults(true)">🔄 Sync results now</button>';
   list.appendChild(bulkBtn);
   renderMeetingsList();
   races.forEach(function(r,i) {
@@ -3477,7 +3479,14 @@ function renderRaceList(races) {
     var surfTag = (r.surface === 'aw')
       ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.2);margin-left:5px;vertical-align:middle">AW</span>'
       : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,.08);color:var(--g);border:1px solid rgba(0,230,118,.15);margin-left:5px;vertical-align:middle">Turf</span>';
-    d.innerHTML = '<div><div class="tm">'+r.time+'</div>'
+    var _lg = getPredictionLog(raceKeyFor(r));
+    var _bdg = '';
+    if (_lg) {
+      var _c = _lg.topPickWon ? '0,230,118' : _lg.topPickPlaced ? '255,193,7' : '255,82,82';
+      var _t = _lg.topPickWon ? '✓ WON' : _lg.topPickPlaced ? 'PLACED' : 'LOST';
+      _bdg = '<span style="font-size:.52rem;padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;background:rgba('+_c+',.12);color:rgb('+_c+');border:1px solid rgba('+_c+',.3)">'+_t+'</span>';
+    }
+    d.innerHTML = '<div><div class="tm">'+r.time+_bdg+'</div>'
       +'<div class="nm">'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
       +'<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">'+r.dist+surfTag+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--mt)">'+r.runners.length+' runners</div></div>';
@@ -6604,6 +6613,204 @@ function autoFetchResult(race, scored) {
       statusEl.innerHTML = '⚠ Result lookup failed (' + err.message + '). Enter manually.';
     });
 }
+
+
+// ═══ AUTOMATIC PREDICT-AND-LOG PIPELINE ════════════════════════════
+// No DOM automation: predictions are locked ~5 min before each off
+// (using fresh odds), the droplet records results ~8-10 min after,
+// and the app logs outcomes automatically + badges the race list.
+
+function raceKeyFor(race){ return ((race.course||'') + '_' + (race.time||'')).replace(/\s/g,'_'); }
+
+// DOM-free clone of predict()'s scoring pipeline (model select, pace,
+// dynamic market weight, power-scale, Platt) — same numbers, no render.
+function scoreRaceHeadless(race, going) {
+  going = going || (document.getElementById('gsel')||{}).value || 'Good';
+  var mdl = getModelForRace(race);
+  if (mdl) S.model = mdl;
+  var active = (race.runners||[]).filter(function(r){ return !r._nr; });
+  if (active.length < 2) return null;
+  active.forEach(function(r){ r.going = going; });
+  var paceInfo = assessPace(active), ctx = buildFieldCtx(active);
+  var oddsEntered = active.filter(function(r){ return r.odds > 0; }).length;
+  var ratio = oddsEntered / active.length;
+  var noOdds = oddsEntered === 0, partial = oddsEntered > 0 && ratio < 0.5;
+  var formArr = active.map(function(r){
+    var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
+    return fs * paceAdjust(r, paceInfo);
+  });
+  var ft = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
+  var fn = formArr.map(function(f){ return f/ft; });
+  var shortest = Infinity;
+  active.forEach(function(r){ if (r.odds > 1 && r.odds < shortest) shortest = r.odds; });
+  var W = noOdds ? 0 : partial ? 0.25 : 0.40;
+  if (!noOdds && !partial) {
+    if (shortest <= 1.5) W = 0.75;
+    else if (shortest <= 2.0) W = 0.60;
+    else if (shortest <= 3.0) W = 0.50;
+  }
+  var blended = active.map(function(r, i){
+    var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
+    return mkt * W + fn[i] * (1 - W);
+  });
+  var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
+  var fp = powerScaleProbs(blended.map(function(b){ return b/bt; }));
+  var pb = loadPlattCalibration();
+  if (pb) {
+    fp = fp.map(function(p){ return applyPlattCorrection(p); });
+    var ps = fp.reduce(function(a,b){ return a+b; }, 0);
+    if (ps > 0) fp = fp.map(function(p){ return p/ps; });
+  }
+  var scored = active.map(function(r, i){ return Object.assign({}, r, { score: fp[i] }); });
+  scored.sort(function(a,b){ return b.score - a.score; });
+  race._mainScored = scored.slice();
+  return scored;
+}
+
+// Prediction lock — the snapshot that gets judged when the result lands.
+// Overwritten each time predict runs; the T-5 refresh makes the final one
+// "last prediction, 5 minutes before the off".
+function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); }
+function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
+function plockSave(race, scored, going) {
+  try {
+    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), odds:r.odds||0 }; });
+    var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
+    var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
+    var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
+               (S._napLocked.race.course||'') === (race.course||'')) ? S._napLocked.runner.name : '';
+    var bf = (race.runners||[]).filter(function(r){ return !r._nr && r._bfAlert; })
+              .map(function(r){ return { name:r.name, odds:r.odds||0, bfDrop:!!r._bfDrop }; });
+    var all = plockAll();
+    all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:race.cls||0,
+      fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
+      favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf,
+      course:race.course, time:race.time, savedAt:Date.now() };
+    localStorage.setItem(plockKey(), JSON.stringify(all));
+  } catch(e) { /* storage full — manual flow still works */ }
+}
+
+// Build + save a log entry from a locked prediction and an official result.
+// Mirrors saveRaceResult's record shape exactly (dashboard-compatible).
+function logResultHeadless(race, lock, resultObj) {
+  var raceKey = raceKeyFor(race);
+  if (getPredictionLog(raceKey)) return '';
+  var winner = resultObj.winner;
+  if (!winner) return '';
+  var placed = (resultObj.placed||[]).filter(function(n){ return n !== winner; });
+  var actual = [winner].concat(placed).slice(0, 3);
+  var preds = lock.preds || [];
+  var fieldSize = lock.fieldSize || ((race.runners||[]).filter(function(r){ return !r._nr; }).length);
+  var placesAvail = fieldSize >= 8 ? 3 : fieldSize >= 5 ? 2 : 1;
+  var actualPlaced = actual.slice(0, placesAvail);
+  var topPick = preds[0] ? preds[0].name : '';
+  var topPickWon = !!(topPick && topPick === winner);
+  var topPickPlaced = !!(placesAvail >= 2 && topPick && !topPickWon && actualPlaced.indexOf(topPick) > -1);
+  var anyTop3 = (fieldSize >= 6) ? preds.slice(0,3).filter(function(p){ return actualPlaced.indexOf(p.name) > -1; }).length : 0;
+  var winnerRank = preds.findIndex(function(p){ return p.name === winner; }) + 1;
+  var entry = { raceKey:raceKey, date:new Date().toISOString().slice(0,10),
+    course:race.course||'', time:race.time||'', dist:lock.dist||race.dist||'', going:lock.going||'',
+    predictions:preds, actual:actual,
+    topPickWon:topPickWon, topPickPlaced:topPickPlaced, anyTop3Placed:anyTop3,
+    winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
+    favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
+    cls:lock.cls||0, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
+    valuePick:'', valuePickOdds:0, valuePickEdge:0, valuePickWon:false, valuePickPlaced:false,
+    bfHorses:(lock.bf||[]).map(function(b){ return { name:b.name, odds:b.odds, cls:lock.cls||0,
+      bfDrop:!!b.bfDrop, won:winner===b.name, placed:actual.slice(0,3).indexOf(b.name)>-1 }; }),
+    dutch:null, placesUnordered:true, autoLogged:true };
+  var log = getPredLog(); log.push(entry); savePredLog(log);
+  return topPickWon ? 'won' : (topPickPlaced ? 'placed' : 'lost');
+}
+
+// Race off-time today, in ms (device is UK-local like the racing)
+function raceOffMs(race) {
+  var m = (race.time||'').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return NaN;
+  var d = new Date(); d.setHours(+m[1], +m[2], 0, 0);
+  return d.getTime();
+}
+
+// Pull today's settled results from the proxy and log any unlogged race.
+var _lastResultsFetch = 0;
+function syncResults(verbose) {
+  var base = getProxyUrl();
+  if (!base) { if (verbose) showLiveStatus('⚠ No proxy URL set.', 'warn'); return Promise.resolve(); }
+  var today = new Date().toISOString().slice(0,10);
+  return fetch(base + '/results?date=' + today)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var res = (d && d.results) || [];
+      var logged = 0, pending = 0, newly = [];
+      (S.meetings||[]).forEach(function(m){ (m.races||[]).forEach(function(race){
+        var rk = raceKeyFor(race);
+        if (getPredictionLog(rk)) return;
+        var off = raceOffMs(race);
+        if (isNaN(off) || Date.now() < off + 5*60000) return;
+        var hit = null;
+        res.forEach(function(x){
+          if (hit) return;
+          if (x.time !== race.time) return;
+          var a = (x.course||'').toLowerCase().replace(/[^a-z]/g,'');
+          var b = (race.course||'').toLowerCase().replace(/[^a-z]/g,'');
+          if (a === b || a.indexOf(b) > -1 || b.indexOf(a) > -1) hit = x;
+        });
+        if (!hit || !hit.winner) { pending++; return; }
+        var lock = plockAll()[rk];
+        if (!lock) {  // race never predicted — lock now from stored odds
+          try { var sc = scoreRaceHeadless(race); if (sc) { plockSave(race, sc, ''); lock = plockAll()[rk]; } } catch(e){}
+        }
+        if (!lock) { pending++; return; }
+        var outcome = logResultHeadless(race, lock, hit);
+        if (outcome) { logged++; newly.push({ race:race, outcome:outcome, winner:hit.winner }); }
+      }); });
+      if (newly.length && S.currentRaces) renderRaceList(S.currentRaces);
+      if (newly.length || verbose) {
+        var msg = newly.length ? '🏁 ' + newly.map(function(n){
+          var ic = n.outcome==='won' ? '✅' : n.outcome==='placed' ? '🟡' : '❌';
+          return ic + ' ' + esc(n.race.time) + ' — won by ' + esc(n.winner);
+        }).join('<br>') : '';
+        if (verbose) msg = (msg ? msg + '<br>' : '') + '🔄 Sync: <strong>' + logged + ' newly logged</strong>' +
+          (pending ? ', ' + pending + ' awaiting settlement (results land ~10 min after the off)' : '') + '.';
+        if (msg) showLiveStatus(msg, (logged || !verbose) ? 'ok' : 'warn');
+      }
+    })
+    .catch(function(e){ if (verbose) showLiveStatus('⚠ Results sync failed: ' + esc(e.message), 'warn'); });
+}
+
+// The heartbeat: refresh odds + lock predictions at T-5, sync results after.
+function autoPipelineTick() {
+  try {
+    if (!S.meetings || !S.meetings.length) return;
+    var now = Date.now();
+    (S.meetings||[]).forEach(function(m){ (m.races||[]).forEach(function(race){
+      var off = raceOffMs(race);
+      if (isNaN(off)) return;
+      // Final prediction lock: fresh odds ~5 min before the off
+      if (now > off - 6*60000 && now < off && !race._t5done) {
+        race._t5done = true;
+        fetchOddsForRace(race).then(function(){
+          try { var sc = scoreRaceHeadless(race); if (sc) plockSave(race, sc, (document.getElementById('gsel')||{}).value||''); } catch(e){}
+        });
+      }
+      // Baseline lock as soon as odds exist, so no race is ever unjudgeable
+      if (!race._snapInit && now < off && (race.runners||[]).some(function(r){ return r.odds > 0; })) {
+        race._snapInit = true;
+        if (!plockAll()[raceKeyFor(race)]) {
+          try { var sc0 = scoreRaceHeadless(race); if (sc0) plockSave(race, sc0, (document.getElementById('gsel')||{}).value||''); } catch(e){}
+        }
+      }
+    }); });
+    var anyDue = false;
+    (S.meetings||[]).forEach(function(m){ (m.races||[]).forEach(function(race){
+      var off = raceOffMs(race);
+      if (!isNaN(off) && now > off + 8*60000 && !getPredictionLog(raceKeyFor(race))) anyDue = true;
+    }); });
+    if (anyDue && now - _lastResultsFetch > 90*1000) { _lastResultsFetch = now; syncResults(false); }
+  } catch(e) { console.warn('pipeline:', e); }
+}
+setInterval(autoPipelineTick, 60*1000);
+setTimeout(autoPipelineTick, 3000);
 
 // ── Bulk: fetch official results and log every finished race ───────
 // One tap after racing: walks the loaded meeting, opens each race,
