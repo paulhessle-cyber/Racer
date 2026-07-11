@@ -3486,13 +3486,19 @@ function renderRaceList(races) {
       var _t = _lg.topPickWon ? '✓ WON' : _lg.topPickPlaced ? 'PLACED' : 'LOST';
       _bdg = '<span style="font-size:.52rem;padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;background:rgba('+_c+',.12);color:rgb('+_c+');border:1px solid rgba('+_c+',.3)">'+_t+'</span>';
     }
-    d.innerHTML = '<div><div class="tm">'+r.time+_bdg+'</div>'
-      +'<div class="nm">'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
+    var _off = raceOffMs(r);
+    var _past = !isNaN(_off) && Date.now() > _off + 2*60000;
+    d.innerHTML = '<div><div class="tm" style="color:'+(_past?'var(--mt)':'var(--g)')+'">'+r.time+_bdg+'</div>'
+      +'<div class="nm"'+(_past?' style="color:var(--mt)"':'')+'>'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
       +'<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">'+r.dist+surfTag+'</div>'
       +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--mt)">'+r.runners.length+' runners</div></div>';
     d.onclick = (function(idx){ return function(){ selRace(idx); }; })(i);
     list.appendChild(d);
   });
+  // Always-available export — the same JSON checker.html imports
+  var expBtn = document.createElement('div');
+  expBtn.innerHTML = '<button style="width:100%;margin:14px 0 0;padding:11px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--tx);border-radius:8px;cursor:pointer" onclick="exportPredLog()">⬇ Export Results JSON — all logged races (for the Results Dashboard)</button>';
+  list.appendChild(expBtn);
 }
 
 function selRace(i) {
