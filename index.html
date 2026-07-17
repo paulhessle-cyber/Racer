@@ -408,7 +408,10 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   <div id="rls" style="display:none">
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="ct" id="rcTitle" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Races</div>
+        <div>
+          <div class="ct" id="rcTitle" style="margin-bottom:0;padding-bottom:0;border-bottom:none">Races</div>
+          <div id="rcTrait" style="font-size:.65rem;color:var(--mt);margin-top:2px;display:none"></div>
+        </div>
         <button class="btn bg" style="width:auto;padding:8px 16px;margin-bottom:0;font-size:.72rem" onclick="go('placepot')">🎯 Placepot</button>
       </div>
       <div class="rlist" id="rl"></div>
@@ -3496,6 +3499,17 @@ function updateSetupHint(races) {
 function renderRaceList(races) {
   document.getElementById('rls').style.display = 'block';
   document.getElementById('rcTitle').textContent = (races[0]?races[0].course:'Races') + ' — ' + races.length + ' Races';
+  var rcTraitEl = document.getElementById('rcTrait');
+  if (rcTraitEl) {
+    var trait = (races[0] && races[0].course) ? getCourseTrait(races[0].course) : null;
+    if (trait) {
+      var handLabel = { L: 'left-handed', R: 'right-handed', S: 'straight', F8: 'figure-of-eight' }[trait.hand] || '';
+      rcTraitEl.textContent = handLabel + ' · ' + trait.notes;
+      rcTraitEl.style.display = 'block';
+    } else {
+      rcTraitEl.style.display = 'none';
+    }
+  }
   updateSetupHint(races);
   var list = document.getElementById('rl'); list.innerHTML = '';
   // Evening workflow: one tap fetches + logs every finished race's result
@@ -3843,6 +3857,56 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
+  // ── Course traits (static reference data — handedness, sharpness etc) ──
+  // Small file (~20KB), fetched once at startup alongside the models.
+  // Failure is silent and harmless: getCourseTrait() just returns null and
+  // any UI using it (course strapline) simply doesn't show.
+  var COURSE_TRAITS_URL = 'models/course_traits.json';
+
+  function fetchCourseTraits() {
+    return fetch(COURSE_TRAITS_URL)
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        S.courseTraits = data;
+        return { ok: true };
+      })
+      .catch(function(err) {
+        console.warn('Course traits fetch failed:', err.message);
+        S.courseTraits = null;
+        return { ok: false, err: err.message };
+      });
+  }
+
+  // Same normalisation rule as the odds proxy's normCourse(), so lookups
+  // agree regardless of "Newcastle (A.W.)" / "Newcastle" / punctuation.
+  function normCourseClient(s) {
+    return (s || '')
+      .toLowerCase()
+      .replace(/\(a\.?w\.?\)/g, '')
+      .replace(/[^a-z]/g, '')
+      .trim();
+  }
+
+  // Look up a course's traits. Returns null if traits haven't loaded yet
+  // or the course isn't in the table (new/minor tracks) — always check
+  // before using.
+  function getCourseTrait(courseName) {
+    if (!S.courseTraits || !courseName) return null;
+    var want = normCourseClient(courseName);
+    if (S.courseTraits[want]) return S.courseTraits[want];
+    // fuzzy fallback: substring match either direction (handles aliases
+    // like "epsomdowns" vs "epsom" the same way the proxy does)
+    var keys = Object.keys(S.courseTraits);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] === '_meta') continue;
+      if (keys[i].indexOf(want) !== -1 || want.indexOf(keys[i]) !== -1) return S.courseTraits[keys[i]];
+    }
+    return null;
+  }
+
   setTimeout(function() {
     var mstEl = document.getElementById('mst');
     if (mstEl) mstEl.innerHTML = '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);padding:8px">⏳ Loading models from GitHub…</div>';
@@ -3857,6 +3921,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return fetchModel('jumps');
     }).then(function(r3) {
       _results.push(r3);
+      return fetchCourseTraits();
     }).then(function() {
       var results = _results;
         var loaded = results.filter(function(r){ return r.ok; }).map(function(r){ return r.slot; });
