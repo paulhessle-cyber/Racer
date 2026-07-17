@@ -185,6 +185,7 @@
   <button class="tab-btn" onclick="showTab('value')">💰 Value</button>
   <button class="tab-btn" onclick="showTab('placepot')">🎯 Placepot</button>
   <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
+  <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
 </div>
 
 <div id="app">
@@ -243,7 +244,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -257,6 +258,7 @@ function showTab(tab) {
   if (tab === 'value') renderValueTab();
   if (tab === 'placepot') renderPlacepotTab();
   if (tab === 'dutch') renderDutchTab();
+  if (tab === 'nap') renderNapTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -299,7 +301,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-bf"></div>' +
     '<div class="tab-content" id="tab-value"></div>' +
     '<div class="tab-content" id="tab-placepot"></div>' +
-    '<div class="tab-content" id="tab-dutch"></div>';
+    '<div class="tab-content" id="tab-dutch"></div>' +
+    '<div class="tab-content" id="tab-nap"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -2174,6 +2177,97 @@ function renderDutchTab() {
 function setDutchCourseFilter(c) {
   _dutchCourseFilter = c;
   renderDutchTab();
+}
+
+// ══ NAP TAB ═══════════════════════════════════════════════════════════════════
+// Day-by-day record of the Nap of the Day: won / placed / lost, odds, and
+// £10 level-stakes P/L. Uses napName/napWon logged with each race; nap odds
+// are looked up from the race's own predictions array.
+function renderNapTab() {
+  var el = document.getElementById('tab-nap');
+  if (!el) return;
+  if (!loadedLog || !loadedLog.length) {
+    el.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:.75rem;color:var(--mt)">Load a results JSON to see nap performance.</div>';
+    return;
+  }
+
+  var napRaces = loadedLog.filter(function(e){ return e.napName; });
+  if (!napRaces.length) {
+    el.innerHTML = '<div style="padding:16px"><div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--mt)">'
+      + '<div style="font-size:2rem;margin-bottom:10px">⭐</div>'
+      + 'No naps logged yet.<br><br>This populates once races with a locked Nap of the Day have results logged.'
+      + '</div></div>';
+    return;
+  }
+
+  // Enrich each nap entry: odds (from its predictions), placed, £10 P/L
+  var naps = napRaces.map(function(e){
+    var pred = (e.predictions || []).filter(function(p){ return p.name === e.napName; })[0];
+    var odds = pred && pred.odds > 1 ? pred.odds : 0;
+    var won = !!e.napWon;
+    // placed = in the actual result beyond the winner slot
+    var placed = !won && (e.actual || []).indexOf(e.napName) > 0;
+    var pl = odds > 1 ? (won ? +(10 * odds - 10).toFixed(2) : -10) : (won ? 0 : (odds ? -10 : 0));
+    return { date: e.date || '?', course: e.course || '?', time: e.time || '',
+             name: e.napName, odds: odds, won: won, placed: placed, pl: pl, hasOdds: odds > 1 };
+  }).sort(function(a,b){ return (a.date + a.time) < (b.date + b.time) ? 1 : -1; });
+
+  var tot = naps.length;
+  var wins = naps.filter(function(n){ return n.won; }).length;
+  var placedCt = naps.filter(function(n){ return n.placed; }).length;
+  var priced = naps.filter(function(n){ return n.hasOdds; });
+  var totStaked = priced.length * 10;
+  var totPL = priced.reduce(function(s,n){ return s + n.pl; }, 0);
+  var roi = totStaked > 0 ? (totPL / totStaked * 100) : 0;
+
+  var h = '<div style="padding:16px">';
+
+  // ── Latest nap banner — the "did today's nap win?" answer ──
+  var latest = naps[0];
+  var lCol = latest.won ? 'var(--g)' : latest.placed ? 'var(--gold)' : 'var(--re)';
+  var lTxt = latest.won ? '✓ WON' : latest.placed ? 'PLACED' : 'LOST';
+  h += '<div style="background:var(--card);border:1px solid ' + lCol + ';border-radius:10px;padding:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">';
+  h += '<div><div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:4px">LATEST NAP · ' + latest.date + '</div>';
+  h += '<div style="font-size:.95rem;font-weight:700;color:var(--tx)">' + latest.name + '</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">' + latest.course + ' ' + latest.time + (latest.hasOdds ? ' · @' + latest.odds.toFixed(2) : '') + '</div></div>';
+  h += '<div style="font-size:1.1rem;font-weight:800;color:' + lCol + '">' + lTxt + '</div>';
+  h += '</div>';
+
+  // ── Headline stats ──
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">£10 LEVEL P/L</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:' + (totPL>=0?'var(--g)':'var(--re)') + '">' + (totPL>=0?'+':'') + '£' + totPL.toFixed(2) + '</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">' + priced.length + ' priced naps</div>';
+  h += '</div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">ROI</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:' + (roi>=0?'var(--g)':'var(--re)') + '">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">£' + totStaked.toFixed(0) + ' staked</div>';
+  h += '</div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px">';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">STRIKE RATE</div>';
+  h += '<div style="font-size:1.5rem;font-weight:700;color:var(--tx)">' + Math.round(wins/tot*100) + '%</div>';
+  h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);margin-top:2px">' + wins + ' won · ' + placedCt + ' placed / ' + tot + '</div>';
+  h += '</div>';
+  h += '</div>';
+
+  // ── Day-by-day list ──
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">📅 NAP BY DAY</div>';
+  naps.slice(0, 60).forEach(function(n){
+    var col = n.won ? 'var(--g)' : n.placed ? 'var(--gold)' : 'var(--re)';
+    var badge = n.won ? '✓ WON' : n.placed ? 'PLACED' : 'LOST';
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div><div style="font-size:.76rem;color:var(--tx);font-weight:600">' + n.name + (n.hasOdds ? ' <span style="color:var(--mt);font-weight:400">@' + n.odds.toFixed(2) + '</span>' : '') + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + n.date + ' · ' + n.course + ' ' + n.time + '</div></div>';
+    h += '<div style="text-align:right"><div style="font-family:var(--mono);font-size:.7rem;font-weight:700;color:' + col + '">' + badge + '</div>';
+    if (n.hasOdds) h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + (n.pl>=0?'var(--g)':'var(--re)') + '">' + (n.pl>=0?'+':'') + '£' + n.pl.toFixed(2) + '</div>';
+    h += '</div></div>';
+  });
+  if (naps.length > 60) h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:8px">Showing latest 60 of ' + naps.length + '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 </script>
