@@ -3496,6 +3496,33 @@ function updateSetupHint(races) {
   }
 }
 
+// Same normalisation rule as the odds proxy's normCourse(), so lookups
+// agree regardless of "Newcastle (A.W.)" / "Newcastle" / punctuation.
+function normCourseClient(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/\(a\.?w\.?\)/g, '')
+    .replace(/[^a-z]/g, '')
+    .trim();
+}
+
+// Look up a course's traits. Returns null if traits haven't loaded yet
+// or the course isn't in the table (new/minor tracks) — always check
+// before using.
+function getCourseTrait(courseName) {
+  if (!S.courseTraits || !courseName) return null;
+  var want = normCourseClient(courseName);
+  if (S.courseTraits[want]) return S.courseTraits[want];
+  // fuzzy fallback: substring match either direction (handles aliases
+  // like "epsomdowns" vs "epsom" the same way the proxy does)
+  var keys = Object.keys(S.courseTraits);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i] === '_meta') continue;
+    if (keys[i].indexOf(want) !== -1 || want.indexOf(keys[i]) !== -1) return S.courseTraits[keys[i]];
+  }
+  return null;
+}
+
 function renderRaceList(races) {
   document.getElementById('rls').style.display = 'block';
   document.getElementById('rcTitle').textContent = (races[0]?races[0].course:'Races') + ' — ' + races.length + ' Races';
@@ -3878,33 +3905,6 @@ document.addEventListener('DOMContentLoaded', function() {
         S.courseTraits = null;
         return { ok: false, err: err.message };
       });
-  }
-
-  // Same normalisation rule as the odds proxy's normCourse(), so lookups
-  // agree regardless of "Newcastle (A.W.)" / "Newcastle" / punctuation.
-  function normCourseClient(s) {
-    return (s || '')
-      .toLowerCase()
-      .replace(/\(a\.?w\.?\)/g, '')
-      .replace(/[^a-z]/g, '')
-      .trim();
-  }
-
-  // Look up a course's traits. Returns null if traits haven't loaded yet
-  // or the course isn't in the table (new/minor tracks) — always check
-  // before using.
-  function getCourseTrait(courseName) {
-    if (!S.courseTraits || !courseName) return null;
-    var want = normCourseClient(courseName);
-    if (S.courseTraits[want]) return S.courseTraits[want];
-    // fuzzy fallback: substring match either direction (handles aliases
-    // like "epsomdowns" vs "epsom" the same way the proxy does)
-    var keys = Object.keys(S.courseTraits);
-    for (var i = 0; i < keys.length; i++) {
-      if (keys[i] === '_meta') continue;
-      if (keys[i].indexOf(want) !== -1 || want.indexOf(keys[i]) !== -1) return S.courseTraits[keys[i]];
-    }
-    return null;
   }
 
   setTimeout(function() {
