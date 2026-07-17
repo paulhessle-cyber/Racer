@@ -6795,10 +6795,18 @@ function plockSave(race, scored, going) {
                (S._napLocked.race.course||'') === (race.course||'')) ? S._napLocked.runner.name : '';
     var bf = (race.runners||[]).filter(function(r){ return !r._nr && r._bfAlert; })
               .map(function(r){ return { name:r.name, odds:r.odds||0, bfDrop:!!r._bfDrop }; });
+    // Dutch selections at lock time — same band logic as the Predict tab
+    // display (1-4 runners: 1 sel, 5-7: 2, 8+: 3; top-ranked with valid odds).
+    // Captured here so auto-logged results can score the dutch bet; without
+    // this, headless logging writes dutch:null and the dashboard goes blank.
+    var dWith = scored.filter(function(r){ return !r._nr && r.odds > 1; });
+    var dField = (race.runners||[]).filter(function(r){ return !r._nr; }).length;
+    var dN = dField >= 8 ? 3 : (dField >= 5 ? 2 : 1);
+    var dSels = dWith.slice(0, dN).map(function(r){ return { name:r.name, odds:r.odds||0 }; });
     var all = plockAll();
     all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:race.cls||0,
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
-      favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf,
+      favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       course:race.course, time:race.time, savedAt:Date.now() };
     localStorage.setItem(plockKey(), JSON.stringify(all));
   } catch(e) { /* storage full — manual flow still works */ }
@@ -6832,7 +6840,25 @@ function logResultHeadless(race, lock, resultObj) {
     valuePick:'', valuePickOdds:0, valuePickEdge:0, valuePickWon:false, valuePickPlaced:false,
     bfHorses:(lock.bf||[]).map(function(b){ return { name:b.name, odds:b.odds, cls:lock.cls||0,
       bfDrop:!!b.bfDrop, won:winner===b.name, placed:actual.slice(0,3).indexOf(b.name)>-1 }; }),
-    dutch:null, placesUnordered:true, autoLogged:true };
+    dutch:(function(){
+      // Same maths as the manual saveRaceResult path — dashboard-compatible.
+      var sels = lock.dutchSels || [];
+      if (!sels.length) return null;   // pre-update locks have no dutch data
+      var outlay = 10;
+      var invSum = sels.reduce(function(s,x){ return s + (x.odds > 1 ? 1/x.odds : 0); }, 0);
+      var w = null;
+      for (var di = 0; di < sels.length; di++) { if (sels[di].name === winner) { w = sels[di]; break; } }
+      var ret = 0;
+      if (w && w.odds > 1 && invSum > 0) {
+        var stake = (1/w.odds) / invSum * outlay;
+        ret = stake * w.odds;
+      }
+      return { selections:sels.map(function(x){ return x.name; }),
+               odds:sels.map(function(x){ return x.odds; }),
+               nSel:sels.length, fieldSize:fieldSize, outlay:outlay,
+               won:!!w, winnerName:w?w.name:null,
+               returned:+ret.toFixed(2), profit:+(ret-outlay).toFixed(2) };
+    })(), placesUnordered:true, autoLogged:true };
   var log = getPredLog(); log.push(entry); savePredLog(log);
   return topPickWon ? 'won' : (topPickPlaced ? 'placed' : 'lost');
 }
