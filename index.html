@@ -6892,6 +6892,93 @@ function logResultHeadless(race, lock, resultObj) {
   return topPickWon ? 'won' : (topPickPlaced ? 'placed' : 'lost');
 }
 
+// ── Headless: predict EVERY today's meeting so each course gets a pick ────────
+// The per-course dashboard can only show courses the app actually predicted.
+// Tapping "Predict from live card" per meeting is easy to forget, which is why
+// only the loaded course showed up. This walks ALL of today's meetings from the
+// proxy and builds+scores+locks every race that isn't already locked — gently
+// (staggered fetches) so it never trips the proxy's rate limits. Idempotent:
+// re-running only fills gaps. Runs a while after load and won't fight a manual
+// live-card build (skips if one is in progress).
+var _autoAllBusy = false, _autoAllDone = false;
+function autoPredictAllMeetings(force) {
+  var base = getProxyUrl();
+  if (!base || _autoAllBusy || S._liveCardBusy) return Promise.resolve(0);
+  if (_autoAllDone && !force) return Promise.resolve(0);
+  _autoAllBusy = true;
+  var built = 0;
+
+  return fetch(base + '/meetings')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data){
+      var meetings = (data && data.meetings) || [];
+      if (!meetings.length) { _autoAllBusy = false; return 0; }
+
+      // Flatten to a work list of {course,time} for races not already locked,
+      // skipping races whose off-time has long passed with no open market
+      // (Betfair only lists open markets; past races simply won't return odds).
+      var locks = plockAll();
+      var work = [];
+      meetings.forEach(function(m){
+        (m.times || []).forEach(function(t){
+          var rk = ((m.course||'') + '_' + t).replace(/\s/g,'_');
+          if (locks[rk]) return;                 // already have a pick
+          if (getPredictionLog(rk)) return;      // already fully logged
+          work.push({ course: m.course, time: t });
+        });
+      });
+      if (!work.length) { _autoAllBusy = false; _autoAllDone = true; return 0; }
+
+      // Process sequentially with a gap between calls (rate-limit friendly).
+      // Group scored races back into S.meetings so results sync + nap logic
+      // see them exactly as a manual live-card build would.
+      var i = 0;
+      function step() {
+        if (i >= work.length) return finishAll();
+        var w = work[i++];
+        return fetchOddsRaw(w.course, w.time).then(function(dj){
+          if (dj && dj.runners && dj.runners.length) {
+            var runners = dj.runners.map(bfRunnerToAppRunner);
+            var mn = dj.marketName || '';
+            var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
+            var race = { rnum:0, time:w.time, course:w.course,
+              dist: dm ? dm[1] : '1m', surface: liveSurface(w.course, mn),
+              title: mn, cls:0, runners: runners, topTip:'', watchFor:'' };
+            // Merge into S.meetings
+            var mtg = (S.meetings||[]).filter(function(x){ return x.course === w.course; })[0];
+            if (!mtg) { mtg = { course:w.course, races:[] }; S.meetings.push(mtg); }
+            var exists = mtg.races.filter(function(r){ return r.time === w.time; })[0];
+            if (!exists) { mtg.races.push(race); mtg.races.sort(function(a,b){ return a.time<b.time?-1:1; }); }
+            // Score + lock this race's pick
+            try {
+              var sc = scoreRaceHeadless(exists || race);
+              if (sc) { plockSave(exists || race, sc, ''); built++; }
+            } catch(e){}
+          }
+          return new Promise(function(res){ setTimeout(res, 400); }).then(step);
+        }).catch(function(){ return new Promise(function(res){ setTimeout(res, 400); }).then(step); });
+      }
+
+      function finishAll() {
+        _autoAllBusy = false; _autoAllDone = true;
+        if (built) {
+          S.races = (S.meetings||[]).reduce(function(all,mm){ return all.concat(mm.races); }, []);
+          try { lsSave(); } catch(e){}
+          // Give results a chance to log now that picks exist
+          try { syncResults(false); } catch(e){}
+        }
+        return built;
+      }
+
+      return step();
+    })
+    .catch(function(){ _autoAllBusy = false; return built; });
+}
+// Kick off a while after load, once the proxy URL and models are ready.
+setTimeout(function(){ try { autoPredictAllMeetings(false); } catch(e){} }, 8000);
+// And re-sweep hourly to catch meetings whose markets open later in the day.
+setInterval(function(){ _autoAllDone = false; try { autoPredictAllMeetings(false); } catch(e){} }, 60*60*1000);
+
 // Race off-time today, in ms (device is UK-local like the racing)
 function raceOffMs(race) {
   var m = (race.time||'').match(/^(\d{1,2}):(\d{2})$/);
