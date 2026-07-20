@@ -5992,10 +5992,39 @@ function getPredictionLog(raceKey) {
 }
 
 
+// Push the full log up to the proxy so other devices (and the checker on any
+// device) can pull the complete history. Fire-and-forget: failure is silent
+// since the local copy and file export both still work. Deduped by a simple
+// "only push when the log actually changed" guard to avoid needless traffic.
+var _lastPushedLen = -1, _lastPushedKey = '';
+function pushLogToServer(force) {
+  try {
+    var base = getProxyUrl();
+    if (!base) return Promise.resolve(false);
+    var log = getPredLog();
+    if (!log.length) return Promise.resolve(false);
+    // cheap change-detector: length + last raceKey
+    var sig = log.length + ':' + (log[log.length-1].raceKey || '');
+    if (!force && sig === (_lastPushedLen + ':' + _lastPushedKey)) return Promise.resolve(false);
+    return fetch(base + '/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(log)
+    }).then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(res){
+        if (res) { _lastPushedLen = log.length; _lastPushedKey = log[log.length-1].raceKey || ''; }
+        return !!res;
+      })
+      .catch(function(){ return false; });
+  } catch(e) { return Promise.resolve(false); }
+}
+
 function exportPredLog() {
   try {
     var log = getPredLog();
     if (!log.length) { alert('No results logged yet.'); return; }
+    // Also push to the server so it's available on your other devices.
+    pushLogToServer(true);
     var blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
     var url  = URL.createObjectURL(blob);
     var a    = document.createElement('a');
@@ -6005,7 +6034,7 @@ function exportPredLog() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showLiveStatus('✓ Exported ' + log.length + ' logged races. On iPhone the file lands in the Downloads folder of the Files app (Safari may flash a blue download arrow, top right).', 'ok');
+    showLiveStatus('✓ Exported ' + log.length + ' logged races (and synced to server for your other devices). On iPhone the file lands in the Downloads folder of the Files app.', 'ok');
   } catch(e) { alert('Export failed: ' + e.message); }
 }
 
@@ -6905,6 +6934,7 @@ function syncResults(verbose) {
         if (outcome) { logged++; newly.push({ race:race, outcome:outcome, winner:hit.winner }); }
       }); });
       if (newly.length && S.currentRaces) renderRaceList(S.currentRaces);
+      if (newly.length) pushLogToServer(false);  // keep server copy current, silently
       if (newly.length || verbose) {
         var msg = newly.length ? '🏁 ' + newly.map(function(n){
           var ic = n.outcome==='won' ? '✅' : n.outcome==='placed' ? '🟡' : '❌';
