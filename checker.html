@@ -10,6 +10,10 @@
     --green:#00e676;--gold:#ffc107;--red:#ff5252;--blue:#448aff;--orange:#ff6d00;
     --bg:#07090b;--sf:#0d1410;--bd:#1c2a1e;--text:#c8dece;--mt:#4a6a55;--white:#eef6f0;
     --mono:'IBM Plex Mono',monospace;
+    /* Short-name aliases used throughout the JS-rendered HTML. Without these,
+       75+ references (every won-green, card panel, etc) fell back to defaults —
+       which is why WON naps weren't showing green. */
+    --g:#00e676;--re:#ff5252;--tx:#c8dece;--card:#0d1410;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px}
@@ -1527,6 +1531,58 @@ function renderInsights() {
 var lsData = tryLocalStorage();
 if (lsData) { loadedLog=lsData; renderAll(); }
 else renderImport();
+
+// ── Auto-load from the proxy export, then merge ──────────────────────────────
+// The predictor auto-logs results to this same origin's localStorage, so on the
+// SAME device the checker already has everything. This fetch matters when you
+// open the checker on a DIFFERENT device (phone vs iPad): it pulls the full
+// server-side history and merges any races this device hasn't seen. Merge is
+// non-destructive — existing local races are never overwritten or removed.
+var PROXY_KEY = 'formintel_proxy_url';
+function getProxyBase() {
+  try {
+    var u = localStorage.getItem(PROXY_KEY);
+    if (u) return u.replace(/\/+$/, '');
+  } catch(e){}
+  return 'https://odds.formintel.co.uk';  // sensible default
+}
+
+function mergeServerLog(serverRaces) {
+  if (!Array.isArray(serverRaces) || !serverRaces.length) return 0;
+  var local = Array.isArray(loadedLog) ? loadedLog.slice() : [];
+  var seen = {};
+  local.forEach(function(e){ if (e && e.raceKey) seen[e.raceKey] = true; });
+  var added = 0;
+  serverRaces.forEach(function(e){
+    if (!e || !e.raceKey) return;
+    if (seen[e.raceKey]) return;      // already have it locally — keep local copy
+    local.push(e); seen[e.raceKey] = true; added++;
+  });
+  if (added) {
+    loadedLog = local;
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(local)); } catch(e){}
+    renderAll();
+  }
+  return added;
+}
+
+(function autoLoadFromServer() {
+  var base = getProxyBase();
+  if (!base || typeof fetch !== 'function') return;
+  fetch(base + '/export')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if (!d) return;
+      var races = Array.isArray(d) ? d : (d.log || d.races || d.results || []);
+      var added = mergeServerLog(races);
+      if (added) {
+        var note = document.getElementById('subtitle');
+        if (note) note.textContent += ' · +' + added + ' synced from server';
+      }
+    })
+    .catch(function(){ /* offline or no endpoint — local data still shows */ });
+})();
+
 // Always render bets tab on load — bet data is independent of prediction log
 // Small delay to ensure tab-bets div exists in DOM
 setTimeout(function(){ renderBets(); }, 50);
@@ -2193,10 +2249,15 @@ function renderNapTab() {
 
   var napRaces = loadedLog.filter(function(e){ return e.napName; });
   if (!napRaces.length) {
-    el.innerHTML = '<div style="padding:16px"><div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--mt)">'
-      + '<div style="font-size:2rem;margin-bottom:10px">⭐</div>'
-      + 'No naps logged yet.<br><br>This populates once races with a locked Nap of the Day have results logged.'
-      + '</div></div>';
+    // No daily Nap captured, but per-course picks may still exist — show those.
+    var coursePicksOnly = renderCoursePicks();
+    el.innerHTML = '<div style="padding:16px">'
+      + '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;text-align:center;font-family:var(--mono);font-size:.72rem;color:var(--mt);margin-bottom:' + (coursePicksOnly ? '4px' : '0') + '">'
+      + '<div style="font-size:1.6rem;margin-bottom:8px">⭐</div>'
+      + 'No daily Nap captured for these dates.' + (coursePicksOnly ? '<br>Per-course top picks are shown below.' : '<br><br>This populates once races with a locked Nap of the Day have results logged.')
+      + '</div>'
+      + coursePicksOnly
+      + '</div>';
     return;
   }
 
@@ -2257,17 +2318,97 @@ function renderNapTab() {
   naps.slice(0, 60).forEach(function(n){
     var col = n.won ? 'var(--g)' : n.placed ? 'var(--gold)' : 'var(--re)';
     var badge = n.won ? '✓ WON' : n.placed ? 'PLACED' : 'LOST';
-    h += '<div style="background:var(--card);border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
+    // Winning naps get a filled green badge + subtly tinted row so they're
+    // unmistakable at a glance (green text alone reads too close to gold).
+    var rowBg = n.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+    var badgeStyle = n.won
+      ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.66rem'
+      : 'font-family:var(--mono);font-size:.7rem;font-weight:700;color:' + col;
+    h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
     h += '<div><div style="font-size:.76rem;color:var(--tx);font-weight:600">' + n.name + (n.hasOdds ? ' <span style="color:var(--mt);font-weight:400">@' + n.odds.toFixed(2) + '</span>' : '') + '</div>';
     h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + n.date + ' · ' + n.course + ' ' + n.time + '</div></div>';
-    h += '<div style="text-align:right"><div style="font-family:var(--mono);font-size:.7rem;font-weight:700;color:' + col + '">' + badge + '</div>';
-    if (n.hasOdds) h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + (n.pl>=0?'var(--g)':'var(--re)') + '">' + (n.pl>=0?'+':'') + '£' + n.pl.toFixed(2) + '</div>';
+    h += '<div style="text-align:right"><div style="' + badgeStyle + '">' + badge + '</div>';
+    if (n.hasOdds) h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + (n.pl>=0?'var(--g)':'var(--re)') + ';margin-top:3px">' + (n.pl>=0?'+':'') + '£' + n.pl.toFixed(2) + '</div>';
     h += '</div></div>';
   });
   if (naps.length > 60) h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:8px">Showing latest 60 of ' + naps.length + '</div>';
 
+  // ── Per-course top pick (the strongest selection at each meeting) ──
+  // Derived from the full log, so it covers every course on every day —
+  // including days the daily Nap wasn't captured. For each course+date we
+  // take that meeting's highest-confidence logged race as its "course pick".
+  h += renderCoursePicks();
+
   h += '</div>';
   el.innerHTML = h;
+}
+
+// Build the per-course best-pick block. Groups the log by course+date,
+// selects each meeting's top-confidence race, and reports win/place/P&L.
+function renderCoursePicks() {
+  var byMeeting = {}; // course|date -> best entry (highest topPickConf)
+  loadedLog.forEach(function(e){
+    if (!e.course || !e.predictions || !e.predictions.length) return;
+    var key = e.course + '|' + (e.date || '?');
+    var cur = byMeeting[key];
+    if (!cur || (e.topPickConf || 0) > (cur.topPickConf || 0)) byMeeting[key] = e;
+  });
+
+  var picks = Object.keys(byMeeting).map(function(k){
+    var e = byMeeting[k];
+    var name = e.predictions[0] ? e.predictions[0].name : '?';
+    var odds = e.predictions[0] && e.predictions[0].odds > 1 ? e.predictions[0].odds : 0;
+    var won = !!e.topPickWon;
+    var placed = !won && !!e.topPickPlaced;
+    var pl = odds > 1 ? (won ? +(10*odds-10).toFixed(2) : -10) : 0;
+    return { course:e.course, date:e.date||'?', time:e.time||'', name:name, odds:odds,
+             won:won, placed:placed, pl:pl, hasOdds:odds>1, conf:e.topPickConf||0 };
+  }).sort(function(a,b){ return (a.date+a.course) < (b.date+b.course) ? 1 : -1; });
+
+  if (!picks.length) return '';
+
+  var tot = picks.length;
+  var wins = picks.filter(function(p){ return p.won; }).length;
+  var placedCt = picks.filter(function(p){ return p.placed; }).length;
+  var priced = picks.filter(function(p){ return p.hasOdds; });
+  var staked = priced.length * 10;
+  var pl = priced.reduce(function(s,p){ return s + p.pl; }, 0);
+  var roi = staked > 0 ? (pl/staked*100) : 0;
+
+  var h = '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:24px 0 10px">🏇 TOP PICK BY COURSE</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:10px;line-height:1.5">The strongest model selection at each meeting, every day — covers all courses even when the daily Nap wasn\'t captured.</div>';
+
+  // headline
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px">';
+  h += '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:5px">£10 LEVEL P/L</div>';
+  h += '<div style="font-size:1.3rem;font-weight:700;color:' + (pl>=0?'var(--g)':'var(--re)') + '">' + (pl>=0?'+':'') + '£' + pl.toFixed(2) + '</div></div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px">';
+  h += '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:5px">ROI</div>';
+  h += '<div style="font-size:1.3rem;font-weight:700;color:' + (roi>=0?'var(--g)':'var(--re)') + '">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</div></div>';
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px">';
+  h += '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:5px">STRIKE</div>';
+  h += '<div style="font-size:1.3rem;font-weight:700;color:var(--tx)">' + Math.round(wins/tot*100) + '%</div>';
+  h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px">' + wins + 'W ' + placedCt + 'P / ' + tot + '</div></div>';
+  h += '</div>';
+
+  picks.slice(0, 80).forEach(function(p){
+    var col = p.won ? 'var(--g)' : p.placed ? 'var(--gold)' : 'var(--re)';
+    var badge = p.won ? '✓ WON' : p.placed ? 'PLACED' : 'LOST';
+    var rowBg = p.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+    var badgeStyle = p.won
+      ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
+      : 'font-family:var(--mono);font-size:.68rem;font-weight:700;color:' + col;
+    h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div><div style="font-size:.72rem;color:var(--tx);font-weight:600">' + p.course + ' <span style="color:var(--mt);font-weight:400">· ' + p.name + (p.hasOdds ? ' @' + p.odds.toFixed(2) : '') + '</span></div>';
+    h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px">' + p.date + (p.time?' ' + p.time:'') + '</div></div>';
+    h += '<div style="text-align:right"><div style="' + badgeStyle + '">' + badge + '</div>';
+    if (p.hasOdds) h += '<div style="font-family:var(--mono);font-size:.6rem;color:' + (p.pl>=0?'var(--g)':'var(--re)') + ';margin-top:3px">' + (p.pl>=0?'+':'') + '£' + p.pl.toFixed(2) + '</div>';
+    h += '</div></div>';
+  });
+  if (picks.length > 80) h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);text-align:center;padding:8px">Showing latest 80 of ' + picks.length + '</div>';
+
+  return h;
 }
 
 </script>
