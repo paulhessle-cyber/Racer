@@ -6822,8 +6822,29 @@ function plockSave(race, scored, going) {
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
                (S._napLocked.race.course||'') === (race.course||'')) ? S._napLocked.runner.name : '';
+    // BF (Betfair "beaten favourite") flags. In the on-screen flow these are
+    // set by showResults(); the headless auto-predict path never runs that, so
+    // BF Watch stayed empty for auto-logged races. computeBF() is DOM-free and
+    // idempotent, so calling it here fills the gap for headless races and is a
+    // harmless no-op for ones the UI already flagged.
+    (race.runners||[]).forEach(function(r){
+      if (r._nr || r._bfAlert) return;
+      try { computeBF(r, race); } catch(e){}
+    });
     var bf = (race.runners||[]).filter(function(r){ return !r._nr && r._bfAlert; })
               .map(function(r){ return { name:r.name, odds:r.odds||0, bfDrop:!!r._bfDrop }; });
+    // Value pick: within the top 3, the runner with the biggest model-vs-market
+    // edge. Same formula as the on-screen path (score is a 0-1 fraction here).
+    // Stored on the lock so auto-logged results can populate the Value tab.
+    var vPick = (function(){
+      var best = null, bestEdge = -9;
+      scored.slice(0,3).forEach(function(r){
+        if (r._nr || !r.odds || r.odds <= 1) return;
+        var edge = (r.score||0) - (1 / r.odds);
+        if (edge > bestEdge) { bestEdge = edge; best = r; }
+      });
+      return best ? { name:best.name, odds:best.odds, edge:Math.round(bestEdge*100) } : null;
+    })();
     // Dutch selections at lock time — same band logic as the Predict tab
     // display (1-4 runners: 1 sel, 5-7: 2, 8+: 3; top-ranked with valid odds).
     // Captured here so auto-logged results can score the dutch bet; without
@@ -6836,6 +6857,7 @@ function plockSave(race, scored, going) {
     all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:race.cls||0,
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
+      valuePick:vPick,
       course:race.course, time:race.time, savedAt:Date.now() };
     localStorage.setItem(plockKey(), JSON.stringify(all));
   } catch(e) { /* storage full — manual flow still works */ }
@@ -6866,7 +6888,11 @@ function logResultHeadless(race, lock, resultObj) {
     winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
     favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
     cls:lock.cls||0, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
-    valuePick:'', valuePickOdds:0, valuePickEdge:0, valuePickWon:false, valuePickPlaced:false,
+    valuePick:      lock.valuePick ? lock.valuePick.name : '',
+    valuePickOdds:  lock.valuePick ? lock.valuePick.odds : 0,
+    valuePickEdge:  lock.valuePick ? lock.valuePick.edge : 0,
+    valuePickWon:   !!(lock.valuePick && winner === lock.valuePick.name),
+    valuePickPlaced:!!(lock.valuePick && actual.slice(0,3).indexOf(lock.valuePick.name) > -1 && winner !== lock.valuePick.name),
     bfHorses:(lock.bf||[]).map(function(b){ return { name:b.name, odds:b.odds, cls:lock.cls||0,
       bfDrop:!!b.bfDrop, won:winner===b.name, placed:actual.slice(0,3).indexOf(b.name)>-1 }; }),
     dutch:(function(){
@@ -6929,6 +6955,24 @@ function autoPredictAllMeetings(force) {
       });
       if (!work.length) { _autoAllBusy = false; _autoAllDone = true; return 0; }
 
+      // Prefetch going once per distinct course. Without this the lock stores
+      // an empty going and the Insights going-breakdown is blank for every
+      // auto-predicted race. One call per meeting (the proxy caches 10 mins),
+      // and a failure just leaves going empty rather than blocking the run.
+      var goingByCourse = {};
+      var courses = [];
+      work.forEach(function(w){ if (courses.indexOf(w.course) === -1) courses.push(w.course); });
+      function prefetchGoing(idx) {
+        if (idx >= courses.length) return Promise.resolve();
+        var c = courses[idx];
+        return fetch(base + '/going?course=' + encodeURIComponent(c))
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(g){ if (g && g.going) goingByCourse[c] = g.going; })
+          .catch(function(){})
+          .then(function(){ return new Promise(function(res){ setTimeout(res, 250); }); })
+          .then(function(){ return prefetchGoing(idx + 1); });
+      }
+
       // Process sequentially with a gap between calls (rate-limit friendly).
       // Group scored races back into S.meetings so results sync + nap logic
       // see them exactly as a manual live-card build would.
@@ -6952,7 +6996,7 @@ function autoPredictAllMeetings(force) {
             // Score + lock this race's pick
             try {
               var sc = scoreRaceHeadless(exists || race);
-              if (sc) { plockSave(exists || race, sc, ''); built++; }
+              if (sc) { plockSave(exists || race, sc, goingByCourse[w.course] || ''); built++; }
             } catch(e){}
           }
           return new Promise(function(res){ setTimeout(res, 400); }).then(step);
@@ -6970,7 +7014,7 @@ function autoPredictAllMeetings(force) {
         return built;
       }
 
-      return step();
+      return prefetchGoing(0).then(step);
     })
     .catch(function(){ _autoAllBusy = false; return built; });
 }
