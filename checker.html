@@ -705,6 +705,8 @@ function renderImport() {
     + '<div class="import-title">Import Results</div>'
     + '<div class="import-sub">Tap to load your exported results file<br>In the Predictor: tap <b>⬇ Export Results JSON</b></div>'
     + '</div>'
+    + '<button class="ls-btn" onclick="loadFromServer(true)">☁️ Load From Server</button>'
+    + '<div id="syncStatus" style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:10px 14px;line-height:1.6"></div>'
     + '<button class="ls-btn" onclick="tryLS()">🔄 Try Load From This Device\'s Storage</button>';
 }
 
@@ -1538,10 +1540,13 @@ else renderImport();
 // open the checker on a DIFFERENT device (phone vs iPad): it pulls the full
 // server-side history and merges any races this device hasn't seen. Merge is
 // non-destructive — existing local races are never overwritten or removed.
-var PROXY_KEY = 'formintel_proxy_url';
+// Must match the key the PREDICTOR writes (fi_odds_proxy_url). These were
+// different keys, so the checker never saw the URL you'd configured and
+// silently fell back to the default below.
+var PROXY_KEY = 'fi_odds_proxy_url';
 function getProxyBase() {
   try {
-    var u = localStorage.getItem(PROXY_KEY);
+    var u = localStorage.getItem(PROXY_KEY) || localStorage.getItem('formintel_proxy_url');
     if (u) return u.replace(/\/+$/, '');
   } catch(e){}
   return 'https://odds.formintel.co.uk';  // sensible default
@@ -1566,21 +1571,56 @@ function mergeServerLog(serverRaces) {
   return added;
 }
 
-(function autoLoadFromServer() {
+// Show what the server sync actually did, on the import screen and as a
+// subtitle note. Silent failure is what made this look like "nothing saves":
+// a 404, CORS block or empty server all looked identical (blank screen).
+function setSyncStatus(msg, kind) {
+  var el = document.getElementById('syncStatus');
+  if (!el) return;
+  var col = kind === 'ok' ? 'var(--green)' : kind === 'warn' ? 'var(--gold)' : 'var(--red)';
+  el.innerHTML = '<span style="color:' + col + '">' + msg + '</span>';
+}
+
+function loadFromServer(manual) {
   var base = getProxyBase();
-  if (!base || typeof fetch !== 'function') return;
-  fetch(base + '/export')
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(d){
-      if (!d) return;
-      var races = Array.isArray(d) ? d : (d.log || d.races || d.results || []);
-      var added = mergeServerLog(races);
-      if (added) {
-        var note = document.getElementById('subtitle');
-        if (note) note.textContent += ' · +' + added + ' synced from server';
-      }
+  if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return Promise.resolve(0); }
+  setSyncStatus('Checking ' + base + ' …', 'warn');
+  return fetch(base + '/export')
+    .then(function(r){
+      if (!r.ok) throw new Error('server returned ' + r.status + (r.status === 404 ? ' (old server.js still running — restart the proxy)' : ''));
+      return r.json();
     })
-    .catch(function(){ /* offline or no endpoint — local data still shows */ });
+    .then(function(d){
+      var races = Array.isArray(d) ? d : (d && (d.log || d.races || d.results)) || [];
+      if (!races.length) {
+        setSyncStatus('Connected, but the server has no results yet. Open the Predictor and tap ⬇ Export Results JSON to push them up.', 'warn');
+        return 0;
+      }
+      // Set status BEFORE merging: a successful merge calls renderAll(), which
+      // replaces the import screen (and the status element with it). The
+      // persistent confirmation goes in the subtitle, which survives the render.
+      setSyncStatus('✓ Server holds ' + races.length + ' races — loading…', 'ok');
+      var added = mergeServerLog(races);
+      var note = document.getElementById('subtitle');
+      if (note) {
+        var base2 = added ? ('Synced from server · +' + added + ' new')
+                          : ('Up to date with server · ' + races.length + ' races');
+        note.textContent = note.textContent.replace(/ · (Synced|Up to date).*$/, '') + ' · ' + base2;
+      }
+      setSyncStatus(added ? ('✓ Loaded ' + added + ' new races from server.')
+                          : ('✓ Up to date — server holds ' + races.length + ' races, all already here.'), 'ok');
+      return added;
+    })
+    .catch(function(err){
+      setSyncStatus('Could not reach the server: ' + err.message
+        + '<br>Check ' + base + '/export opens in your browser.', 'err');
+      return 0;
+    });
+}
+
+(function autoLoadFromServer() {
+  // slight delay so the import screen has rendered and can show status
+  setTimeout(function(){ loadFromServer(false); }, 200);
 })();
 
 // Always render bets tab on load — bet data is independent of prediction log
