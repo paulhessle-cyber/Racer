@@ -6010,12 +6010,22 @@ function pushLogToServer(force) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(log)
-    }).then(function(r){ return r.ok ? r.json() : null; })
+    }).then(function(r){
+        if (!r.ok) throw new Error('server returned ' + r.status +
+          (r.status === 404 ? ' — the proxy is running an old server.js (restart it)' : ''));
+        return r.json();
+      })
       .then(function(res){
         if (res) { _lastPushedLen = log.length; _lastPushedKey = log[log.length-1].raceKey || ''; }
+        if (force) showLiveStatus('☁️ Synced ' + log.length + ' races to the server.', 'ok');
         return !!res;
       })
-      .catch(function(){ return false; });
+      .catch(function(err){
+        // Visible now: a silently-failing push made it look like nothing saved.
+        showLiveStatus('⚠ Could not sync results to the server (' + err.message +
+          '). Your results are still saved on this device.', 'warn');
+        return false;
+      });
   } catch(e) { return Promise.resolve(false); }
 }
 
