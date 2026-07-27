@@ -6929,20 +6929,59 @@ function logResultHeadless(race, lock, resultObj) {
 }
 
 // ── Headless: predict EVERY today's meeting so each course gets a pick ────────
-// The per-course dashboard can only show courses the app actually predicted.
-// Tapping "Predict from live card" per meeting is easy to forget, which is why
-// only the loaded course showed up. This walks ALL of today's meetings from the
-// proxy and builds+scores+locks every race that isn't already locked — gently
-// (staggered fetches) so it never trips the proxy's rate limits. Idempotent:
-// re-running only fills gaps. Runs a while after load and won't fight a manual
-// live-card build (skips if one is in progress).
+// IMPORTANT ARCHITECTURE NOTE: locks and the results log live in localStorage
+// (they persist all day), but S.meetings is IN-MEMORY and resets on every page
+// load. An earlier version only added races to S.meetings when it needed to
+// fetch+lock them — so after the morning sweep, reopening the app skipped every
+// already-locked race, leaving S.meetings empty. That silently broke almost
+// everything downstream: syncResults only iterates S.meetings, so nothing got
+// logged; the race list only shows S.meetings, so finished races vanished; and
+// with nothing newly logged, the server push never fired either.
+//
+// So we now ALWAYS rebuild S.meetings for every race of the day, and only do
+// network work (odds fetch + score + lock) for races that aren't locked yet.
+// Already-locked races are reconstructed from their lock — no network call,
+// which also makes reopening the app fast and light on the proxy.
 var _autoAllBusy = false, _autoAllDone = false;
+
+// Rebuild a lightweight race object from a stored lock. Carries everything
+// logResultHeadless() and the race list need (course/time/dist/runners).
+function raceFromLock(course, time, lock) {
+  var runners = (lock.preds || []).map(function(p){
+    return { name: p.name, odds: p.odds || 0 };
+  });
+  return { rnum:0, time:time, course:course,
+           dist: lock.dist || '', cls: lock.cls || 0,
+           surface: lock.surface || 'turf',
+           title: lock.title || '', runners: runners,
+           topTip:'', watchFor:'', _fromLock:true };
+}
+
+// Ensure a race exists in S.meetings (idempotent). Returns the stored race.
+function ensureRaceInMeetings(course, race) {
+  if (!S.meetings) S.meetings = [];
+  var mtg = S.meetings.filter(function(x){ return x.course === course; })[0];
+  if (!mtg) { mtg = { course: course, races: [] }; S.meetings.push(mtg); }
+  var existing = mtg.races.filter(function(r){ return r.time === race.time; })[0];
+  if (existing) {
+    // Prefer a real fetched card over a lock-reconstructed stub
+    if (existing._fromLock && !race._fromLock) {
+      mtg.races[mtg.races.indexOf(existing)] = race;
+      return race;
+    }
+    return existing;
+  }
+  mtg.races.push(race);
+  mtg.races.sort(function(a,b){ return a.time < b.time ? -1 : 1; });
+  return race;
+}
+
 function autoPredictAllMeetings(force) {
   var base = getProxyUrl();
   if (!base || _autoAllBusy || S._liveCardBusy) return Promise.resolve(0);
   if (_autoAllDone && !force) return Promise.resolve(0);
   _autoAllBusy = true;
-  var built = 0;
+  var built = 0, restored = 0;
 
   return fetch(base + '/meetings')
     .then(function(r){ return r.ok ? r.json() : null; })
@@ -6950,25 +6989,45 @@ function autoPredictAllMeetings(force) {
       var meetings = (data && data.meetings) || [];
       if (!meetings.length) { _autoAllBusy = false; return 0; }
 
-      // Flatten to a work list of {course,time} for races not already locked,
-      // skipping races whose off-time has long passed with no open market
-      // (Betfair only lists open markets; past races simply won't return odds).
       var locks = plockAll();
-      var work = [];
+      var work = [];   // races needing a network fetch + lock
+
       meetings.forEach(function(m){
         (m.times || []).forEach(function(t){
           var rk = ((m.course||'') + '_' + t).replace(/\s/g,'_');
-          if (locks[rk]) return;                 // already have a pick
-          if (getPredictionLog(rk)) return;      // already fully logged
+          var lock = locks[rk];
+          if (lock) {
+            // Already predicted earlier today (possibly in a previous session).
+            // Rebuild it into S.meetings so the race list shows it and
+            // syncResults can still log its result. No network needed.
+            ensureRaceInMeetings(m.course, raceFromLock(m.course, t, lock));
+            restored++;
+            return;
+          }
+          if (getPredictionLog(rk)) {
+            // Already fully logged. Still needs to exist in S.meetings so it
+            // renders (greyed, with its result badge) instead of disappearing.
+            var logged = getPredictionLog(rk);
+            ensureRaceInMeetings(m.course, {
+              rnum:0, time:t, course:m.course,
+              dist:(logged && logged.dist) || '', cls:(logged && logged.cls) || 0,
+              surface:'turf', title:'', topTip:'', watchFor:'', _fromLock:true,
+              runners:((logged && logged.predictions) || []).map(function(p){
+                return { name:p.name, odds:p.odds || 0 };
+              })
+            });
+            restored++;
+            return;
+          }
           work.push({ course: m.course, time: t });
         });
       });
-      if (!work.length) { _autoAllBusy = false; _autoAllDone = true; return 0; }
 
-      // Prefetch going once per distinct course. Without this the lock stores
-      // an empty going and the Insights going-breakdown is blank for every
-      // auto-predicted race. One call per meeting (the proxy caches 10 mins),
-      // and a failure just leaves going empty rather than blocking the run.
+      // Even with no new work, we may have restored races that still need
+      // their results logged — so always finish through finishAll().
+      if (!work.length) { return finishAll(); }
+
+      // Prefetch going once per distinct course (proxy caches it 10 mins).
       var goingByCourse = {};
       var courses = [];
       work.forEach(function(w){ if (courses.indexOf(w.course) === -1) courses.push(w.course); });
@@ -6983,9 +7042,6 @@ function autoPredictAllMeetings(force) {
           .then(function(){ return prefetchGoing(idx + 1); });
       }
 
-      // Process sequentially with a gap between calls (rate-limit friendly).
-      // Group scored races back into S.meetings so results sync + nap logic
-      // see them exactly as a manual live-card build would.
       var i = 0;
       function step() {
         if (i >= work.length) return finishAll();
@@ -6998,15 +7054,10 @@ function autoPredictAllMeetings(force) {
             var race = { rnum:0, time:w.time, course:w.course,
               dist: dm ? dm[1] : '1m', surface: liveSurface(w.course, mn),
               title: mn, cls:0, runners: runners, topTip:'', watchFor:'' };
-            // Merge into S.meetings
-            var mtg = (S.meetings||[]).filter(function(x){ return x.course === w.course; })[0];
-            if (!mtg) { mtg = { course:w.course, races:[] }; S.meetings.push(mtg); }
-            var exists = mtg.races.filter(function(r){ return r.time === w.time; })[0];
-            if (!exists) { mtg.races.push(race); mtg.races.sort(function(a,b){ return a.time<b.time?-1:1; }); }
-            // Score + lock this race's pick
+            var stored = ensureRaceInMeetings(w.course, race);
             try {
-              var sc = scoreRaceHeadless(exists || race);
-              if (sc) { plockSave(exists || race, sc, goingByCourse[w.course] || ''); built++; }
+              var sc = scoreRaceHeadless(stored);
+              if (sc) { plockSave(stored, sc, goingByCourse[w.course] || ''); built++; }
             } catch(e){}
           }
           return new Promise(function(res){ setTimeout(res, 400); }).then(step);
@@ -7015,10 +7066,11 @@ function autoPredictAllMeetings(force) {
 
       function finishAll() {
         _autoAllBusy = false; _autoAllDone = true;
-        if (built) {
-          S.races = (S.meetings||[]).reduce(function(all,mm){ return all.concat(mm.races); }, []);
-          try { lsSave(); } catch(e){}
-          // Give results a chance to log now that picks exist
+        // NOTE: deliberately does NOT overwrite S.races or call lsSave().
+        // S.races belongs to whatever card the user actually loaded; clobbering
+        // it with every meeting of the day replaced their loaded card and
+        // persisted the damage to storage.
+        if (built || restored) {
           try { syncResults(false); } catch(e){}
         }
         return built;
@@ -7030,8 +7082,9 @@ function autoPredictAllMeetings(force) {
 }
 // Kick off a while after load, once the proxy URL and models are ready.
 setTimeout(function(){ try { autoPredictAllMeetings(false); } catch(e){} }, 8000);
-// And re-sweep hourly to catch meetings whose markets open later in the day.
-setInterval(function(){ _autoAllDone = false; try { autoPredictAllMeetings(false); } catch(e){} }, 60*60*1000);
+// And re-sweep every 20 minutes so late-opening markets and newly settled
+// results are picked up even if the app is left sitting open.
+setInterval(function(){ _autoAllDone = false; try { autoPredictAllMeetings(false); } catch(e){} }, 20*60*1000);
 
 // Race off-time today, in ms (device is UK-local like the racing)
 function raceOffMs(race) {
@@ -7063,6 +7116,11 @@ function syncResults(verbose) {
           if (x.time !== race.time) return;
           var a = (x.course||'').toLowerCase().replace(/[^a-z]/g,'');
           var b = (race.course||'').toLowerCase().replace(/[^a-z]/g,'');
+          // Both names must be real. Previously an empty name passed, because
+          // "anything".indexOf("") === 0, so a result with a missing course
+          // matched the FIRST race at that time — stamping a result badge onto
+          // a completely different (often not-yet-run) race at another meeting.
+          if (a.length < 3 || b.length < 3) return;
           if (a === b || a.indexOf(b) > -1 || b.indexOf(a) > -1) hit = x;
         });
         if (!hit || !hit.winner) { pending++; return; }
