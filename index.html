@@ -7080,11 +7080,62 @@ function autoPredictAllMeetings(force) {
     })
     .catch(function(){ _autoAllBusy = false; return built; });
 }
+// ── Catch-up: score races the app wasn't open for ────────────────────────────
+// Betfair drops a race from /meetings the moment its market closes, so a race
+// that ran before you opened the app is invisible to the live sweep below.
+// The proxy snapshots every card shortly before the off and keeps it, so we
+// pull those here and score them with the model exactly as if we'd been open.
+// This is what makes the day complete regardless of when you open the app.
+function catchUpFromCards() {
+  var base = getProxyUrl();
+  if (!base) return Promise.resolve(0);
+  var today = new Date().toISOString().slice(0,10);
+  return fetch(base + '/cards?date=' + today)
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      var cards = (d && d.cards) || [];
+      if (!cards.length) return 0;
+      var locks = plockAll();
+      var scoredNow = 0;
+      cards.forEach(function(c){
+        if (!c || !c.runners || !c.runners.length || !c.course || !c.time) return;
+        var rk = ((c.course||'') + '_' + c.time).replace(/\s/g,'_');
+        var runners = c.runners.map(bfRunnerToAppRunner);
+        var mn = c.marketName || '';
+        var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
+        var race = { rnum:0, time:c.time, course:c.course,
+          dist: dm ? dm[1] : '1m', surface: liveSurface(c.course, mn),
+          title: mn, cls:0, runners: runners, topTip:'', watchFor:'' };
+        // Always put it in S.meetings so it shows in the race list and
+        // syncResults can log its result.
+        var stored = ensureRaceInMeetings(c.course, race);
+        // Only score if we don't already have a pick or a logged result.
+        if (locks[rk] || getPredictionLog(rk)) return;
+        try {
+          var sc = scoreRaceHeadless(stored);
+          if (sc) { plockSave(stored, sc, c.going || ''); scoredNow++; }
+        } catch(e){}
+      });
+      return scoredNow;
+    })
+    .catch(function(){ return 0; });
+}
+
+// One pass: catch up on missed races first, then sweep today's open markets.
+function fullSweep(force) {
+  return catchUpFromCards().then(function(caught){
+    return autoPredictAllMeetings(force).then(function(built){
+      if (caught) { try { syncResults(false); } catch(e){} }
+      return caught + built;
+    });
+  }).catch(function(){ return 0; });
+}
+
 // Kick off a while after load, once the proxy URL and models are ready.
-setTimeout(function(){ try { autoPredictAllMeetings(false); } catch(e){} }, 8000);
+setTimeout(function(){ try { fullSweep(false); } catch(e){} }, 8000);
 // And re-sweep every 20 minutes so late-opening markets and newly settled
 // results are picked up even if the app is left sitting open.
-setInterval(function(){ _autoAllDone = false; try { autoPredictAllMeetings(false); } catch(e){} }, 20*60*1000);
+setInterval(function(){ _autoAllDone = false; try { fullSweep(false); } catch(e){} }, 20*60*1000);
 
 // Race off-time today, in ms (device is UK-local like the racing)
 function raceOffMs(race) {
