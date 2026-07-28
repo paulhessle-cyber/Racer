@@ -5997,6 +5997,17 @@ function getPredictionLog(raceKey) {
 // since the local copy and file export both still work. Deduped by a simple
 // "only push when the log actually changed" guard to avoid needless traffic.
 var _lastPushedLen = -1, _lastPushedKey = '';
+// Signature of the last log we successfully pushed. Persisted, because the
+// in-memory version reset on every page load and there was no way to tell an
+// already-synced log from one that had never reached the server.
+var PUSH_SIG_KEY = 'fi_last_push_sig';
+function pushedSig() {
+  try { return localStorage.getItem(PUSH_SIG_KEY) || ''; } catch(e) { return ''; }
+}
+function setPushedSig(s) {
+  try { localStorage.setItem(PUSH_SIG_KEY, s); } catch(e) {}
+}
+
 function pushLogToServer(force) {
   try {
     var base = getProxyUrl();
@@ -6005,7 +6016,7 @@ function pushLogToServer(force) {
     if (!log.length) return Promise.resolve(false);
     // cheap change-detector: length + last raceKey
     var sig = log.length + ':' + (log[log.length-1].raceKey || '');
-    if (!force && sig === (_lastPushedLen + ':' + _lastPushedKey)) return Promise.resolve(false);
+    if (!force && sig === pushedSig()) return Promise.resolve(false);
     return fetch(base + '/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6016,7 +6027,7 @@ function pushLogToServer(force) {
         return r.json();
       })
       .then(function(res){
-        if (res) { _lastPushedLen = log.length; _lastPushedKey = log[log.length-1].raceKey || ''; }
+        if (res) { setPushedSig(sig); }
         if (force) showLiveStatus('☁️ Synced ' + log.length + ' races to the server.', 'ok');
         return !!res;
       })
@@ -7126,12 +7137,26 @@ function fullSweep(force) {
   return catchUpFromCards().then(function(caught){
     return autoPredictAllMeetings(force).then(function(built){
       if (caught) { try { syncResults(false); } catch(e){} }
+      // ALWAYS try a push at the end of a sweep, not just when this session
+      // happened to log something new. Previously the only push triggers were
+      // "a race just settled while you watched" and the manual Export button —
+      // so opening the app before racing (or after it, on another device) left
+      // a backlog sitting on the phone that never reached the server. The
+      // persisted signature makes this a no-op when there's nothing new.
+      setTimeout(function(){ try { pushLogToServer(false); } catch(e){} }, 2500);
       return caught + built;
     });
-  }).catch(function(){ return 0; });
+  }).catch(function(){
+    setTimeout(function(){ try { pushLogToServer(false); } catch(e){} }, 2500);
+    return 0;
+  });
 }
 
 // Kick off a while after load, once the proxy URL and models are ready.
+// Early backlog push: if this device holds logged races the server hasn't got
+// (e.g. a previous day's racing, or a session where the push failed), get them
+// up straight away rather than waiting for a race to settle.
+setTimeout(function(){ try { pushLogToServer(false); } catch(e){} }, 4000);
 setTimeout(function(){ try { fullSweep(false); } catch(e){} }, 8000);
 // And re-sweep every 20 minutes so late-opening markets and newly settled
 // results are picked up even if the app is left sitting open.
