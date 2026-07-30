@@ -5988,7 +5988,15 @@ function savePredLog(log) {
 
 function getPredictionLog(raceKey) {
   var log = getPredLog();
-  return log.find(function(e){ return e.raceKey === raceKey; }) || null;
+  var hit = log.find(function(e){ return e.raceKey === raceKey; });
+  if (hit) return hit;
+  // Legacy support: older entries were stored as course_time with no date.
+  // Match those ONLY when their own date field equals the date in this key,
+  // so a previous day's race can never masquerade as today's.
+  var m = String(raceKey||'').match(/^(.*)_(\d{4}-\d{2}-\d{2})$/);
+  if (!m) return null;
+  var legacyKey = m[1], date = m[2];
+  return log.find(function(e){ return e.raceKey === legacyKey && e.date === date; }) || null;
 }
 
 
@@ -6785,7 +6793,18 @@ function autoFetchResult(race, scored) {
 // (using fresh odds), the droplet records results ~8-10 min after,
 // and the app logs outcomes automatically + badges the race list.
 
-function raceKeyFor(race){ return ((race.course||'') + '_' + (race.time||'')).replace(/\s/g,'_'); }
+// Race keys MUST include the date. They used to be just course_time, which
+// collided across days: at a multi-day festival like Goodwood the same course
+// runs at the same off-times on consecutive days, so today's 13:50 produced the
+// identical key to yesterday's 13:50. That made yesterday's logged result look
+// like today's race was already predicted AND already logged — so today's race
+// was skipped by the sweep, skipped by the results sync, and rendered with
+// yesterday's win/lose badge. Including the date makes every race unique.
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function raceKeyFor(race){
+  var d = (race && race.date) ? race.date : todayISO();
+  return (((race&&race.course)||'') + '_' + ((race&&race.time)||'') + '_' + d).replace(/\s/g,'_');
+}
 
 // DOM-free clone of predict()'s scoring pipeline (model select, pace,
 // dynamic market weight, power-scale, Platt) — same numbers, no render.
@@ -7006,7 +7025,7 @@ function autoPredictAllMeetings(force) {
 
       meetings.forEach(function(m){
         (m.times || []).forEach(function(t){
-          var rk = ((m.course||'') + '_' + t).replace(/\s/g,'_');
+          var rk = raceKeyFor({ course: m.course, time: t });
           var lock = locks[rk];
           if (lock) {
             // Already predicted earlier today (possibly in a previous session).
@@ -7111,7 +7130,7 @@ function catchUpFromCards() {
       var scoredNow = 0;
       cards.forEach(function(c){
         if (!c || !c.runners || !c.runners.length || !c.course || !c.time) return;
-        var rk = ((c.course||'') + '_' + c.time).replace(/\s/g,'_');
+        var rk = raceKeyFor({ course: c.course, time: c.time });
         var runners = c.runners.map(bfRunnerToAppRunner);
         var mn = c.marketName || '';
         var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
