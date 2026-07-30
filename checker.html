@@ -1552,16 +1552,27 @@ function getProxyBase() {
   return 'https://odds.formintel.co.uk';  // sensible default
 }
 
+// Identify a race by course+date+time rather than raceKey. Older raceKeys were
+// just course_time with no date, so at a multi-day meeting yesterday's race and
+// today's shared a key — and this merge silently discarded today's as a
+// duplicate. course+date+time is unique regardless of key format.
+function raceIdent(e) {
+  if (!e) return '';
+  if (e.course && e.date && e.time) return e.course + '|' + e.date + '|' + e.time;
+  return e.raceKey || '';
+}
+
 function mergeServerLog(serverRaces) {
   if (!Array.isArray(serverRaces) || !serverRaces.length) return 0;
   var local = Array.isArray(loadedLog) ? loadedLog.slice() : [];
   var seen = {};
-  local.forEach(function(e){ if (e && e.raceKey) seen[e.raceKey] = true; });
+  local.forEach(function(e){ var id = raceIdent(e); if (id) seen[id] = true; });
   var added = 0;
   serverRaces.forEach(function(e){
-    if (!e || !e.raceKey) return;
-    if (seen[e.raceKey]) return;      // already have it locally — keep local copy
-    local.push(e); seen[e.raceKey] = true; added++;
+    var id = raceIdent(e);
+    if (!id) return;
+    if (seen[id]) return;             // already have it locally — keep local copy
+    local.push(e); seen[id] = true; added++;
   });
   if (added) {
     loadedLog = local;
