@@ -6117,6 +6117,7 @@ function saveRaceResult(raceKey) {
     favOdds:       fav ? fav.odds : 0,
     favWon:        favWon,
     cls:           (S.sel && S.sel.cls) || 0,
+    fieldSize:     fieldSize,
     napName:       (S._logRace && S._logRace.napName) || '',
     napWon:        !!(S._logRace && S._logRace.napName && actual[0] === S._logRace.napName),
     valuePick:      S._logValuePick ? S._logValuePick.name : '',
@@ -6908,7 +6909,7 @@ function logResultHeadless(race, lock, resultObj) {
     topPickWon:topPickWon, topPickPlaced:topPickPlaced, anyTop3Placed:anyTop3,
     winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
     favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
-    cls:lock.cls||0, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
+    cls:lock.cls||0, fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
     valuePick:      lock.valuePick ? lock.valuePick.name : '',
     valuePickOdds:  lock.valuePick ? lock.valuePick.odds : 0,
     valuePickEdge:  lock.valuePick ? lock.valuePick.edge : 0,
@@ -7132,10 +7133,89 @@ function catchUpFromCards() {
     .catch(function(){ return 0; });
 }
 
+// ── Nap of the Day — one per racecourse, chosen headlessly ───────────────────
+// The Nap used to be picked only while the Placepot screen was open for a
+// loaded meeting, and was stored per course ('rp_nap_<date>_<course>'), so each
+// meeting got its own Nap. Once the automatic sweep took over, that screen
+// stopped being opened per meeting, so no Nap was ever locked and every logged
+// race recorded napName:'' — which is why the Nap tab went blank after 27 July.
+//
+// Selection uses ONLY pre-race data (model score + snapshot odds), never
+// results, so computing it later in the day gives the same answer it would
+// have given in the morning. Locked once per course per day so it can't drift.
+function napDayKey(course){
+  return 'rp_napday_' + new Date().toISOString().slice(0,10) + '_' +
+         String(course || 'unknown').replace(/[^a-z0-9]/gi,'_');
+}
+
+function ensureNapForToday() {
+  try {
+    var locks = plockAll();
+    // Group today's locked races by course
+    var byCourse = {};
+    Object.keys(locks).forEach(function(rk){
+      var L = locks[rk];
+      if (!L || !L.preds || !L.preds.length) return;
+      var c = L.course || '';
+      if (!c) return;
+      if (!byCourse[c]) byCourse[c] = [];
+      byCourse[c].push({ raceKey: rk, lock: L });
+    });
+
+    var chosen = [];
+    Object.keys(byCourse).forEach(function(course){
+      var key = napDayKey(course);
+      var existing = null;
+      try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){}
+
+      if (!existing || !existing.name) {
+        var best = null;
+        byCourse[course].forEach(function(item){
+          var L = item.lock, p = L.preds[0];
+          if (!p || !p.name || !(p.odds > 1)) return;    // needs a real price
+          if ((L.fieldSize || 0) < 4) return;            // skip tiny fields
+          var gap = p.score - (L.preds[1] ? L.preds[1].score : 0);
+          var cand = { raceKey:item.raceKey, course:course, time:L.time||'',
+                       name:p.name, odds:p.odds, score:p.score, gap:gap };
+          // Highest confidence at this meeting, tie-broken by margin over 2nd.
+          if (!best || cand.score > best.score ||
+              (cand.score === best.score && cand.gap > best.gap)) best = cand;
+        });
+        if (!best) return;
+        existing = best;
+        try { localStorage.setItem(key, JSON.stringify(existing)); } catch(e){}
+      }
+
+      // Stamp it on the race's lock so logging records it from here on.
+      if (locks[existing.raceKey] && locks[existing.raceKey].napName !== existing.name) {
+        locks[existing.raceKey].napName = existing.name;
+      }
+      chosen.push(existing);
+    });
+
+    if (chosen.length) {
+      try { localStorage.setItem(plockKey(), JSON.stringify(locks)); } catch(e){}
+      // Backfill the log for any of those races already logged today.
+      var log = getPredLog(), changed = false;
+      log.forEach(function(e){
+        chosen.forEach(function(n){
+          if (e.raceKey !== n.raceKey || e.napName === n.name) return;
+          e.napName = n.name;
+          e.napWon  = !!(e.actual && e.actual[0] === n.name);
+          changed = true;
+        });
+      });
+      if (changed) savePredLog(log);
+    }
+    return chosen;
+  } catch(e) { return []; }
+}
+
 // One pass: catch up on missed races first, then sweep today's open markets.
 function fullSweep(force) {
   return catchUpFromCards().then(function(caught){
     return autoPredictAllMeetings(force).then(function(built){
+      try { ensureNapForToday(); } catch(e){}
       if (caught) { try { syncResults(false); } catch(e){} }
       // ALWAYS try a push at the end of a sweep, not just when this session
       // happened to log something new. Previously the only push triggers were
