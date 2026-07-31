@@ -2365,24 +2365,48 @@ function renderNapTab() {
   h += '</div>';
 
   // ── Day-by-day list ──
-  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">📅 NAP BY DAY</div>';
-  naps.slice(0, 60).forEach(function(n){
-    var col = n.won ? 'var(--g)' : n.placed ? 'var(--gold)' : 'var(--re)';
-    var badge = n.won ? '✓ WON' : n.placed ? 'PLACED' : 'LOST';
-    // Winning naps get a filled green badge + subtly tinted row so they're
-    // unmistakable at a glance (green text alone reads too close to gold).
-    var rowBg = n.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
-    var badgeStyle = n.won
-      ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.66rem'
-      : 'font-family:var(--mono);font-size:.7rem;font-weight:700;color:' + col;
-    h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
-    h += '<div><div style="font-size:.76rem;color:var(--tx);font-weight:600">' + n.name + (n.hasOdds ? ' <span style="color:var(--mt);font-weight:400">@' + n.odds.toFixed(2) + '</span>' : '') + '</div>';
-    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + n.date + ' · ' + n.course + ' ' + n.time + '</div></div>';
-    h += '<div style="text-align:right"><div style="' + badgeStyle + '">' + badge + '</div>';
-    if (n.hasOdds) h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + (n.pl>=0?'var(--g)':'var(--re)') + ';margin-top:3px">' + (n.pl>=0?'+':'') + '£' + n.pl.toFixed(2) + '</div>';
-    h += '</div></div>';
+  // ── Naps grouped by day ──
+  // One nap per racecourse per day, grouped under each date with that day's
+  // record, so you can see "the best of each track" and how the day went.
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">📅 NAPS BY DAY</div>';
+
+  var byDay = {};
+  naps.forEach(function(n){ (byDay[n.date] = byDay[n.date] || []).push(n); });
+  var days = Object.keys(byDay).sort().reverse();
+
+  days.slice(0, 30).forEach(function(day){
+    var list = byDay[day].slice().sort(function(a,b){ return a.time < b.time ? -1 : 1; });
+    var dWon = list.filter(function(n){ return n.won; }).length;
+    var dPl  = list.filter(function(n){ return n.placed; }).length;
+    var dPriced = list.filter(function(n){ return n.hasOdds; });
+    var dProfit = dPriced.reduce(function(s2,n){ return s2 + n.pl; }, 0);
+    var dCol = dProfit > 0 ? 'var(--g)' : dProfit < 0 ? 'var(--re)' : 'var(--mt)';
+
+    // Day header with that day's record
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--bd)">';
+    h += '<div style="font-family:var(--mono);font-size:.68rem;color:var(--tx);font-weight:700">' + day + '</div>';
+    h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">'
+       + dWon + '/' + list.length + ' won' + (dPl ? ' · ' + dPl + ' placed' : '')
+       + (dPriced.length ? ' · <span style="color:' + dCol + '">' + (dProfit>=0?'+':'') + '£' + dProfit.toFixed(2) + '</span>' : '')
+       + '</div></div>';
+
+    list.forEach(function(n){
+      var col = n.won ? 'var(--g)' : n.placed ? 'var(--gold)' : 'var(--re)';
+      var badge = n.won ? '✓ WON' : n.placed ? 'PLACED' : 'LOST';
+      var rowBg = n.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+      var badgeStyle = n.won
+        ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
+        : 'font-family:var(--mono);font-size:.68rem;font-weight:700;color:' + col;
+      h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">';
+      h += '<div><div style="font-size:.74rem;color:var(--tx);font-weight:600">' + n.name
+         + (n.hasOdds ? ' <span style="color:var(--mt);font-weight:400">@' + n.odds.toFixed(2) + '</span>' : '') + '</div>';
+      h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + n.time + ' ' + n.course + '</div></div>';
+      h += '<div style="text-align:right"><div style="' + badgeStyle + '">' + badge + '</div>';
+      if (n.hasOdds) h += '<div style="font-family:var(--mono);font-size:.6rem;color:' + (n.pl>=0?'var(--g)':'var(--re)') + ';margin-top:3px">' + (n.pl>=0?'+':'') + '£' + n.pl.toFixed(2) + '</div>';
+      h += '</div></div>';
+    });
   });
-  if (naps.length > 60) h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:8px">Showing latest 60 of ' + naps.length + '</div>';
+  if (days.length > 30) h += '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:8px">Showing latest 30 days of ' + days.length + '</div>';
 
   // ── Per-course top pick (the strongest selection at each meeting) ──
   // Derived from the full log, so it covers every course on every day —
