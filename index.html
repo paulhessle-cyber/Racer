@@ -7187,6 +7187,38 @@ function ensureNapForToday() {
       var existing = null;
       try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){}
 
+      // The app's own pick always wins, even if we previously stored a computed
+      // one — otherwise a wrong Nap written earlier today would stick forever.
+      if (existing && existing.name && !existing.fromApp) existing = null;
+
+      // FIRST: use the Nap the app itself already chose for this course.
+      // The app picks its Nap with a composite "best of the day" score plus
+      // beaten-favourite overrides, and stores it under 'rp_nap_<date>_<course>'.
+      // This function used to ignore that and pick by raw confidence instead,
+      // so the Nap that got LOGGED was a different horse in a different race
+      // from the one shown on screen that morning. Always defer to the app's
+      // choice; only compute one if the app hasn't made a pick for this course.
+      if (!existing || !existing.name) {
+        try {
+          var appKey = 'rp_nap_' + new Date().toISOString().slice(0,10) + '_' +
+                       String(course).replace(/[^a-z0-9]/gi,'_');
+          var appNap = JSON.parse(localStorage.getItem(appKey) || 'null');
+          if (appNap && appNap.name && appNap.time) {
+            // Find the locked race matching that course + off-time
+            var match = byCourse[course].filter(function(it){
+              return (it.lock.time || '') === appNap.time;
+            })[0];
+            if (match) {
+              existing = { raceKey: match.raceKey, course: course, time: appNap.time,
+                           name: appNap.name,
+                           odds: (match.lock.preds.filter(function(p){ return p.name === appNap.name; })[0] || {}).odds || 0,
+                           score: appNap.conf1 || 0, gap: appNap.gap || 0, fromApp: true };
+              try { localStorage.setItem(key, JSON.stringify(existing)); } catch(e){}
+            }
+          }
+        } catch(e){}
+      }
+
       if (!existing || !existing.name) {
         var best = null;
         byCourse[course].forEach(function(item){
@@ -7214,15 +7246,36 @@ function ensureNapForToday() {
 
     if (chosen.length) {
       try { localStorage.setItem(plockKey(), JSON.stringify(locks)); } catch(e){}
-      // Backfill the log for any of those races already logged today.
+      // Backfill the log for any of those races already logged today, and
+      // clear any stale nap tag left on a race that is no longer the Nap for
+      // its course (otherwise a wrong pick made earlier today lingers).
+      var today = new Date().toISOString().slice(0,10);
+      var chosenByCourse = {};
+      chosen.forEach(function(n){ chosenByCourse[n.course] = n; });
+
+      // Clear stale napName on today's locks
+      Object.keys(locks).forEach(function(rk){
+        var L = locks[rk];
+        if (!L || !L.napName) return;
+        var pick = chosenByCourse[L.course || ''];
+        if (pick && rk !== pick.raceKey) L.napName = '';
+      });
+      try { localStorage.setItem(plockKey(), JSON.stringify(locks)); } catch(e){}
+
       var log = getPredLog(), changed = false;
       log.forEach(function(e){
-        chosen.forEach(function(n){
-          if (e.raceKey !== n.raceKey || e.napName === n.name) return;
-          e.napName = n.name;
-          e.napWon  = !!(e.actual && e.actual[0] === n.name);
-          changed = true;
-        });
+        if ((e.date || '') !== today) return;
+        var pick = chosenByCourse[e.course || ''];
+        if (!pick) return;
+        if (e.raceKey === pick.raceKey) {
+          if (e.napName !== pick.name) {
+            e.napName = pick.name;
+            e.napWon  = !!(e.actual && e.actual[0] === pick.name);
+            changed = true;
+          }
+        } else if (e.napName) {
+          e.napName = ''; e.napWon = false; changed = true;
+        }
       });
       if (changed) savePredLog(log);
     }
