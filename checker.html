@@ -337,6 +337,108 @@ function renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) {
   h += buildPnlCurve(sorted, function(e){ return e.topPickWon; }, function(e){ return e.topPickOdds||0; });
   h += '</div>';
 
+  h += renderMonthlyTable(sorted);
+
+  return h;
+}
+
+// ── Monthly performance table ────────────────────────────────────────────────
+// Month-by-month win/place/loss split and flat £1 P&L, so you can see whether
+// the model is actually improving rather than judging it on a single day.
+function renderMonthlyTable(rows) {
+  var priced = (rows || []).filter(function(e){ return e && e.date && (e.topPickOdds || 0) > 1; });
+  if (priced.length < 20) return '';
+
+  var byMonth = {};
+  priced.forEach(function(e){
+    var m = String(e.date).slice(0,7);
+    if (!byMonth[m]) byMonth[m] = { n:0, w:0, p:0, ret:0 };
+    var b = byMonth[m];
+    b.n++;
+    if (e.topPickWon) { b.w++; b.ret += (e.topPickOdds || 0); }
+    else if (e.topPickPlaced) { b.p++; }
+  });
+
+  var months = Object.keys(byMonth).sort();
+  if (months.length < 2) return '';
+
+  // Format money with the sign OUTSIDE the £, so a loss reads -£2.00 not £-2.00
+  function money(v){ return (v < 0 ? '-£' : '+£') + Math.abs(v).toFixed(2); }
+
+  var MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function label(m){
+    var parts = m.split('-');
+    return (MN[parseInt(parts[1],10)-1] || m) + ' ' + parts[0];
+  }
+
+  // Best/worst ROI months for highlighting
+  var rois = months.map(function(m){ var b=byMonth[m]; return (b.ret-b.n)/b.n*100; });
+  var bestRoi = Math.max.apply(null, rois), worstRoi = Math.min.apply(null, rois);
+
+  var h = '<div class="chart-wrap">';
+  h += '<div class="chart-title">Monthly Performance — Is The Model Improving?</div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.62rem">';
+  h += '<tr style="color:var(--mt);text-align:right">'
+     + '<th style="text-align:left;padding:6px 4px;font-weight:400">Month</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Races</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Won</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Plc</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Lost</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Win%</th>'
+     + '<th style="padding:6px 4px;font-weight:400">£1 P/L</th>'
+     + '<th style="padding:6px 4px;font-weight:400">ROI</th></tr>';
+
+  var tn=0, tw=0, tp=0, tret=0;
+  months.forEach(function(m){
+    var b = byMonth[m];
+    var lost = b.n - b.w - b.p;
+    var pl = b.ret - b.n;
+    var roi = pl / b.n * 100;
+    tn+=b.n; tw+=b.w; tp+=b.p; tret+=b.ret;
+    var plCol = pl >= 0 ? 'var(--g)' : 'var(--re)';
+    // subtle highlight on the best and worst months
+    var bg = (roi === bestRoi) ? 'rgba(0,230,118,0.07)' : (roi === worstRoi) ? 'rgba(255,82,82,0.06)' : 'transparent';
+    h += '<tr style="text-align:right;border-top:1px solid var(--bd);background:' + bg + '">'
+       + '<td style="text-align:left;padding:7px 4px;color:var(--tx);font-weight:600">' + label(m) + '</td>'
+       + '<td style="padding:7px 4px;color:var(--mt)">' + b.n + '</td>'
+       + '<td style="padding:7px 4px;color:var(--g)">' + b.w + '</td>'
+       + '<td style="padding:7px 4px;color:var(--gold)">' + b.p + '</td>'
+       + '<td style="padding:7px 4px;color:var(--mt)">' + lost + '</td>'
+       + '<td style="padding:7px 4px;color:var(--tx)">' + (b.w/b.n*100).toFixed(1) + '%</td>'
+       + '<td style="padding:7px 4px;color:' + plCol + '">' + money(pl) + '</td>'
+       + '<td style="padding:7px 4px;color:' + plCol + ';font-weight:700">' + (roi>=0?'+':'') + roi.toFixed(1) + '%</td></tr>';
+  });
+
+  var tpl = tret - tn, troi = tpl / tn * 100;
+  var tCol = tpl >= 0 ? 'var(--g)' : 'var(--re)';
+  h += '<tr style="text-align:right;border-top:2px solid var(--bd)">'
+     + '<td style="text-align:left;padding:7px 4px;color:var(--tx);font-weight:700">All</td>'
+     + '<td style="padding:7px 4px;color:var(--mt)">' + tn + '</td>'
+     + '<td style="padding:7px 4px;color:var(--g)">' + tw + '</td>'
+     + '<td style="padding:7px 4px;color:var(--gold)">' + tp + '</td>'
+     + '<td style="padding:7px 4px;color:var(--mt)">' + (tn-tw-tp) + '</td>'
+     + '<td style="padding:7px 4px;color:var(--tx)">' + (tw/tn*100).toFixed(1) + '%</td>'
+     + '<td style="padding:7px 4px;color:' + tCol + '">' + money(tpl) + '</td>'
+     + '<td style="padding:7px 4px;color:' + tCol + ';font-weight:700">' + (troi>=0?'+':'') + troi.toFixed(1) + '%</td></tr>';
+  h += '</table></div>';
+
+  // Trend read-out: compare the most recent full-ish month against the first
+  if (months.length >= 3) {
+    var firstRoi = rois[0], lastRoi = rois[rois.length-1];
+    var firstWin = byMonth[months[0]].w / byMonth[months[0]].n * 100;
+    var lastWin  = byMonth[months[months.length-1]].w / byMonth[months[months.length-1]].n * 100;
+    var dRoi = lastRoi - firstRoi, dWin = lastWin - firstWin;
+    var arrow = dRoi > 0 ? '▲' : dRoi < 0 ? '▼' : '■';
+    var col = dRoi > 0 ? 'var(--g)' : dRoi < 0 ? 'var(--re)' : 'var(--mt)';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding:10px 4px 2px;line-height:1.6">'
+       + '<span style="color:' + col + ';font-weight:700">' + arrow + ' ' + label(months[0]) + ' → ' + label(months[months.length-1]) + '</span>'
+       + '&nbsp; win rate ' + (dWin>=0?'+':'') + dWin.toFixed(1) + ' pts'
+       + ' · ROI ' + (dRoi>=0?'+':'') + dRoi.toFixed(1) + ' pts<br>'
+       + 'Note: months with few races swing wildly — judge the trend on months with 300+ races.'
+       + '</div>';
+  }
+
+  h += '</div>';
   return h;
 }
 
