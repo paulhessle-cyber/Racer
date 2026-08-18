@@ -2901,6 +2901,108 @@ function row(label, val) {
   return '<div class="rd"><span>' + label + '</span><span>' + val + '</span></div>';
 }
 
+// ── Per-horse write-up ───────────────────────────────────────────────────────
+// A few plain-English lines explaining WHY a horse is rated where it is.
+// Everything here comes from data already computed for the prediction — no new
+// lookups, so it can't disagree with the score shown.
+function buildHorseNote(r, race, scored) {
+  var L = [];
+
+  // --- Class move -----------------------------------------------------------
+  var thisCls = (race && race.cls) || (S.sel && S.sel.cls) || 0;
+  if (r._bfAlert && r._bfDrop) {
+    L.push('⬇ <b>Class drop</b> — beaten favourite in a stronger race' +
+           (r._bfCourse ? ' at ' + esc(r._bfCourse) : '') +
+           (r._bfDays ? ' ' + r._bfDays + ' days ago' : '') + ', now dropped in grade. Often overpriced.');
+  } else if (r._bfAlert) {
+    L.push('👀 <b>Beaten favourite</b>' + (r._bfCourse ? ' at ' + esc(r._bfCourse) : '') +
+           (r._bfDays ? ' ' + r._bfDays + ' days ago' : '') +
+           (r._bfPos ? ' (finished ' + r._bfPos + ')' : '') + ' — well fancied last time and failed.');
+  } else if (thisCls) {
+    L.push('Running in <b>Class ' + thisCls + '</b>. No recent beaten-favourite flag.');
+  }
+
+  // --- Current form ---------------------------------------------------------
+  var f = (r.form || '').replace(/[^0-9PUFR\-\/]/gi, '');
+  if (f) {
+    var recent = f.slice(-5);
+    var digits = recent.split('').filter(function(c){ return /[0-9]/.test(c); }).map(Number);
+    var wins = digits.filter(function(n){ return n === 1; }).length;
+    var plcs = digits.filter(function(n){ return n >= 2 && n <= 3; }).length;
+    var trend = '';
+    if (digits.length >= 3) {
+      var firstHalf = digits.slice(0, Math.floor(digits.length/2));
+      var lastHalf  = digits.slice(-Math.floor(digits.length/2));
+      var avg = function(a){ return a.reduce(function(x,y){return x+y;},0)/Math.max(a.length,1); };
+      // lower finishing position = better, so a FALLING average is improving
+      if (avg(lastHalf) < avg(firstHalf) - 0.4) trend = ' — <b>improving</b>';
+      else if (avg(lastHalf) > avg(firstHalf) + 0.4) trend = ' — <b>regressing</b>';
+      else trend = ' — holding form';
+    }
+    L.push('📋 <b>Form</b> ' + esc(recent) + trend +
+           (wins ? ' · ' + wins + ' win' + (wins>1?'s':'') : '') +
+           (plcs ? ' · ' + plcs + ' placed' : '') +
+           (r.daysSince != null ? ' · ' + r.daysSince + ' days since last run' : ''));
+  } else {
+    L.push('📋 <b>Form</b> — no recent figures available for this horse.');
+  }
+
+  // --- Jockey ---------------------------------------------------------------
+  var jn = (r.jockey || '').replace(/\s*\(\d+\)/,'').trim();
+  if (jn) {
+    var jkey = jn.toLowerCase();
+    var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[jkey] : null;
+    if (js && js.r >= 20) {
+      var sr = js.w / js.r * 100;
+      var verdict = sr >= 18 ? 'in strong form' : sr >= 13 ? 'around average' : 'below average';
+      L.push('🏇 <b>' + esc(jn) + '</b> — ' + sr.toFixed(0) + '% strike rate from ' +
+             js.r + ' rides, ' + verdict + '.' + (r.claim ? ' Claims ' + r.claim + 'lb.' : ''));
+    } else {
+      L.push('🏇 <b>' + esc(jn) + '</b> — not enough rides in the model to judge form.');
+    }
+  }
+
+  // --- Trainer --------------------------------------------------------------
+  var tn = (r.trainer || '').trim();
+  if (tn) {
+    var tm = trainerMultiplier(tn);
+    var tv = tm >= 1.08 ? 'elite yard' : tm >= 1.03 ? 'strong yard' : tm <= 0.95 ? 'lower-tier yard' : 'mid-tier yard';
+    L.push('🎩 <b>' + esc(tn) + '</b> — ' + tv + '.');
+  }
+
+  // --- Market vs model ------------------------------------------------------
+  if (r.odds > 1) {
+    var mkt = 1 / r.odds * 100;
+    var mdl = r.score * 100;
+    var diff = mdl - mkt;
+    if (diff > 8) {
+      L.push('⚠️ <b>Model rates this well above the market</b> (' + mdl.toFixed(0) + '% vs ' +
+             mkt.toFixed(0) + '%). In your logged results that gap has been a <b>losing</b> signal — treat with caution.');
+    } else if (diff < -8) {
+      L.push('📉 Market rates this higher than the model (' + mkt.toFixed(0) + '% vs ' + mdl.toFixed(0) + '%).');
+    } else {
+      L.push('✅ Model and market broadly agree (' + mdl.toFixed(0) + '% vs ' + mkt.toFixed(0) + '%) — historically the more reliable zone.');
+    }
+  }
+
+  // --- Draw / pace ----------------------------------------------------------
+  var extras = [];
+  if (r._pace === 'front') extras.push('likely to lead');
+  else if (r._pace === 'closer') extras.push('held-up runner');
+  if (r.stall) extras.push('drawn ' + r.stall);
+  if (r._mv === 'steam') extras.push('odds shortening');
+  else if (r._mv === 'drift') extras.push('odds drifting');
+  if (extras.length) L.push('🏁 ' + extras.join(' · ') + '.');
+
+  return L;
+}
+
+function toggleHorseNote(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+}
+
 function showResults(scored, val, race, paceInfo) {
   // Store for stake refresh
   S._lastScored    = scored;
@@ -3107,10 +3209,13 @@ function showResults(scored, val, race, paceInfo) {
     else if (r._mv === 'steam') explainParts.push('Steaming ↑');
     else if (r._mv === 'drift') explainParts.push('Drifting ↓');
     var explainStr = explainParts.slice(0,4).join(' · ');
-    h += '<div class="rrr ' + pc + '">'
+    var noteId = 'hnote_' + i;
+    var noteLines = buildHorseNote(r, race, scored);
+    h += '<div class="rrr ' + pc + '" onclick="toggleHorseNote(\'' + noteId + '\')" style="cursor:pointer">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert + '</div>'
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert
+          + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
@@ -3118,6 +3223,10 @@ function showResults(scored, val, race, paceInfo) {
         + '<div class="ro2">' + (r.odds > 0 ? r.odds.toFixed(1) : '—') + '</div>'
         + '<div class="rsc">' + Math.round(r.score * 100) + '%</div>'
       + '</div></div>';
+    h += '<div id="' + noteId + '" style="display:none;background:var(--sf2);border:1px solid var(--bd);border-top:none;'
+       + 'border-radius:0 0 8px 8px;padding:10px 12px;margin:-4px 0 8px;font-size:.68rem;line-height:1.75;color:var(--tx)">'
+       + noteLines.map(function(ln){ return '<div style="margin-bottom:3px">' + ln + '</div>'; }).join('')
+       + '</div>';
   });
   h += '</div>';
 
