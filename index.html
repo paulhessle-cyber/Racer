@@ -660,6 +660,11 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       </div>
     </div>
 
+    <button class="btn" style="width:100%;margin:8px 0 0;padding:10px 12px;background:rgba(68,138,255,.12);
+      border:1px solid rgba(68,138,255,.35);color:var(--bl);font-weight:600"
+      onclick="runConfidencePredictor()">🎯 Confidence Predictor</button>
+
+    <div id="conf-results"></div>
     <div id="l15-results"></div>
   </div>
 </div>
@@ -5211,6 +5216,140 @@ function renderAnalysis(a) {
   return '<div class="ai-card" style="margin-top:10px"><div class="ct">Second Opinion</div>' + h + '</div>';
 }
 // ══════════════════════════════════════════════════════════
+// ── CONFIDENCE PREDICTOR ──────────────────────────────────
+// Scans EVERY race across all loaded meetings and lists the horses the model
+// separates most clearly from their nearest rival. Qualifying rule: the gap
+// between the top-rated horse and the second must be GREATER than 20
+// percentage points (so 44% vs 19% = 25pt gap qualifies; 30% vs 10% = 20pt
+// does not). Up to 10, ordered by the horse's own confidence, highest first.
+// If only 3 qualify, it shows 3 — it never pads the list.
+var CONF_GAP_MIN = 20;   // percentage points, must be EXCEEDED
+var CONF_MAX     = 10;
+
+function computeConfidencePicks() {
+  var meetings = S.meetings || [];
+  var out = [];
+
+  meetings.forEach(function(meeting) {
+    (meeting.races || []).forEach(function(race) {
+      var active = (race.runners || []).filter(function(r){ return !r._nr; });
+      if (active.length < 2) return;
+
+      // Same scoring path the Placepot/L15 use, so the numbers agree with
+      // what's already on screen.
+      var ctx      = buildFieldCtx(active);
+      var paceInfo = assessPace(active);
+      var going    = (typeof getL15Going === 'function') ? getL15Going(race) : '';
+      var formArr  = active.map(function(r) {
+        var raw;
+        try {
+          raw = S.model ? rawScoreMdl(Object.assign({}, r, {going: going}), race, ctx)
+                        : rawScoreDef(Object.assign({}, r, {going: going}), race, ctx);
+        } catch(err) { raw = 0.01; }
+        return raw * paceAdjust(r, paceInfo);
+      });
+      var formTotal = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
+      var formNorm  = formArr.map(function(f){ return f/formTotal; });
+      var oddsAvail = active.filter(function(r){ return r.odds > 0; }).length;
+      var mktW = oddsAvail === 0 ? 0.0 : oddsAvail < active.length*0.5 ? 0.25 : 0.40;
+      var blended = active.map(function(r,i){
+        var mkt = (r._mktProb !== undefined) ? r._mktProb : impliedShare(r.odds, ctx.odds);
+        return mkt*mktW + formNorm[i]*(1.0-mktW);
+      });
+      var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
+      var probs = powerScaleProbs(blended.map(function(b){ return b/bt; }));
+
+      // Rank this race
+      var ranked = active.map(function(r,i){ return { r:r, p:probs[i] }; })
+                         .sort(function(a,b){ return b.p - a.p; });
+      var top = ranked[0], second = ranked[1];
+      if (!top || !second) return;
+
+      var topPct = top.p * 100, secPct = second.p * 100;
+      var gap = topPct - secPct;
+      if (!(gap > CONF_GAP_MIN)) return;    // strictly greater than 20 points
+
+      out.push({
+        name:    top.r.name,
+        jockey:  (top.r.jockey || '').replace(/\s*\(\d+\)/,''),
+        odds:    top.r.odds || 0,
+        pct:     topPct,
+        nextName: second.r.name,
+        nextPct: secPct,
+        gap:     gap,
+        course:  meeting.course,
+        time:    race.time,
+        dist:    race.dist || '',
+        runners: active.length
+      });
+    });
+  });
+
+  // Order by the horse's own confidence, highest first
+  out.sort(function(a,b){ return b.pct - a.pct; });
+  return out.slice(0, CONF_MAX);
+}
+
+function runConfidencePredictor() {
+  var el = document.getElementById('conf-results');
+  if (!el) return;
+  var meetings = S.meetings || [];
+  if (!meetings.length) {
+    el.innerHTML = '<div class="al alw" style="margin-top:10px">Load some meetings first — the Confidence Predictor scans every race you have loaded.</div>';
+    return;
+  }
+
+  var picks = computeConfidencePicks();
+  var totalRaces = meetings.reduce(function(n,m){ return n + ((m.races||[]).length); }, 0);
+
+  var h = '<div class="card" style="margin-top:10px;padding:14px 16px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+     + '<div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">🎯 Confidence Predictor</div>'
+     + '<div class="mpill ok">' + picks.length + ' qualified</div></div>';
+  h += '<div style="font-size:.68rem;color:var(--mt);margin-bottom:12px;line-height:1.5">'
+     + 'Horses rated more than ' + CONF_GAP_MIN + " points clear of the next in their race. Scanned "
+     + totalRaces + ' race' + (totalRaces!==1?'s':'') + ' across ' + meetings.length + ' meeting'
+     + (meetings.length!==1?'s':'') + '.</div>';
+
+  if (!picks.length) {
+    h += '<div class="al alw" style="margin:0">No horse today is more than ' + CONF_GAP_MIN
+       + ' points clear of its nearest rival. Nothing qualifies — the list is deliberately left empty '
+       + 'rather than padded with weaker selections.</div></div>';
+    el.innerHTML = h;
+    return;
+  }
+
+  picks.forEach(function(p, i) {
+    var strong = p.gap >= 30;
+    var col = strong ? 'var(--g)' : 'var(--bl)';
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;'
+       + (i ? 'border-top:1px solid var(--bd);' : '') + '">';
+    h += '<div style="font-family:var(--mono);font-size:1.05rem;font-weight:700;color:' + col + ';min-width:22px">' + (i+1) + '</div>';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="font-size:.86rem;font-weight:700;color:var(--tx)">' + p.name
+       + (p.odds > 1 ? ' <span style="color:var(--mt);font-weight:400;font-size:.72rem">@' + p.odds.toFixed(1) + '</span>' : '')
+       + (strong ? ' <span class="mk" style="background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.4)">STRONG</span>' : '')
+       + '</div>';
+    h += '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">' + p.time + ' ' + esc(p.course)
+       + (p.dist ? ' · ' + p.dist : '') + ' · ' + p.runners + ' runners'
+       + (p.jockey ? ' · ' + esc(p.jockey) : '') + '</div>';
+    h += '<div style="font-size:.6rem;color:var(--mt);margin-top:3px">next best: ' + esc(p.nextName)
+       + ' ' + p.nextPct.toFixed(0) + '%</div>';
+    h += '</div>';
+    h += '<div style="text-align:right;min-width:62px">'
+       + '<div style="font-family:var(--mono);font-size:1.05rem;font-weight:700;color:' + col + '">' + p.pct.toFixed(0) + '%</div>'
+       + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">+' + p.gap.toFixed(0) + ' pts</div>'
+       + '</div>';
+    h += '</div>';
+  });
+
+  h += '<div style="font-size:.6rem;color:var(--mt);margin-top:10px;line-height:1.5;border-top:1px solid var(--bd);padding-top:8px">'
+     + 'A wide gap means the model separates this horse clearly from its rivals — it does not mean the price is generous. '
+     + 'Check the odds before backing.</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
 // ── LUCKY 15 + MONTE CARLO ────────────────────────────────
 // ══════════════════════════════════════════════════════════
 
