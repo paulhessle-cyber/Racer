@@ -1145,6 +1145,103 @@ function closeModal() {
 }
 
 // ── Render Bets tab ───────────────────────────────────
+// ── Auto-settle bets from the results log ────────────────────────────────────
+// Bet legs store a horse name; loadedLog already knows every race's winner and
+// placed horses. So instead of tapping Won/Placed/Lost on each leg by hand, we
+// match names and fill the results in. Only touches legs still 'pending' — a
+// result you set yourself is never overwritten.
+function normHorse(n) {
+  return String(n || '')
+    .toUpperCase()
+    .replace(/\s*\([A-Z]{2,3}\)\s*$/,'')   // strip country suffix (IRE), (FR)
+    .replace(/[^A-Z0-9]/g,'')                // punctuation/apostrophes/spaces
+    .trim();
+}
+
+// Build a lookup of every horse we know a result for.
+// Returns { NORMNAME: {result, date, course, time, placesKnown} }
+function buildResultIndex() {
+  var idx = {};
+  (loadedLog || []).forEach(function(e){
+    var act = e.actual || [];
+    if (!act.length) return;
+    // act[0] is the winner; the rest are placed (order not guaranteed).
+    // With only 1-2 names we know the winner but NOT the full place list.
+    var placesKnown = act.length >= 3;
+    act.forEach(function(nm, i){
+      var k = normHorse(nm);
+      if (!k) return;
+      idx[k] = { result: i === 0 ? 'won' : 'placed', date: e.date || '',
+                 course: e.course || '', time: e.time || '', placesKnown: placesKnown };
+    });
+    // Losers: any runner we predicted that isn't in the result list.
+    (e.predictions || []).forEach(function(p){
+      var k = normHorse(p.name);
+      if (!k || idx[k]) return;
+      // Only safe to call it a loser if we know the full frame
+      if (placesKnown) {
+        idx[k] = { result: 'lost', date: e.date || '', course: e.course || '',
+                   time: e.time || '', placesKnown: true };
+      }
+    });
+  });
+  return idx;
+}
+
+function autoSettleBets(silent) {
+  var log = getBetLog();
+  if (!log.length) { if (!silent) alert('No bets to settle yet.'); return 0; }
+  if (!loadedLog || !loadedLog.length) {
+    if (!silent) alert('Load your results first — the Bets tab settles from the results log.');
+    return 0;
+  }
+
+  var idx = buildResultIndex();
+  var legsFilled = 0, betsChanged = 0, unmatched = [];
+
+  log.forEach(function(bet){
+    var changed = false;
+    (bet.legs || []).forEach(function(leg){
+      if (!leg || !leg.name) return;
+      if (leg.result && leg.result !== 'pending') return;   // never overwrite a manual call
+      var hit = idx[normHorse(leg.name)];
+      if (!hit) { unmatched.push(leg.name); return; }
+      leg.result = hit.result;
+      legsFilled++; changed = true;
+    });
+    if (!changed) return;
+    betsChanged++;
+    // Recompute the bet's standing
+    bet.pending = (bet.legs || []).some(function(l){ return !l.result || l.result === 'pending'; });
+    if (!bet.pending && bet.type === 'l15' && typeof calcL15Return === 'function') {
+      try {
+        bet.actualReturn = calcL15Return(bet.legs, bet.unit, bet.isEW, bet.placeFrac);
+        bet.profit = Math.round((bet.actualReturn - bet.stake) * 100) / 100;
+      } catch(err) {}
+    }
+    // Placepot returns are dividend-based, so they still need entering by hand.
+  });
+
+  if (legsFilled) { saveBetLog(log); renderBets(); }
+
+  if (!silent) {
+    var msg = legsFilled
+      ? ('Settled ' + legsFilled + ' leg' + (legsFilled!==1?'s':'') + ' across ' + betsChanged + ' bet' + (betsChanged!==1?'s':'') + '.')
+      : 'Nothing new to settle.';
+    if (unmatched.length) {
+      var uniq = unmatched.filter(function(v,i,a){ return a.indexOf(v)===i; });
+      msg += '\n\nNot found in results (' + uniq.length + '): ' + uniq.slice(0,6).join(', ')
+           + (uniq.length>6 ? '…' : '')
+           + '\n\nThese are usually races the app never logged, or a spelling difference.';
+    }
+    if (legsFilled && log.some(function(b){ return b.type==='placepot' && !b.pending; })) {
+      msg += '\n\nPlacepot returns are dividend-based — enter those amounts yourself.';
+    }
+    alert(msg);
+  }
+  return legsFilled;
+}
+
 function renderBets() {
   var el = document.getElementById('tab-bets');
   if (!el) return;
@@ -1168,6 +1265,10 @@ function renderBets() {
     + '<span style="font-family:var(--mono);font-size:.65rem;color:var(--mt)">'
     + '📂 Import bet file · <span style="color:var(--green)">tap to load</span></span>'
     + '</label>';
+h += '<button onclick="autoSettleBets(false)" style="width:100%;padding:11px;margin-bottom:12px;border-radius:8px;'
+    + 'border:1px solid rgba(68,138,255,.35);background:rgba(68,138,255,.1);color:var(--blue);'
+    + 'font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">'
+    + '⚡ Auto-settle from results</button>';
 h += '<div style="display:flex;gap:8px;margin-bottom:16px">';
   h += '<button onclick="openAddBet(&apos;l15&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(0,230,118,.3);background:rgba(0,230,118,.1);color:var(--green);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">⚡ + Lucky 15</button>';
   h += '<button onclick="openAddBet(&apos;placepot&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(255,193,7,.3);background:rgba(255,193,7,.08);color:var(--gold);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">🎯 + Placepot</button>';
