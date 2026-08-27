@@ -5230,13 +5230,46 @@ function computeConfidencePicks() {
   var meetings = S.meetings || [];
   var out = [];
 
+  var locks = (typeof plockAll === 'function') ? plockAll() : {};
+
   meetings.forEach(function(meeting) {
     (meeting.races || []).forEach(function(race) {
       var active = (race.runners || []).filter(function(r){ return !r._nr; });
       if (active.length < 2) return;
 
-      // Same scoring path the Placepot/L15 use, so the numbers agree with
-      // what's already on screen.
+      // PREFER THE STORED LOCK. Two reasons:
+      //  1. Races restored from a lock (after the app reopens) carry runners
+      //     with only a name and price — no jockey, OR, form or draw. Rescoring
+      //     those produces near-identical numbers for every horse, so nothing
+      //     ever cleared the 20-point gap. That's why this stopped working.
+      //  2. The lock holds the exact scores the Predict tab showed, so the
+      //     percentages here match what you saw on screen.
+      var lk = locks[raceKeyFor(race)];
+      if (lk && lk.preds && lk.preds.length >= 2) {
+        var p1 = lk.preds[0], p2 = lk.preds[1];
+        var g = (p1.score || 0) - (p2.score || 0);
+        if (g > CONF_GAP_MIN) {
+          out.push({
+            name: p1.name,
+            jockey: '',
+            odds: p1.odds || 0,
+            pct: p1.score || 0,
+            nextName: p2.name,
+            nextPct: p2.score || 0,
+            gap: g,
+            course: meeting.course,
+            time: race.time,
+            dist: race.dist || lk.dist || '',
+            runners: lk.fieldSize || active.length
+          });
+        }
+        return;   // lock is authoritative — don't rescore
+      }
+
+      // No lock yet (race not predicted): fall back to live scoring. Skip
+      // lock-stub races entirely, since their runners have no form data.
+      if (race._fromLock) return;
+
       var ctx      = buildFieldCtx(active);
       var paceInfo = assessPace(active);
       var going    = (typeof getL15Going === 'function') ? getL15Going(race) : '';
