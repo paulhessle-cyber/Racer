@@ -190,6 +190,7 @@
   <button class="tab-btn" onclick="showTab('placepot')">🎯 Placepot</button>
   <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
   <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
+  <button class="tab-btn" onclick="showTab('conf')">🎯 Confidence</button>
 </div>
 
 <div id="app">
@@ -248,7 +249,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -263,6 +264,7 @@ function showTab(tab) {
   if (tab === 'placepot') renderPlacepotTab();
   if (tab === 'dutch') renderDutchTab();
   if (tab === 'nap') renderNapTab();
+  if (tab === 'conf') renderConfTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
@@ -306,7 +308,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-value"></div>' +
     '<div class="tab-content" id="tab-placepot"></div>' +
     '<div class="tab-content" id="tab-dutch"></div>' +
-    '<div class="tab-content" id="tab-nap"></div>';
+    '<div class="tab-content" id="tab-nap"></div>' +
+    '<div class="tab-content" id="tab-conf"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -2506,6 +2509,122 @@ function renderDutchTab() {
 function setDutchCourseFilter(c) {
   _dutchCourseFilter = c;
   renderDutchTab();
+}
+
+// ══ CONFIDENCE PREDICTOR TAB ══════════════════════════════════════════════════
+// Rebuilt from the log rather than needing its own record: a race "qualified"
+// if the model's top pick was more than CONF_GAP points clear of the second,
+// which is exactly the rule the app uses. So this shows full history from day
+// one, not just from when the feature was added.
+var CONF_GAP = 20;
+
+function confGap(e) {
+  var p = e.predictions || [];
+  if (p.length < 2 || p[0].score == null || p[1].score == null) return null;
+  return p[0].score - p[1].score;
+}
+
+function renderConfTab() {
+  var el = document.getElementById('tab-conf');
+  if (!el) return;
+  if (!loadedLog || !loadedLog.length) {
+    el.innerHTML = '<div style="padding:20px;font-family:var(--mono);font-size:.75rem;color:var(--mt)">Load a results JSON to see Confidence Predictor performance.</div>';
+    return;
+  }
+
+  var q = loadedLog.filter(function(e){
+    var g = confGap(e);
+    return g !== null && g > CONF_GAP && (e.topPickOdds || 0) > 1;
+  }).sort(function(a,b){ return (a.date + a.time) < (b.date + b.time) ? 1 : -1; });
+
+  if (!q.length) {
+    el.innerHTML = '<div style="padding:16px"><div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.72rem;color:var(--mt)">'
+      + '<div style="font-size:1.6rem;margin-bottom:8px">🎯</div>No race has yet had a top pick more than ' + CONF_GAP + ' points clear.</div></div>';
+    return;
+  }
+
+  function agg(rows) {
+    var w = rows.filter(function(e){ return e.topPickWon; }).length;
+    var pl = rows.filter(function(e){ return e.topPickPlaced && !e.topPickWon; }).length;
+    var st = 10 * rows.length;
+    var rt = rows.reduce(function(a,e){ return a + (e.topPickWon ? 10 * e.topPickOdds : 0); }, 0);
+    var od = rows.reduce(function(a,e){ return a + e.topPickOdds; }, 0) / rows.length;
+    return { n:rows.length, w:w, pl:pl, staked:st, profit:rt-st, roi:(rt-st)/st*100,
+             strike:w/rows.length*100, avgOdds:od, frame:(w+pl)/rows.length*100 };
+  }
+  var A = agg(q);
+
+  var h = '<div style="padding:16px">';
+
+  // headline
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">';
+  function card(lbl, val, col, sub) {
+    return '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:13px">'
+      + '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:5px">' + lbl + '</div>'
+      + '<div style="font-size:1.35rem;font-weight:700;color:' + col + '">' + val + '</div>'
+      + (sub ? '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px">' + sub + '</div>' : '')
+      + '</div>';
+  }
+  h += card('STRIKE RATE', A.strike.toFixed(1) + '%', 'var(--tx)', A.w + ' of ' + A.n);
+  h += card('£10 LEVEL P/L', (A.profit>=0?'+':'-') + '£' + Math.abs(A.profit).toFixed(2), A.profit>=0?'var(--g)':'var(--re)', '£' + A.staked.toFixed(0) + ' staked');
+  h += card('ROI', (A.roi>=0?'+':'') + A.roi.toFixed(1) + '%', A.roi>=0?'var(--g)':'var(--re)', 'avg odds ' + A.avgOdds.toFixed(2));
+  h += '</div>';
+
+  // the honest read
+  var breakEven = 100 / A.avgOdds;
+  h += '<div style="background:var(--card);border:1px solid ' + (A.roi>=0?'rgba(0,230,118,.35)':'rgba(255,193,7,.35)')
+     + ';border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:.66rem;color:var(--mt);line-height:1.6">'
+     + 'Picks win <b style="color:var(--tx)">' + A.strike.toFixed(0) + '%</b> of the time and hit the frame <b style="color:var(--tx)">'
+     + A.frame.toFixed(0) + '%</b> — but at an average price of <b style="color:var(--tx)">' + A.avgOdds.toFixed(2)
+     + '</b> you need <b style="color:var(--tx)">' + breakEven.toFixed(0) + '%</b> just to break even. '
+     + (A.roi < 0 ? 'A big confidence gap identifies the likely winner, not a generous price.'
+                  : 'Currently clearing that bar.')
+     + '</div>';
+
+  // by gap band — does a wider gap mean a better pick?
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:4px 0 8px">📏 BY CONFIDENCE GAP</div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.62rem">';
+  h += '<tr style="color:var(--mt);text-align:right"><th style="text-align:left;padding:5px 4px;font-weight:400">Gap</th>'
+     + '<th style="padding:5px 4px;font-weight:400">n</th><th style="padding:5px 4px;font-weight:400">Strike</th>'
+     + '<th style="padding:5px 4px;font-weight:400">Avg odds</th><th style="padding:5px 4px;font-weight:400">ROI</th></tr>';
+  [[20,25,'20–25'],[25,30,'25–30'],[30,40,'30–40'],[40,999,'40+']].forEach(function(b){
+    var rows = q.filter(function(e){ var g=confGap(e); return g>=b[0] && g<b[1]; });
+    if (rows.length < 5) return;
+    var a = agg(rows);
+    h += '<tr style="text-align:right;border-top:1px solid var(--bd)">'
+       + '<td style="text-align:left;padding:6px 4px;color:var(--tx);font-weight:600">' + b[2] + ' pts</td>'
+       + '<td style="padding:6px 4px;color:var(--mt)">' + a.n + '</td>'
+       + '<td style="padding:6px 4px;color:var(--tx)">' + a.strike.toFixed(0) + '%</td>'
+       + '<td style="padding:6px 4px;color:var(--mt)">' + a.avgOdds.toFixed(2) + '</td>'
+       + '<td style="padding:6px 4px;font-weight:700;color:' + (a.roi>=0?'var(--g)':'var(--re)') + '">'
+       + (a.roi>=0?'+':'') + a.roi.toFixed(0) + '%</td></tr>';
+  });
+  h += '</table></div>';
+
+  // recent picks
+  h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 8px">🎯 QUALIFIERS</div>';
+  q.slice(0, 60).forEach(function(e){
+    var won = !!e.topPickWon, plc = !won && !!e.topPickPlaced;
+    var col = won ? 'var(--g)' : plc ? 'var(--gold)' : 'var(--re)';
+    var badge = won ? '✓ WON' : plc ? 'PLACED' : 'LOST';
+    var bg = won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+    var bs = won ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.62rem'
+                 : 'font-family:var(--mono);font-size:.66rem;font-weight:700;color:' + col;
+    var pl = won ? (10*e.topPickOdds - 10) : -10;
+    var nm = (e.predictions && e.predictions[0]) ? e.predictions[0].name : '?';
+    h += '<div style="background:' + bg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div style="min-width:0"><div style="font-size:.73rem;color:var(--tx);font-weight:600">' + esc(nm)
+       + ' <span style="color:var(--mt);font-weight:400">@' + e.topPickOdds.toFixed(2) + '</span></div>';
+    h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px">' + (e.date||'') + ' · '
+       + esc(courseName(e.course)) + ' ' + (e.time||'') + ' · +' + confGap(e) + ' pts clear</div></div>';
+    h += '<div style="text-align:right"><div style="' + bs + '">' + badge + '</div>'
+       + '<div style="font-family:var(--mono);font-size:.6rem;color:' + (pl>=0?'var(--g)':'var(--re)') + ';margin-top:3px">'
+       + (pl>=0?'+':'-') + '£' + Math.abs(pl).toFixed(2) + '</div></div></div>';
+  });
+  if (q.length > 60) h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);text-align:center;padding:8px">Showing latest 60 of ' + q.length + '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 // ══ NAP TAB ═══════════════════════════════════════════════════════════════════
