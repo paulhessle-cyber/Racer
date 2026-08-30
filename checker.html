@@ -1602,7 +1602,7 @@ function renderInsights() {
     },
     {
       label: 'Course',
-      fn: function(e){ return e.course || null; },
+      fn: function(e){ return e.course ? courseName(e.course) : null; },
       advice: 'Course win stats (cw) feature — consider course-specific model'
     }
   ];
@@ -1759,6 +1759,25 @@ function getProxyBase() {
 // just course_time with no date, so at a multi-day meeting yesterday's race and
 // today's shared a key — and this merge silently discarded today's as a
 // duplicate. course+date+time is unique regardless of key format.
+// ── Course name canonicalisation ─────────────────────────────────────────────
+// The same track arrives with different spellings depending on source: PDF
+// racecards give "BEVERLEY", Betfair gives "Beverley", and some carry an
+// "(A.W.)" suffix. Grouping on the raw string split 48 courses into two rows
+// each. courseKey() gives one stable key; courseName() gives a tidy label.
+function courseKey(c) {
+  return String(c || 'Unknown')
+    .toUpperCase()
+    .replace(/\(\s*A\.?\s*W\.?\s*\)/g,'')   // drop (A.W.) / (AW)
+    .replace(/[^A-Z0-9]/g,'')                    // punctuation + spaces
+    .trim() || 'UNKNOWN';
+}
+function courseName(c) {
+  var raw = String(c || 'Unknown').replace(/\(\s*A\.?\s*W\.?\s*\)/gi,'').trim();
+  // Title-case so "BEVERLEY" and "Beverley" render identically
+  return raw.toLowerCase().replace(/\b[a-z]/g, function(m){ return m.toUpperCase(); })
+            .replace(/\bAw\b/g,'AW').replace(/\s+/g,' ').trim() || 'Unknown';
+}
+
 function raceIdent(e) {
   if (!e) return '';
   if (e.course && e.date && e.time) return e.course + '|' + e.date + '|' + e.time;
@@ -2245,15 +2264,15 @@ function renderPlacepotTab() {
   // ── Aggregate place-rate by course (summary at top) ──────────────────────
   var courses = {};
   loadedLog.forEach(function(e) {
-    var c = e.course || 'Unknown';
-    if (!courses[c]) courses[c] = { races:0, placed:0, won:0 };
+    var c = courseKey(e.course);
+    if (!courses[c]) courses[c] = { races:0, placed:0, won:0, label: courseName(e.course) };
     courses[c].races++;
     if (e.topPickWon || e.topPickPlaced) courses[c].placed++;
     if (e.topPickWon) courses[c].won++;
   });
   var courseList = Object.keys(courses).map(function(c){
     var d = courses[c];
-    return { name:c, races:d.races, placed:d.placed, won:d.won, placeRate:d.placed/d.races };
+    return { name:d.label || courseName(c), races:d.races, placed:d.placed, won:d.won, placeRate:d.placed/d.races };
   }).sort(function(a,b){ return b.placeRate - a.placeRate; });
 
   var h = '<div style="padding:16px">';
@@ -2261,8 +2280,8 @@ function renderPlacepotTab() {
   // ── Day-by-day meeting results (the main event) ──────────────────────────
   var meetings = {};
   loadedLog.forEach(function(e) {
-    var key = (e.course||'?') + '||' + (e.date||'?');
-    if (!meetings[key]) meetings[key] = { course:e.course, date:e.date, races:[] };
+    var key = courseKey(e.course) + '||' + (e.date||'?');
+    if (!meetings[key]) meetings[key] = { course:courseName(e.course), date:e.date, races:[] };
     meetings[key].races.push(e);
   });
 
@@ -2369,8 +2388,8 @@ function renderDutchTab() {
   // Build per-course aggregates
   var byCourse = {}; // course -> {races, staked, returned, profit, wins}
   dutchRaces.forEach(function(e){
-    var c = e.course || 'Unknown';
-    if (!byCourse[c]) byCourse[c] = { races:0, staked:0, returned:0, profit:0, wins:0 };
+    var c = courseKey(e.course);
+    if (!byCourse[c]) byCourse[c] = { races:0, staked:0, returned:0, profit:0, wins:0, label: courseName(e.course) };
     byCourse[c].races++;
     byCourse[c].staked   += e.dutch.outlay || 10;
     byCourse[c].returned += e.dutch.returned || 0;
@@ -2413,7 +2432,7 @@ function renderDutchTab() {
   dutchRaces.forEach(function(e){
     var d = e.date || '?';
     if (!byDay[d]) byDay[d] = {};
-    var c = e.course || 'Unknown';
+    var c = courseName(e.course);
     byDay[d][c] = (byDay[d][c] || 0) + (e.dutch.profit || 0);
   });
   var days = Object.keys(byDay).sort().reverse();
@@ -2435,7 +2454,7 @@ function renderDutchTab() {
 
   // ── Per-course breakdown (sortable by profit) ──
   h += '<div style="font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:1px;margin:18px 0 10px">🏇 PROFIT BY COURSE</div>';
-  var courseStats = courses.map(function(c){ return { course:c, s:byCourse[c] }; });
+  var courseStats = courses.map(function(c){ return { course:(byCourse[c].label || courseName(c)), s:byCourse[c] }; });
   courseStats.sort(function(a,b){ return b.s.profit - a.s.profit; });
   courseStats.forEach(function(cs){
     var s = cs.s;
@@ -2460,7 +2479,7 @@ function renderDutchTab() {
   h += '</select></div>';
 
   var shown = dutchRaces.slice().sort(function(a,b){ return (a.date+a.time) < (b.date+b.time) ? 1 : -1; });
-  if (_dutchCourseFilter !== 'ALL') shown = shown.filter(function(e){ return (e.course||'Unknown') === _dutchCourseFilter; });
+  if (_dutchCourseFilter !== 'ALL') shown = shown.filter(function(e){ return courseKey(e.course) === courseKey(_dutchCourseFilter); });
 
   shown.slice(0, 60).forEach(function(e){
     var d = e.dutch;
@@ -2627,7 +2646,7 @@ function renderCoursePicks() {
   var byMeeting = {}; // course|date -> best entry (highest topPickConf)
   loadedLog.forEach(function(e){
     if (!e.course || !e.predictions || !e.predictions.length) return;
-    var key = e.course + '|' + (e.date || '?');
+    var key = courseKey(e.course) + '|' + (e.date || '?');
     var cur = byMeeting[key];
     if (!cur || (e.topPickConf || 0) > (cur.topPickConf || 0)) byMeeting[key] = e;
   });
