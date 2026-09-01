@@ -3008,6 +3008,119 @@ function toggleHorseNote(id) {
   el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
 }
 
+// ── Export race for AI analysis ──────────────────────────────────────────────
+// Builds a self-contained brief: every fact the model used, plus the model's
+// own output, wrapped in a prompt that tells the AI to reason ONLY from the
+// supplied data and to say when it doesn't know something. That last part
+// matters — language models will otherwise invent a horse's last run, a
+// trainer's recent record or a pedigree with complete confidence, and those
+// inventions look exactly like the real thing.
+function buildAIBrief(scored, race, paceInfo) {
+  var going = (document.getElementById('gsel') || {}).value || 'unknown';
+  var when  = new Date().toISOString().slice(0,10);
+  var L = [];
+
+  L.push('# Race brief — ' + (race.course || 'Unknown') + ' ' + (race.time || '') + ' (' + when + ')');
+  L.push('');
+  L.push('I run a horse racing model called Formintel. Below is its output for one race,');
+  L.push('plus the raw data it used. I want a second opinion.');
+  L.push('');
+  L.push('## Instructions');
+  L.push('- Reason ONLY from the data below plus general racing principles.');
+  L.push('- Do NOT state facts about these horses, jockeys or trainers from memory —');
+  L.push('  recent form, past runs, pedigree, stable news. If it is not in the data, say so.');
+  L.push('- If you have web access, you may look up current information, and say what you looked up.');
+  L.push('- Tell me where the model looks WRONG and why, not just agreement.');
+  L.push('- Flag anything the data cannot tell us that would matter.');
+  L.push('');
+  L.push('## Race');
+  L.push('- Course: ' + (race.course || '?') + '   Time: ' + (race.time || '?'));
+  L.push('- Distance: ' + (race.dist || '?') + '   Class: ' + (race.cls || 'unknown') + '   Going: ' + going);
+  L.push('- Runners: ' + scored.filter(function(r){ return !r._nr; }).length);
+  if (paceInfo && paceInfo.label) L.push('- Pace shape: ' + paceInfo.label);
+  if (typeof getCourseTrait === 'function') {
+    var t = getCourseTrait(race.course);
+    if (t) {
+      var hand = { L:'left-handed', R:'right-handed', S:'straight', F8:'figure-of-eight' }[t.hand] || t.hand;
+      L.push('- Course character: ' + hand + ', sharpness ' + t.sharpness + '/5, ' + t.terrain
+             + ', ' + t.finish + ' finish, ' + t.runIn + ' run-in. ' + (t.notes || ''));
+    }
+  }
+  L.push('');
+  L.push('## Runners (model order)');
+  L.push('');
+  L.push('| # | Horse | Model % | Odds | Mkt % | Jockey | Trainer | OR | Draw | Age | Wgt | Form | Days | Pace | Headgear |');
+  L.push('|---|-------|---------|------|-------|--------|---------|----|----- |-----|-----|------|------|------|----------|');
+  scored.forEach(function(r, i) {
+    if (r._nr) return;
+    var mkt = r.odds > 1 ? (100/r.odds).toFixed(0) + '%' : '—';
+    var wgt = (r.wst ? r.wst + '-' + (r.wlbs || 0) : '—');
+    L.push('| ' + (i+1) + ' | ' + r.name + ' | ' + Math.round(r.score*100) + '% | '
+      + (r.odds > 1 ? r.odds.toFixed(2) : '—') + ' | ' + mkt + ' | '
+      + ((r.jockey || '—').replace(/\|/g,'')) + ' | ' + ((r.trainer || '—').replace(/\|/g,'')) + ' | '
+      + (r.or || '—') + ' | ' + (r.stall || '—') + ' | ' + (r.age || '—') + ' | ' + wgt + ' | '
+      + (r.form || '—') + ' | ' + (r.daysSince != null ? r.daysSince : '—') + ' | '
+      + (r._pace || '—') + ' | ' + (r._headgear || '—') + ' |');
+  });
+  L.push('');
+
+  // Flags the model raised
+  var flags = [];
+  scored.forEach(function(r){
+    if (r._nr) return;
+    if (r._bfAlert) flags.push('- ' + r.name + ': beaten favourite'
+      + (r._bfCourse ? ' at ' + r._bfCourse : '') + (r._bfDays ? ', ' + r._bfDays + ' days ago' : '')
+      + (r._bfDrop ? ' — DROPPING IN CLASS today' : ''));
+    if (r._mv === 'steam') flags.push('- ' + r.name + ': odds shortening');
+    else if (r._mv === 'drift') flags.push('- ' + r.name + ': odds drifting');
+  });
+  if (flags.length) { L.push('## Model flags'); L.push.apply(L, flags); L.push(''); }
+
+  L.push('## What my logged results say (2,000+ races)');
+  L.push('- Top pick overall: ~30% strike, about -10% ROI at level stakes.');
+  L.push('- Where the model rates a horse WELL ABOVE the market, it performs badly:');
+  L.push('  15%+ above market = -75% ROI. Treat large model-vs-market gaps as a warning, not value.');
+  L.push('- Picks where model and market roughly agree are the most reliable.');
+  L.push('- Short-priced picks win often but rarely pay enough to cover the losers.');
+  L.push('');
+  L.push('## What I want back');
+  L.push('1. Which runner looks strongest on THIS data, and where you disagree with the model.');
+  L.push('2. The pace scenario and who it favours.');
+  L.push('3. Anything in the data that contradicts the model\'s top pick.');
+  L.push('4. What key information is MISSING that would change your view.');
+  L.push('5. Keep it brief. Say plainly if the race is unpredictable — do not manufacture confidence.');
+
+  return L.join('\n');
+}
+
+function exportRaceForAI(mode) {
+  try {
+    var sc = S._lastScored, rc = S._lastRace, pi = S._lastPace;
+    if (!sc || !rc) { alert('Run a prediction first.'); return; }
+    var txt = buildAIBrief(sc, rc, pi);
+    if (mode === 'copy' && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function(){
+        showLiveStatus('📋 Race brief copied — paste it into Claude or ChatGPT.', 'ok');
+      }, function(){ aiFallbackShow(txt); });
+    } else {
+      aiFallbackShow(txt);
+    }
+  } catch(e) { alert('Could not build the brief: ' + e.message); }
+}
+
+// Fallback for browsers that block clipboard access: show it for manual copy
+function aiFallbackShow(txt) {
+  var box = document.getElementById('aiBriefBox');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--mt);margin-bottom:6px">Select all and copy:</div>'
+    + '<textarea readonly style="width:100%;height:220px;font-family:var(--mono);font-size:.6rem;'
+    + 'background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:8px">'
+    + txt.replace(/</g,'&lt;') + '</textarea>';
+  var ta = box.querySelector('textarea');
+  if (ta) { ta.focus(); ta.select(); }
+}
+
 function showResults(scored, val, race, paceInfo) {
   // Store for stake refresh
   S._lastScored    = scored;
@@ -3075,6 +3188,16 @@ function showResults(scored, val, race, paceInfo) {
   // Full order
   // Bet Advisor
   h += '<div id="betAdvisorSlot">' + betAdvisorHTML(scored, scored.length, stake, S._placeFrac || 4) + '</div>';
+  S._lastScored = scored; S._lastRace = race; S._lastPace = paceInfo;
+
+  h += '<div style="margin:0 0 12px">'
+    + '<button onclick="exportRaceForAI(\'copy\')" style="width:100%;padding:11px;border-radius:8px;'
+    + 'border:1px solid rgba(68,138,255,.35);background:rgba(68,138,255,.1);color:var(--bl);'
+    + 'font-family:var(--mono);font-size:.64rem;font-weight:600;cursor:pointer;letter-spacing:.5px">'
+    + '🤖 Copy race brief for AI</button>'
+    + '<div id="aiBriefBox" style="display:none;margin-top:8px"></div>'
+    + '</div>';
+
   h += '<div class="arc"><div class="art">Full Predicted Order</div>';
   // Value pick: top-3 runner with biggest model-vs-market edge (backtested +ROI both samples)
   var _vpIdx = -1, _vpEdge = -9;
