@@ -2994,7 +2994,7 @@ function buildHorseNote(r, race, scored) {
   var extras = [];
   if (r._pace === 'front') extras.push('likely to lead');
   else if (r._pace === 'closer') extras.push('held-up runner');
-  if (r.stall) extras.push('drawn ' + r.stall);
+  if (drawOf(r)) extras.push('drawn ' + drawOf(r));
   if (r._mv === 'steam') extras.push('odds shortening');
   else if (r._mv === 'drift') extras.push('odds drifting');
   if (extras.length) L.push('🏁 ' + extras.join(' · ') + '.');
@@ -3049,8 +3049,8 @@ function buildAIBrief(scored, race, paceInfo) {
   L.push('');
   L.push('## Runners (model order)');
   L.push('');
-  L.push('| # | Horse | Model % | Odds | Mkt % | Jockey | Trainer | OR | Draw | Age | Wgt | Form | Days | Pace | Headgear |');
-  L.push('|---|-------|---------|------|-------|--------|---------|----|----- |-----|-----|------|------|------|----------|');
+  L.push('| # | Horse | Model % | Odds | Mkt % | Jockey | Trainer | OR | Draw | No. | Age | Wgt | Form | Days | Pace | Headgear |');
+  L.push('|---|-------|---------|------|-------|--------|---------|----|------|-----|-----|-----|------|------|------|----------|');
   scored.forEach(function(r, i) {
     if (r._nr) return;
     var mkt = r.odds > 1 ? (100/r.odds).toFixed(0) + '%' : '—';
@@ -3058,11 +3058,18 @@ function buildAIBrief(scored, race, paceInfo) {
     L.push('| ' + (i+1) + ' | ' + r.name + ' | ' + Math.round(r.score*100) + '% | '
       + (r.odds > 1 ? r.odds.toFixed(2) : '—') + ' | ' + mkt + ' | '
       + ((r.jockey || '—').replace(/\|/g,'')) + ' | ' + ((r.trainer || '—').replace(/\|/g,'')) + ' | '
-      + (r.or || '—') + ' | ' + (r.stall || '—') + ' | ' + (r.age || '—') + ' | ' + wgt + ' | '
+      + (r.or || '—') + ' | ' + (r.draw ? r.draw : '?') + ' | ' + (clothOf(r) || '—') + ' | '
+      + (r.age || '—') + ' | ' + wgt + ' | '
       + (r.form || '—') + ' | ' + (r.daysSince != null ? r.daysSince : '—') + ' | '
       + (r._pace || '—') + ' | ' + (r._headgear || '—') + ' |');
   });
   L.push('');
+  var noDraw = scored.filter(function(r){ return !r._nr && !r.draw; }).length;
+  if (noDraw) {
+    L.push('> NOTE: the starting stall was not supplied for ' + noDraw + ' runner(s) — shown as "?".');
+    L.push('> Do NOT treat the "No." column as a draw; it is the saddle-cloth number.');
+    L.push('');
+  }
 
   // Flags the model raised
   var flags = [];
@@ -3155,7 +3162,8 @@ function showResults(scored, val, race, paceInfo) {
     + '<div class="bn gn">' + w.name + paceMk + '</div>'
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
     + row('Jockey', w.jockey.replace(/\s*\(\d+\)/,'') || '—')
-    + row('Draw / stall', w.stall)
+    + row('Draw (stall)', drawOf(w) || '—')
+    + row('Cloth no.', clothOf(w) || '—')
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
     + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
@@ -3344,7 +3352,7 @@ function showResults(scored, val, race, paceInfo) {
       + '<div class="ri2">'
         + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert
           + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
-        + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + r.stall + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
+        + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + drawOf(r) + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
       + '<div class="rr">'
@@ -4978,7 +4986,7 @@ function runPlacepot() {
       var oddsDisp=r.odds>0?'<span style="color:var(--gold);font-family:\'IBM Plex Mono\',monospace;font-size:.7rem;margin-left:4px">'+r.odds.toFixed(1)+'</span>':'';
       rows+='<div class="pp-pick '+rankCl+'"><div class="pp-rank">'+(i+1)+'</div>'
         +'<div class="pp-info"><div class="pp-name">'+r.name+badge+paceBadge+oddsDisp+'</div>'
-        +'<div class="pp-meta">Draw '+r.stall+(r.or>0?' · OR '+r.or:'')+' · '+jn+'</div></div>'
+        +'<div class="pp-meta">Draw '+drawOf(r)+(r.or>0?' · OR '+r.or:'')+' · '+jn+'</div></div>'
         +'<div class="pp-bar-wrap"><div class="pp-score">'+Math.round(r.score*100)+'%</div>'
         +'<div class="pp-bar"><div class="pp-fill" style="width:'+pct+'%"></div></div></div></div>';
     });
@@ -5049,7 +5057,7 @@ function runPlacepot() {
     }
     document.getElementById('nap-detail').textContent=nrace.time+' '+nrace.course+(nr.odds>0?' — '+nr.odds.toFixed(1)+' decimal':' — odds not entered');
     var confBit = napCandidate.conf1 ? ' · '+napCandidate.conf1+'% vs '+napCandidate.conf2+'% (+'+napCandidate.gap+'% gap)' : '';
-    document.getElementById('nap-meta').textContent='Draw '+nr.stall+(nr.or>0?' · OR '+nr.or:'')+' · '+jn+confBit;
+    document.getElementById('nap-meta').textContent='Draw '+drawOf(nr)+(nr.or>0?' · OR '+nr.or:'')+' · '+jn+confBit;
     var reasonEl = document.getElementById('nap-reason');
     if (reasonEl) reasonEl.textContent = napCandidate.reason || '';
     napEl.style.display='block';
@@ -6852,6 +6860,15 @@ function toggleMeeting(id) {
 // stay dormant on live cards; everything else runs at full strength.
 var LIVE_AW_COURSES = ['wolverhampton','southwell','kempton','newcastle','lingfield','chelmsford','dundalk'];
 
+// Betfair sends STALL_DRAW and CLOTH_NUMBER separately. `stall` on our runner
+// object is the CLOTH (saddle-cloth / horse number), `draw` is the actual
+// starting stall. The display was showing `stall` under a "Draw" label, so it
+// was reporting horse numbers as draws. Scoring was never affected — the draw
+// bias already used r.draw. These helpers keep the two straight.
+function drawOf(r)  { return (r && r.draw)  ? r.draw  : ((r && r.stall) || 0); }
+function clothOf(r) { return (r && r.stall) ? r.stall : ((r && r.draw)  || 0); }
+function hasRealDraw(r) { return !!(r && r.draw && r.stall && r.draw !== r.stall) || !!(r && r.draw); }
+
 function bfRunnerToAppRunner(r, i) {
   var lbs = r.lbs || 0;
   var wst = lbs ? Math.floor(lbs / 14) : 0;
@@ -6861,7 +6878,11 @@ function bfRunnerToAppRunner(r, i) {
   var jockey = r.jockey || '';
   if (r.claim) jockey += ' (' + r.claim + ')';
   var odds = (r.back && r.back > 1) ? r.back : 0;
-  var run = { stall: r.cloth || (i + 1), draw: r.draw || r.cloth || (i + 1),
+  // NOTE: draw is deliberately NOT defaulted to the cloth number. If Betfair
+  // doesn't supply STALL_DRAW we keep it 0 so the AI brief can say "unknown"
+  // rather than presenting a saddle-cloth number as a starting stall. The
+  // draw-bias scoring falls back to stall on its own, so nothing breaks.
+  var run = { stall: r.cloth || (i + 1), draw: r.draw || 0,
     form: form, name: r.name, age: r.age || 0, wst: wst, wlbs: wlbs,
     jockey: jockey, or: r.or || 0,
     daysSince: (r.daysSince === 0 || r.daysSince) ? r.daysSince : 21,
