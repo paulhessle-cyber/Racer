@@ -705,11 +705,17 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
   <div class="card">
     <div class="ct">Live Odds (Betfair Proxy)</div>
-    <p class="mu" style="margin-bottom:12px">Optional. If you've set up the Formintel odds proxy on your server, paste its base URL here to fetch live Betfair Exchange prices with one tap instead of pasting them manually.</p>
-    <input type="text" id="oddsProxyUrl" placeholder="https://api.yourdomain.co.uk/formintel"
+    <p class="mu" style="margin-bottom:12px">Already set up — live Betfair prices work straight away, no account or API key needed. Only change this if you're running your own proxy.</p>
+    <input type="text" id="oddsProxyUrl" placeholder="https://odds.formintel.co.uk"
       style="width:100%;box-sizing:border-box;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:var(--mono);font-size:.78rem;margin-bottom:8px">
     <button class="btn bo" style="width:100%;font-size:.75rem" onclick="testOddsProxy()">Test connection</button>
     <div id="oddsProxyStatus" style="margin-top:8px;font-family:var(--mono);font-size:.68rem"></div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">
+      <div style="font-size:.62rem;color:var(--mt);margin-bottom:5px">Your results are private to this device. Device ID:</div>
+      <input type="text" id="ownerIdBox" onchange="setOwnerId(this.value)"
+        style="width:100%;box-sizing:border-box;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;color:var(--mt);font-family:var(--mono);font-size:.68rem">
+      <div style="font-size:.58rem;color:var(--mt);margin-top:5px;line-height:1.5">Paste this same ID on another device to see the same results there.</div>
+    </div>
   </div>
   <div class="card" id="msc" style="display:none">
     <div class="ct">Model Stats</div>
@@ -3100,6 +3106,147 @@ function buildAIBrief(scored, race, paceInfo) {
   return L.join('\n');
 }
 
+// ── Whole-meeting brief for AI ───────────────────────────────────────────────
+// Every race at the course in one pasteable block, for cross-checking the
+// model against tipsters, the racing press or an AI with web access.
+// Reads the stored T-5 locks where they exist, so the numbers match exactly
+// what the app is showing rather than being recomputed down a second path.
+function buildMeetingBrief(meeting) {
+  var locks = (typeof plockAll === 'function') ? plockAll() : {};
+  var when  = new Date();
+  var stamp = when.toISOString().slice(0,10) + ' ' +
+              when.toTimeString().slice(0,5);
+  var L = [];
+
+  L.push('# ' + (meeting.course || 'Meeting') + ' — full card');
+  L.push('');
+  L.push('Generated ' + stamp + ' (UK). Model: Formintel.');
+  L.push('Odds move through the day, so these are a snapshot — treat prices as');
+  L.push('indicative and re-check anything close before acting on it.');
+  L.push('');
+  L.push('## Instructions');
+  L.push('- Reason ONLY from the data below plus general racing principles.');
+  L.push('- Do NOT state facts about these horses, jockeys or trainers from memory.');
+  L.push('  If a fact is not in this data, say you do not have it.');
+  L.push('- If you have web access, look up today\'s card and tell me what you');
+  L.push('  checked and where you disagree with the model.');
+  L.push('- Point out where the model looks WRONG, not just where it agrees.');
+  L.push('');
+
+  if (typeof getCourseTrait === 'function') {
+    var t = getCourseTrait(meeting.course);
+    if (t) {
+      var hand = { L:'left-handed', R:'right-handed', S:'straight', F8:'figure-of-eight' }[t.hand] || t.hand;
+      L.push('## Course');
+      L.push('- ' + meeting.course + ': ' + hand + ', sharpness ' + t.sharpness + '/5, '
+             + t.terrain + ', ' + t.finish + ' finish, ' + t.runIn + ' run-in.');
+      if (t.notes) L.push('- ' + t.notes);
+      L.push('');
+    }
+  }
+
+  var races = (meeting.races || []).slice().sort(function(a,b){ return a.time < b.time ? -1 : 1; });
+  var covered = 0, skipped = [];
+
+  races.forEach(function(race) {
+    var rk = raceKeyFor(race);
+    var lk = locks[rk];
+    var preds = null;
+
+    if (lk && lk.preds && lk.preds.length) {
+      preds = lk.preds;                       // authoritative: what the app showed
+    } else if (!race._fromLock) {
+      // No lock yet — score it now so the race still appears
+      try {
+        var sc = scoreRaceHeadless(race);
+        if (sc && sc.length) preds = sc.map(function(r){
+          return { name:r.name, odds:r.odds || 0, score:Math.round((r.score||0)*100) };
+        });
+      } catch(e) {}
+    }
+    if (!preds || !preds.length) { skipped.push(race.time); return; }
+
+    covered++;
+    var field = (race.runners || []).filter(function(r){ return !r._nr; }).length || (lk && lk.fieldSize) || preds.length;
+    L.push('### ' + race.time + ' — ' + (race.dist || lk && lk.dist || '?')
+           + (race.title ? ' ' + race.title : '')
+           + '  (' + field + ' runners' + (race.cls || (lk && lk.cls) ? ', Class ' + (race.cls || lk.cls) : '') + ')');
+
+    // Richer per-runner detail where the live card is still in memory
+    var byName = {};
+    (race.runners || []).forEach(function(r){ byName[r.name] = r; });
+
+    L.push('| Pick | Horse | Model % | Odds | Mkt % | Draw | Jockey | OR | Form |');
+    L.push('|------|-------|---------|------|-------|------|--------|----|------|');
+    preds.slice(0, 5).forEach(function(p, i) {
+      var full = byName[p.name] || {};
+      var mkt = (p.odds > 1) ? (100/p.odds).toFixed(0) + '%' : '—';
+      L.push('| ' + (i+1) + ' | ' + p.name + ' | ' + (p.score != null ? p.score + '%' : '—') + ' | '
+        + (p.odds > 1 ? p.odds.toFixed(2) : '—') + ' | ' + mkt + ' | '
+        + (full.draw ? full.draw : '?') + ' | '
+        + ((full.jockey || '—').replace(/\s*\(\d+\)/,'').replace(/\|/g,'')) + ' | '
+        + (full.or || '—') + ' | ' + (full.form || '—') + ' |');
+    });
+    if (preds.length > 5) L.push('_(top 5 of ' + preds.length + ' shown)_');
+    L.push('');
+  });
+
+  if (!covered) {
+    return '# ' + (meeting.course || 'Meeting') + '\n\nNo predictions available yet for this meeting. '
+         + 'Open the app for a minute so it can build the card, then try again.';
+  }
+  if (skipped.length) {
+    L.push('> Not yet predicted: ' + skipped.join(', ') + '. Usually races whose Betfair market has not opened.');
+    L.push('');
+  }
+
+  L.push('## What my logged results say (2,000+ races)');
+  L.push('- Top pick overall: ~30% strike, about -10% ROI at level stakes.');
+  L.push('- Where the model rates a horse WELL ABOVE the market it does badly:');
+  L.push('  15%+ above market = -75% ROI. Big model-vs-market gaps are a warning, not value.');
+  L.push('- Picks where model and market roughly agree are the most reliable.');
+  L.push('');
+  L.push('## What I want back');
+  L.push('1. Which races look most and least predictable, and why.');
+  L.push('2. Where you disagree with the model\'s top pick, race by race.');
+  L.push('3. Any race where the model and the market disagree sharply — and which you would trust.');
+  L.push('4. What information is missing that would change your view.');
+  L.push('5. Be brief and say plainly when a race is unpredictable.');
+
+  return L.join('\n');
+}
+
+function exportMeetingForAI() {
+  try {
+    var races = S.currentRaces || S.races || [];
+    var course = (races[0] && races[0].course) || '';
+    var meeting = (S.meetings || []).filter(function(m){ return m.course === course; })[0];
+    if (!meeting) meeting = { course: course, races: races };
+    if (!meeting.races || !meeting.races.length) { alert('Load a meeting first.'); return; }
+
+    var txt = buildMeetingBrief(meeting);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function(){
+        showLiveStatus('📋 ' + meeting.course + ' card copied — paste it into Claude or ChatGPT.', 'ok');
+      }, function(){ aiMeetingFallback(txt); });
+    } else {
+      aiMeetingFallback(txt);
+    }
+  } catch(e) { alert('Could not build the meeting brief: ' + e.message); }
+}
+
+function aiMeetingFallback(txt) {
+  var box = document.getElementById('aiMeetingBox');
+  if (!box) { alert('Copy failed.'); return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:.62rem;color:var(--mt);margin-bottom:6px">Select all and copy:</div>'
+    + '<textarea readonly style="width:100%;height:240px;font-family:var(--mono);font-size:.6rem;'
+    + 'background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:8px">'
+    + txt.replace(/</g,'&lt;') + '</textarea>';
+  var ta = box.querySelector('textarea');
+  if (ta) { ta.focus(); ta.select(); }
+}
+
 function exportRaceForAI(mode) {
   try {
     var sc = S._lastScored, rc = S._lastRace, pi = S._lastPace;
@@ -3788,6 +3935,10 @@ function renderRaceList(races) {
   var bulkBtn = document.createElement('div');
   bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.25);color:var(--g);border-radius:8px;cursor:pointer" onclick="syncResults(true)">🔄 Sync results now</button>';
   list.appendChild(bulkBtn);
+  var aiBtn = document.createElement('div');
+  aiBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(68,138,255,.1);border:1px solid rgba(68,138,255,.35);color:var(--bl);border-radius:8px;cursor:pointer" onclick="exportMeetingForAI()">🤖 Copy whole meeting for AI</button>'
+    + '<div id="aiMeetingBox" style="display:none;margin:0 0 12px"></div>';
+  list.appendChild(aiBtn);
   renderMeetingsList();
   races.forEach(function(r,i) {
     var d = document.createElement('div');
@@ -6420,6 +6571,23 @@ var _lastPushedLen = -1, _lastPushedKey = '';
 // Signature of the last log we successfully pushed. Persisted, because the
 // in-memory version reset on every page load and there was no way to tell an
 // already-synced log from one that had never reached the server.
+// ── Device ID ────────────────────────────────────────────────────────────────
+// The odds proxy is public, so results must be namespaced per device or one
+// person's dashboard would show everyone else's races. Generated once, stored
+// locally, shared with the results checker (same origin = same storage).
+var OWNER_KEY = 'fi_owner_id';
+function getOwnerId() {
+  try {
+    var id = localStorage.getItem(OWNER_KEY);
+    if (id) return id;
+    var buf = 'xxxxxxxxxxxxxxxx'.replace(/x/g, function(){
+      return '0123456789abcdef'[Math.floor(Math.random()*16)];
+    });
+    localStorage.setItem(OWNER_KEY, buf);
+    return buf;
+  } catch(e) { return 'local'; }
+}
+
 var PUSH_SIG_KEY = 'fi_last_push_sig';
 function pushedSig() {
   try { return localStorage.getItem(PUSH_SIG_KEY) || ''; } catch(e) { return ''; }
@@ -6437,7 +6605,7 @@ function pushLogToServer(force) {
     // cheap change-detector: length + last raceKey
     var sig = log.length + ':' + (log[log.length-1].raceKey || '');
     if (!force && sig === pushedSig()) return Promise.resolve(false);
-    return fetch(base + '/log', {
+    return fetch(base + '/log?owner=' + encodeURIComponent(getOwnerId()), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(log)
@@ -6731,14 +6899,23 @@ function checkLongTravel(trainerName, raceCourse) {
 // ══ BETFAIR ODDS PROXY ════════════════════════════════════════════════════════
 var ODDS_PROXY_KEY = 'fi_odds_proxy_url';
 
+// The public Formintel proxy. Used automatically unless someone has entered
+// their own URL — users kept getting stuck at the setup screen thinking they
+// had to run their own server before live odds would work.
+var DEFAULT_PROXY_URL = 'https://odds.formintel.co.uk';
+
 function getProxyUrl() {
   var el = document.getElementById('oddsProxyUrl');
   var fromInput = el ? el.value.trim() : '';
   if (fromInput) {
     try { localStorage.setItem(ODDS_PROXY_KEY, fromInput); } catch(e) {}
-    return fromInput.replace(/\/$/, '');
+    return fromInput.replace(/\/+$/, '');
   }
-  try { return (localStorage.getItem(ODDS_PROXY_KEY) || '').replace(/\/$/, ''); } catch(e) { return ''; }
+  try {
+    var saved = (localStorage.getItem(ODDS_PROXY_KEY) || '').trim();
+    if (saved) return saved.replace(/\/+$/, '');
+  } catch(e) {}
+  return DEFAULT_PROXY_URL;   // works out of the box
 }
 
 // Restore saved URL on load
@@ -6747,15 +6924,28 @@ function getProxyUrl() {
     try {
       var saved = localStorage.getItem(ODDS_PROXY_KEY);
       var el = document.getElementById('oddsProxyUrl');
-      if (saved && el) el.value = saved;
+      if (el) el.value = saved || DEFAULT_PROXY_URL;
+      var ob = document.getElementById('ownerIdBox');
+      if (ob) ob.value = getOwnerId();
     } catch(e) {}
   });
 })();
 
+// Let the same ID be reused on a second device (phone + iPad share results)
+function setOwnerId(v) {
+  var id = String(v || '').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+  if (!id) { var ob=document.getElementById('ownerIdBox'); if(ob) ob.value=getOwnerId(); return; }
+  try {
+    localStorage.setItem(OWNER_KEY, id);
+    localStorage.removeItem(PUSH_SIG_KEY);   // force a re-push under the new ID
+    showLiveStatus('Device ID set. Your results will now sync under this ID.', 'ok');
+  } catch(e) {}
+}
+
 function testOddsProxy() {
   var base = getProxyUrl();
   var statusEl = document.getElementById('oddsProxyStatus');
-  if (!base) { statusEl.innerHTML = '<span style="color:var(--re)">Enter a URL first.</span>'; return; }
+  if (!base) { statusEl.innerHTML = '<span style="color:var(--re)">No proxy URL set.</span>'; return; }
   statusEl.innerHTML = '<span style="color:var(--mt)">Testing…</span>';
   fetch(base + '/health')
     .then(function(r){ return r.json(); })
