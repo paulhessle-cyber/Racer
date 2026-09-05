@@ -1749,6 +1749,11 @@ else renderImport();
 // Must match the key the PREDICTOR writes (fi_odds_proxy_url). These were
 // different keys, so the checker never saw the URL you'd configured and
 // silently fell back to the default below.
+var OWNER_KEY = 'fi_owner_id';
+function getOwnerId() {
+  try { return localStorage.getItem(OWNER_KEY) || ''; } catch(e) { return ''; }
+}
+
 var PROXY_KEY = 'fi_odds_proxy_url';
 function getProxyBase() {
   try {
@@ -1821,7 +1826,12 @@ function loadFromServer(manual) {
   var base = getProxyBase();
   if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return Promise.resolve(0); }
   setSyncStatus('Checking ' + base + ' …', 'warn');
-  return fetch(base + '/export')
+  var who = getOwnerId();
+  if (!who) {
+    setSyncStatus('No device ID yet — open the Predictor once on this device, then come back.', 'warn');
+    return Promise.resolve(0);
+  }
+  return fetch(base + '/export?owner=' + encodeURIComponent(who))
     .then(function(r){
       if (!r.ok) throw new Error('server returned ' + r.status + (r.status === 404 ? ' (old server.js still running — restart the proxy)' : ''));
       return r.json();
