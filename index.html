@@ -5665,6 +5665,11 @@ function runConfidencePredictor() {
   el.innerHTML = h;
 }
 
+// Runners skipped because the model rates a rival clearly better in the same
+// race. Declared out here because runL15() sets it but the results renderer,
+// which lives in a different scope, is what displays it.
+var _l15Dismissed = 0;
+
 // ── LUCKY 15 + MONTE CARLO ────────────────────────────────
 // ══════════════════════════════════════════════════════════
 
@@ -5833,6 +5838,7 @@ function runL15(strategy) {
   setTimeout(function() {
    try {
     var allHorses = [];
+    _l15Dismissed = 0;   // reset for this run
     meetings.forEach(function(meeting) {
       meeting.races.forEach(function(race) {
         var active = race.runners.filter(function(r){ return !r._nr; });
@@ -5863,8 +5869,22 @@ function runL15(strategy) {
         var bt = blended.reduce(function(a,b){return a+b;},0)||1;
         var finalProbs = powerScaleProbs(blended.map(function(b){return b/bt;}));
 
+        // Don't offer a horse the model has already dismissed in its own race.
+        // Previously every runner with a price went into the pool, so the
+        // selector could pick the 18% horse in a race where the model rates
+        // another 60% — i.e. bet against its own strongest opinion, and
+        // directly contradict what the Confidence Predictor is showing.
+        // Same threshold the Confidence Predictor uses, so the two agree:
+        // if the top-rated horse is more than CONF_GAP_MIN points clear,
+        // only that horse is eligible from this race. In genuinely open
+        // races every runner stays available as before.
+        var raceTop = Math.max.apply(null, finalProbs);
+        var gapLimit = (typeof CONF_GAP_MIN === 'number') ? CONF_GAP_MIN : 20;
+
         active.forEach(function(r,i) {
           if (!r.odds || r.odds <= 1) return; // need odds for L15
+          var gapToTop = (raceTop - finalProbs[i]) * 100;
+          if (gapToTop > 0.0001 && gapToTop > gapLimit) { _l15Dismissed++; return; }
           allHorses.push({
             name:    r.name,
             jockey:  r.jockey.replace(/\s*\(\d+\)/,''),
@@ -6214,6 +6234,8 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     + '<div style="font-size:.68rem;color:var(--mt);margin-bottom:4px">' + stratDesc + '</div>'
     + '<div style="font-size:.62rem;color:var(--mt)">'
     + totalHorses + ' horses · ' + totalRaces + ' races · ' + combosChecked.toLocaleString() + ' combos · £1 unit (£15 total)'
+    + (_l15Dismissed ? '<br><span style="color:var(--mt)">' + _l15Dismissed
+        + ' runner' + (_l15Dismissed!==1?'s':'') + ' excluded — the model rates a rival clearly better in the same race</span>' : '')
     + '</div></div>';
 
   var medals = ['🥇','🥈','🥉','4th','5th'];
