@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.0 · 5 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.1 · 5 Sep 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -5895,12 +5895,34 @@ function runL15(strategy) {
         // if the top-rated horse is more than CONF_GAP_MIN points clear,
         // only that horse is eligible from this race. In genuinely open
         // races every runner stays available as before.
-        var raceTop = Math.max.apply(null, finalProbs);
         var gapLimit = (typeof CONF_GAP_MIN === 'number') ? CONF_GAP_MIN : 20;
+
+        // Use the SAME numbers the Confidence Predictor uses — the stored
+        // lock — otherwise the two disagree on the same race. The L15's own
+        // blend is uncalibrated and produced a narrower gap, so a horse the
+        // Confidence Predictor had clearly dismissed (Big Hitter 41% vs
+        // Romidijo 19%) still slipped into the pool.
+        var lkL15 = null;
+        try { lkL15 = plockAll()[raceKeyFor(race)]; } catch(e) {}
+        var lockScore = null, lockTop = 0;
+        if (lkL15 && lkL15.preds && lkL15.preds.length) {
+          lockScore = {};
+          lkL15.preds.forEach(function(pp){
+            if (!pp || !pp.name) return;
+            lockScore[pp.name] = pp.score || 0;
+            if ((pp.score || 0) > lockTop) lockTop = pp.score || 0;
+          });
+        }
+        var raceTop = Math.max.apply(null, finalProbs);
 
         active.forEach(function(r,i) {
           if (!r.odds || r.odds <= 1) return; // need odds for L15
-          var gapToTop = (raceTop - finalProbs[i]) * 100;
+          var gapToTop;
+          if (lockScore && lockScore[r.name] !== undefined) {
+            gapToTop = lockTop - lockScore[r.name];           // lock scores are 0-100
+          } else {
+            gapToTop = (raceTop - finalProbs[i]) * 100;        // no lock — use live calc
+          }
           if (gapToTop > 0.0001 && gapToTop > gapLimit) { _l15Dismissed++; return; }
           allHorses.push({
             name:    r.name,
