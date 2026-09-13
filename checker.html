@@ -175,6 +175,7 @@
   <div>
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v6.1 · 13 Sep 2026</div>
   </div>
   <div style="font-size:1.6rem">📊</div>
 </div>
@@ -1163,32 +1164,58 @@ function normHorse(n) {
 
 // Build a lookup of every horse we know a result for.
 // Returns { NORMNAME: {result, date, course, time, placesKnown} }
+// Index EVERY appearance of a horse, not just the last one.
+// Keying by name alone meant a horse that won on any day was reported as
+// winning your bet — across a 3,000-race log, 931 horses appear more than
+// once and 480 of those have conflicting outcomes, so the wrong result was
+// being applied routinely. Now each name maps to a list and the bet's own
+// date decides which run counts.
 function buildResultIndex() {
   var idx = {};
+  function add(key, rec) {
+    if (!key) return;
+    if (!idx[key]) idx[key] = [];
+    idx[key].push(rec);
+  }
   (loadedLog || []).forEach(function(e){
     var act = e.actual || [];
     if (!act.length) return;
-    // act[0] is the winner; the rest are placed (order not guaranteed).
-    // With only 1-2 names we know the winner but NOT the full place list.
     var placesKnown = act.length >= 3;
+    var seen = {};
     act.forEach(function(nm, i){
       var k = normHorse(nm);
       if (!k) return;
-      idx[k] = { result: i === 0 ? 'won' : 'placed', date: e.date || '',
-                 course: e.course || '', time: e.time || '', placesKnown: placesKnown };
+      seen[k] = true;
+      add(k, { result: i === 0 ? 'won' : 'placed', date: e.date || '',
+               course: e.course || '', time: e.time || '', placesKnown: placesKnown });
     });
-    // Losers: any runner we predicted that isn't in the result list.
-    (e.predictions || []).forEach(function(p){
-      var k = normHorse(p.name);
-      if (!k || idx[k]) return;
-      // Only safe to call it a loser if we know the full frame
-      if (placesKnown) {
-        idx[k] = { result: 'lost', date: e.date || '', course: e.course || '',
-                   time: e.time || '', placesKnown: true };
-      }
-    });
+    // Losers: a runner we predicted that isn't in the result list.
+    // Only safe when we know the full frame.
+    if (placesKnown) {
+      (e.predictions || []).forEach(function(p){
+        var k = normHorse(p.name);
+        if (!k || seen[k]) return;
+        seen[k] = true;
+        add(k, { result: 'lost', date: e.date || '', course: e.course || '',
+                 time: e.time || '', placesKnown: true });
+      });
+    }
   });
   return idx;
+}
+
+// Pick the run that belongs to THIS bet. Returns:
+//   {rec}          - one unambiguous match
+//   {ambiguous:n}  - the horse ran more than once that day
+//   null           - no run found for that date
+function matchLegRun(idx, legName, betDate) {
+  var list = idx[normHorse(legName)];
+  if (!list || !list.length) return null;
+  if (!betDate) return { ambiguous: list.length, reason: 'bet has no date' };
+  var sameDay = list.filter(function(r){ return r.date === betDate; });
+  if (sameDay.length === 1) return { rec: sameDay[0] };
+  if (sameDay.length > 1)  return { ambiguous: sameDay.length, reason: 'ran more than once that day' };
+  return null;
 }
 
 function autoSettleBets(silent) {
@@ -1200,16 +1227,28 @@ function autoSettleBets(silent) {
   }
 
   var idx = buildResultIndex();
-  var legsFilled = 0, betsChanged = 0, unmatched = [];
+  var legsFilled = 0, betsChanged = 0, unmatched = [], ambiguous = [], corrected = 0;
 
   log.forEach(function(bet){
     var changed = false;
     (bet.legs || []).forEach(function(leg){
       if (!leg || !leg.name) return;
-      if (leg.result && leg.result !== 'pending') return;   // never overwrite a manual call
-      var hit = idx[normHorse(leg.name)];
-      if (!hit) { unmatched.push(leg.name); return; }
-      leg.result = hit.result;
+      // Never touch a result you set by hand. DO re-check one we set
+      // ourselves, so legs settled by the old name-only matching get fixed.
+      var wasAuto = !!leg.autoSettled;
+      if (leg.result && leg.result !== 'pending' && !wasAuto) return;
+
+      var m = matchLegRun(idx, leg.name, bet.date);
+      if (!m) { unmatched.push(leg.name + (bet.date ? ' (' + bet.date + ')' : '')); return; }
+      if (m.ambiguous) {
+        ambiguous.push(leg.name + ' — ' + m.reason);
+        if (wasAuto) { leg.result = 'pending'; leg.autoSettled = false; changed = true; }
+        return;
+      }
+      if (wasAuto && leg.result === m.rec.result) return;   // already correct
+      if (wasAuto && leg.result !== m.rec.result) corrected++;
+      leg.result = m.rec.result;
+      leg.autoSettled = true;
       legsFilled++; changed = true;
     });
     if (!changed) return;
@@ -1231,6 +1270,16 @@ function autoSettleBets(silent) {
     var msg = legsFilled
       ? ('Settled ' + legsFilled + ' leg' + (legsFilled!==1?'s':'') + ' across ' + betsChanged + ' bet' + (betsChanged!==1?'s':'') + '.')
       : 'Nothing new to settle.';
+    if (corrected) {
+      msg += '\n\n' + corrected + ' previously auto-settled leg' + (corrected!==1?'s were':' was')
+           + ' WRONG and has been corrected — the old version matched on horse name only,'
+           + ' so a run on a different day could be applied to your bet.';
+    }
+    if (ambiguous.length) {
+      var ua = ambiguous.filter(function(v,i,a){ return a.indexOf(v)===i; });
+      msg += '\n\nLeft pending (' + ua.length + '): ' + ua.slice(0,5).join('; ')
+           + (ua.length>5 ? '…' : '') + '\nSet these by hand.';
+    }
     if (unmatched.length) {
       var uniq = unmatched.filter(function(v,i,a){ return a.indexOf(v)===i; });
       msg += '\n\nNot found in results (' + uniq.length + '): ' + uniq.slice(0,6).join(', ')
