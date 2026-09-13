@@ -5699,6 +5699,23 @@ function renderMeetingsList() {
       + '<button class="l15-clear" onclick="clearMeeting(\'' + m.course + '\')">✕ Remove</button>'
     + '</div>';
   }).join('');
+
+  // Make it visible which going each course is actually being scored on —
+  // the dropdowns below are only a fallback now, so without this you can't
+  // tell whether a meeting is using its real going or your manual value.
+  var lines = [];
+  meetings.forEach(function(m) {
+    var r0 = (m.races || [])[0];
+    if (!r0) return;
+    var live = getGoingForRace(r0, '');
+    lines.push('<span style="color:' + (live ? 'var(--g)' : 'var(--mt)') + '">'
+      + esc(m.course) + ': ' + (live ? esc(live) : 'using dropdown') + '</span>');
+  });
+  if (lines.length) {
+    listEl.innerHTML += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);'
+      + 'margin:2px 0 10px;line-height:1.7">Going in use — ' + lines.join(' · ')
+      + '<br>Courses shown in green use their real going; the dropdowns below only apply to the rest.</div>';
+  }
 }
 
 function switchToMeeting(course) {
@@ -5709,6 +5726,10 @@ function switchToMeeting(course) {
   var hint = document.getElementById('hint');
   if (hint) hint.style.display = 'none';
   renderRaceList(S.currentRaces);
+  // Without this the card loads silently in the background and "tap to view"
+  // looks broken — you stay on whichever tab you tapped from.
+  try { go('races'); } catch(e) {}
+  try { window.scrollTo(0, 0); } catch(e) {}
 }
 
 function clearMeeting(course) {
