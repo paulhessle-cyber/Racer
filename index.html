@@ -5061,7 +5061,7 @@ function runPlacepot() {
     var ctx=buildFieldCtx(active);
     var paceInfo=assessPace(active);
 
-    var raceGoing = (typeof getGoingForRace === 'function') ? getGoingForRace(race) : going;
+    var raceGoing = getGoingForRace(race, going) || going;
     var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,raceGoing,ctx)*paceAdjust(r,paceInfo); });
     var rawTotal = rawArr.reduce(function(a,b){return a+b;},0)||1;
     var rawNorm  = rawArr.map(function(f){return f/rawTotal;});
@@ -5800,7 +5800,10 @@ function runL15(strategy) {
   var l15TurfGoing = (document.getElementById('l15-going-turf')||{}).value || 'Good';
   var l15AWGoing   = (document.getElementById('l15-going-aw')||{}).value   || 'Standard';
   function getL15Going(race) {
-    return (race.surface === 'aw') ? l15AWGoing : l15TurfGoing;
+    var manual = (race.surface === 'aw') ? l15AWGoing : l15TurfGoing;
+    // Real going for THIS course beats the single dropdown, which can only
+    // hold one value for every turf meeting of the day.
+    return getGoingForRace(race, manual) || manual;
   }
   var resEl   = document.getElementById('l15-results');
   resEl.innerHTML = '<div class="prog" style="margin:12px 0"><div class="spin"></div><p style="font-size:.8rem;color:var(--mt)">Scoring all horses and finding best combinations…</p></div>';
@@ -7083,6 +7086,25 @@ function bfRunnerToAppRunner(r, i) {
   return run;
 }
 
+// ── Per-course going ─────────────────────────────────────────────────────────
+// One "turf going" dropdown can't describe a day where Ayr is Heavy and
+// Newmarket is Good. The sweep already fetches the real going per course and
+// stores it on each race's lock, so prefer that and fall back to the dropdown
+// only when we genuinely don't know. Returns '' if nothing is known, so the
+// caller's own default applies.
+function getGoingForRace(race, fallback) {
+  if (!race) return fallback || '';
+  try {
+    // 1. Live per-course going captured by the sweep
+    var m = (S && S.goingByCourse) ? S.goingByCourse[race.course] : null;
+    if (m) return m;
+    // 2. Going recorded on this race's lock when it was predicted
+    var lk = (typeof plockAll === 'function') ? plockAll()[raceKeyFor(race)] : null;
+    if (lk && lk.going) return lk.going;
+  } catch(e) {}
+  return fallback || '';
+}
+
 function liveSurface(course, marketName) {
   var mn = (marketName || '').toLowerCase();
   if (/hrd|hurdle|chs|chase|nhf|bumper|hunt/.test(mn)) return 'jumps';
@@ -7704,6 +7726,11 @@ function autoPredictAllMeetings(force) {
             try {
               var sc = scoreRaceHeadless(stored);
               if (sc) { plockSave(stored, sc, goingByCourse[w.course] || ''); built++; }
+              // keep it for the rest of the session (L15 / placepot per-course going)
+              if (goingByCourse[w.course]) {
+                if (!S.goingByCourse) S.goingByCourse = {};
+                S.goingByCourse[w.course] = goingByCourse[w.course];
+              }
             } catch(e){}
           }
           return new Promise(function(res){ setTimeout(res, 400); }).then(step);
