@@ -175,7 +175,7 @@
   <div>
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v6.1 · 13 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v6.2 · 13 Sep 2026</div>
   </div>
   <div style="font-size:1.6rem">📊</div>
 </div>
@@ -1189,17 +1189,18 @@ function buildResultIndex() {
       add(k, { result: i === 0 ? 'won' : 'placed', date: e.date || '',
                course: e.course || '', time: e.time || '', placesKnown: placesKnown });
     });
-    // Losers: a runner we predicted that isn't in the result list.
-    // Only safe when we know the full frame.
-    if (placesKnown) {
-      (e.predictions || []).forEach(function(p){
-        var k = normHorse(p.name);
-        if (!k || seen[k]) return;
-        seen[k] = true;
-        add(k, { result: 'lost', date: e.date || '', course: e.course || '',
-                 time: e.time || '', placesKnown: true });
-      });
-    }
+    // A runner we predicted that isn't in the result list didn't win — and the
+    // winner is ALWAYS recorded, so 'lost' is certain for win betting. Whether
+    // it PLACED is only knowable when the full frame was logged, and 45% of
+    // races record just 1-2 finishers. Index it either way and carry the
+    // uncertainty, so win bets settle while each-way bets can hold back.
+    (e.predictions || []).forEach(function(p){
+      var k = normHorse(p.name);
+      if (!k || seen[k]) return;
+      seen[k] = true;
+      add(k, { result: 'lost', date: e.date || '', course: e.course || '',
+               time: e.time || '', placesKnown: placesKnown });
+    });
   });
   return idx;
 }
@@ -1242,6 +1243,13 @@ function autoSettleBets(silent) {
       if (!m) { unmatched.push(leg.name + (bet.date ? ' (' + bet.date + ')' : '')); return; }
       if (m.ambiguous) {
         ambiguous.push(leg.name + ' — ' + m.reason);
+        if (wasAuto) { leg.result = 'pending'; leg.autoSettled = false; changed = true; }
+        return;
+      }
+      // 'lost' from an incomplete frame is certain for a win bet, but for
+      // each-way we can't tell a beaten horse from a placed one.
+      if (m.rec.result === 'lost' && !m.rec.placesKnown && bet.isEW) {
+        ambiguous.push(leg.name + ' — place unknown (race logged without a full frame)');
         if (wasAuto) { leg.result = 'pending'; leg.autoSettled = false; changed = true; }
         return;
       }
