@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v5.1 · 14 Aug 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.0 · 5 Sep 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3450,10 +3450,27 @@ function showResults(scored, val, race, paceInfo) {
     var travelAlert = '';
     var _travDebug = ''; // diagnostic info shown on hover when alert doesn't fire
     if (S.model && S.model.trainerCourses && race && race.course) {
-      var trainerName = r.trainer || '';
       var hKey = (r.name || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
       var hStat = S.model.horseStats ? S.model.horseStats[hKey] : null;
-      if (!trainerName && hStat && hStat.tr) trainerName = hStat.tr;
+      // trainerCourses is keyed by the MODEL's trainer name (lowercase).
+      // Betfair supplies title-case ("Harry Charlton"), which never matched,
+      // so the badge silently gave up while the diagnostic — which uses
+      // hStat.tr — found the same alerts. Try the model's own key first,
+      // then case-normalised variants of the live-card name.
+      var trainerName = '';
+      var tcTable = S.model.trainerCourses || {};
+      var cands = [];
+      if (hStat && hStat.tr) cands.push(hStat.tr);
+      if (r.trainer) {
+        cands.push(r.trainer);
+        cands.push(String(r.trainer).toLowerCase().trim());
+        cands.push(String(r.trainer).toLowerCase().replace(/\s+/g,' ').trim());
+      }
+      for (var ci = 0; ci < cands.length; ci++) {
+        if (cands[ci] && tcTable[cands[ci]]) { trainerName = cands[ci]; break; }
+      }
+      // Nothing matched the table — keep a name for the diagnostic message
+      if (!trainerName) trainerName = (hStat && hStat.tr) || r.trainer || '';
 
       if (!trainerName) {
         _travDebug = 'Horse not in model (' + hKey + ')';
