@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.1 · 5 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.2 · 20 Sep 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -709,6 +709,8 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <input type="text" id="oddsProxyUrl" placeholder="https://odds.formintel.co.uk"
       style="width:100%;box-sizing:border-box;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:var(--mono);font-size:.78rem;margin-bottom:8px">
     <button class="btn bo" style="width:100%;font-size:.75rem" onclick="testOddsProxy()">Test connection</button>
+    <button class="btn bo" style="width:100%;font-size:.75rem;margin-top:8px" onclick="freeUpStorage()">🧹 Free up storage</button>
+    <div id="storageInfo" style="margin-top:6px;font-family:var(--mono);font-size:.6rem;color:var(--mt)"></div>
     <div id="oddsProxyStatus" style="margin-top:8px;font-family:var(--mono);font-size:.68rem"></div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">
       <div style="font-size:.62rem;color:var(--mt);margin-bottom:5px">Your results are private to this device. Device ID:</div>
@@ -6184,6 +6186,100 @@ function renderL15Stake() {
 
 
 // ── Save L15 selection to bet tracker ─────────────────────
+// ── Storage housekeeping ─────────────────────────────────────────────────────
+// iOS Safari caps localStorage at roughly 5MB per origin. The results log
+// alone reaches ~5.7MB at 3,000 races, and on top of that the app writes a
+// set of per-day keys (cards, odds, locks, naps) for EVERY meeting on EVERY
+// day and never deleted any of them. So saves eventually fail outright.
+var DAY_KEY_PREFIXES = ['rp_card_','rp_odds_','rp_plock_','rp_nap_','rp_napday_','rp_af_'];
+
+// Remove per-day keys older than keepDays. Today's locks are needed for
+// result logging, so keep a few days' margin.
+function pruneStaleDayKeys(keepDays) {
+  var keep = keepDays == null ? 3 : keepDays;
+  var cutoff = new Date(Date.now() - keep * 86400000).toISOString().slice(0,10);
+  var doomed = [], freed = 0;
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k) continue;
+      var isDayKey = DAY_KEY_PREFIXES.some(function(pre){ return k.indexOf(pre) === 0; });
+      if (!isDayKey) continue;
+      var m = k.match(/(\d{4}-\d{2}-\d{2})/);
+      if (!m || m[1] >= cutoff) continue;      // no date, or recent enough
+      doomed.push(k);
+    }
+    doomed.forEach(function(k){
+      try { freed += (localStorage.getItem(k) || '').length; localStorage.removeItem(k); } catch(e){}
+    });
+  } catch(e) {}
+  return { removed: doomed.length, freed: freed };
+}
+
+// Older log entries don't need every runner — the dashboards only read the
+// top few. Trim predictions on entries older than keepDays.
+function compactPredLog(keepDays) {
+  var keep = keepDays == null ? 14 : keepDays;
+  var cutoff = new Date(Date.now() - keep * 86400000).toISOString().slice(0,10);
+  try {
+    var log = getPredLog(), changed = 0;
+    log.forEach(function(e){
+      if (!e || !e.date || e.date >= cutoff) return;
+      if (e.predictions && e.predictions.length > 8) {
+        e.predictions = e.predictions.slice(0, 8);
+        changed++;
+      }
+    });
+    if (changed) savePredLog(log);
+    return changed;
+  } catch(e) { return 0; }
+}
+
+// Write that recovers from a full store instead of just failing.
+function safeSetItem(key, value) {
+  try { localStorage.setItem(key, value); return { ok: true }; }
+  catch (err) {
+    var quota = /quota|exceed/i.test(err && (err.name + ' ' + err.message));
+    if (!quota) return { ok: false, err: err };
+    var p1 = pruneStaleDayKeys(3);
+    try { localStorage.setItem(key, value); return { ok: true, recovered: 'pruned ' + p1.removed + ' old day files' }; }
+    catch (e2) {}
+    var n = compactPredLog(14);
+    try { localStorage.setItem(key, value); return { ok: true, recovered: 'pruned ' + p1.removed + ' old day files and compacted ' + n + ' old races' }; }
+    catch (e3) { return { ok: false, err: e3, quota: true, freed: p1.freed, compacted: n }; }
+  }
+}
+
+// Reclaim space. Old races are trimmed rather than deleted, and only after
+// the log has reached the server — losing results is worse than a full store.
+function freeUpStorage() {
+  var used = 0;
+  try { for (var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); used += k.length + (localStorage.getItem(k)||'').length; } } catch(e){}
+  var log = getPredLog();
+  var synced = (function(){ try { return localStorage.getItem(PUSH_SIG_KEY) === (log.length + ':' + ((log[log.length-1]||{}).raceKey||'')); } catch(e){ return false; } })();
+
+  var msg = 'Storage in use: ~' + Math.round(used/1024) + 'KB of roughly 5,000KB.\n'
+          + log.length + ' races logged.\n\n'
+          + (synced ? 'Your log IS backed up to the server.\n\n'
+                    : 'WARNING: this device has changes not yet pushed to the server.\n'
+                      + 'Export Results JSON first if you want a copy.\n\n')
+          + 'This will:\n'
+          + '  • delete cached cards/odds/picks older than 3 days\n'
+          + '  • trim races older than 14 days to their top 8 runners\n\n'
+          + 'No race and no result is deleted. Continue?';
+  if (!confirm(msg)) return;
+
+  var pruned = pruneStaleDayKeys(3);
+  var compacted = compactPredLog(14);
+  var after = 0;
+  try { for (var j=0;j<localStorage.length;j++){ var k2=localStorage.key(j); after += k2.length + (localStorage.getItem(k2)||'').length; } } catch(e){}
+  var el = document.getElementById('storageInfo');
+  var line = 'Freed ' + Math.round((used-after)/1024) + 'KB — removed ' + pruned.removed
+           + ' old cached files, trimmed ' + compacted + ' old races. Now ~' + Math.round(after/1024) + 'KB.';
+  if (el) el.textContent = line;
+  alert(line);
+}
+
 function saveL15AsBet(idx) {
   try {
     // Look up pre-stored combo by card index
@@ -6225,7 +6321,18 @@ function saveL15AsBet(idx) {
     var existing = localStorage.getItem(BETS_KEY);
     var log = existing ? JSON.parse(existing) : [];
     log.push(bet);
-    localStorage.setItem(BETS_KEY, JSON.stringify(log));
+    var res = safeSetItem(BETS_KEY, JSON.stringify(log));
+    if (!res.ok && res.quota) {
+      alert('Storage is full, so the bet could not be saved.\n\n'
+        + 'Your results log has outgrown the browser\'s ~5MB limit. It is already '
+        + 'backed up to the server, so the safest fix is:\n\n'
+        + '1. Tap "Export Results JSON" to keep a copy\n'
+        + '2. Then use Setup > Free up storage\n\n'
+        + 'Freed ' + Math.round((res.freed||0)/1024) + 'KB by clearing old day files, '
+        + 'which was not enough on its own.');
+      return;
+    }
+    if (res.recovered) showLiveStatus('Storage was full — ' + res.recovered + '. Bet saved.', 'warn');
 
     // Confirm and offer export
     var names = horses.map(function(h){ return h.name; }).join(', ');
@@ -8032,6 +8139,7 @@ function fullSweep(force) {
 // Early backlog push: if this device holds logged races the server hasn't got
 // (e.g. a previous day's racing, or a session where the push failed), get them
 // up straight away rather than waiting for a race to settle.
+setTimeout(function(){ try { pruneStaleDayKeys(3); } catch(e){} }, 2000);
 setTimeout(function(){ try { pushLogToServer(false); } catch(e){} }, 4000);
 setTimeout(function(){ try { fullSweep(false); } catch(e){} }, 8000);
 // And re-sweep every 20 minutes so late-opening markets and newly settled
