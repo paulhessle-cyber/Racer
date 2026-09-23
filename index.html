@@ -368,7 +368,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.2 · 20 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.3 · 23 Sep 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -915,6 +915,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   </div>
 </div>
 
+<script src="plog.js?v=6.3"></script>
 <script>
 
 
@@ -3694,6 +3695,7 @@ function lsPurgeOld() {
   try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0||k.indexOf('rp_plock_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
 }
 lsPurgeOld();
+try { FIPlog.purgeDead(); FIPlog.read(); } catch(e) { console.warn('plog init:', e); }
 
 // ── Full-card persistence ───────────────────────────────────
 // Live cards can't be re-fetched once races run (Betfair drops closed
@@ -6250,33 +6252,47 @@ function safeSetItem(key, value) {
   }
 }
 
-// Reclaim space. Old races are trimmed rather than deleted, and only after
-// the log has reached the server — losing results is worse than a full store.
+// Human-readable breakdown of what's using this web address's ~5MB.
+function kb(b) { return Math.round(b/1024) + 'KB'; }
+function storageSummaryText(rep) {
+  var g = rep.groups, lines = [];
+  lines.push('Storage in use: ~' + kb(rep.total) + ' of roughly 5,000KB.');
+  if (g.log)        lines.push('  • Results log (compressed): ' + kb(g.log));
+  if (g.oldLog)     lines.push('  • Results log (old format): ' + kb(g.oldLog));
+  if (g.deadModels) lines.push('  • Old saved model copies: ' + kb(g.deadModels));
+  if (g.dayCache)   lines.push('  • Today\'s cards/odds/picks: ' + kb(g.dayCache));
+  if (g.formintel)  lines.push('  • Other Formintel settings/bets: ' + kb(g.formintel));
+  if (g.other) {
+    lines.push('  • Other apps on this address: ' + kb(g.other));
+    rep.otherKeys.slice(0, 4).forEach(function(o){ lines.push('      – ' + o.key.slice(0, 32) + ': ' + kb(o.bytes)); });
+  }
+  return lines.join('\n');
+}
+
+// Reclaim space. Nothing here deletes a race or a result.
 function freeUpStorage() {
-  var used = 0;
-  try { for (var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); used += k.length + (localStorage.getItem(k)||'').length; } } catch(e){}
-  var log = getPredLog();
+  var before = FIPlog.report();
+  var log = getPredLog();   // also migrates an old-format log if one is present
   var synced = (function(){ try { return localStorage.getItem(PUSH_SIG_KEY) === (log.length + ':' + ((log[log.length-1]||{}).raceKey||'')); } catch(e){ return false; } })();
 
-  var msg = 'Storage in use: ~' + Math.round(used/1024) + 'KB of roughly 5,000KB.\n'
-          + log.length + ' races logged.\n\n'
-          + (synced ? 'Your log IS backed up to the server.\n\n'
-                    : 'WARNING: this device has changes not yet pushed to the server.\n'
-                      + 'Export Results JSON first if you want a copy.\n\n')
+  var msg = storageSummaryText(before) + '\n' + log.length + ' races logged. '
+          + (synced ? 'Backed up to the server.\n\n' : 'Some changes not yet on the server.\n\n')
           + 'This will:\n'
-          + '  • delete cached cards/odds/picks older than 3 days\n'
+          + '  • delete old saved model copies (models load from GitHub)\n'
+          + '  • delete cached cards/odds/picks from previous days\n'
           + '  • trim races older than 14 days to their top 8 runners\n\n'
           + 'No race and no result is deleted. Continue?';
   if (!confirm(msg)) return;
 
-  var pruned = pruneStaleDayKeys(3);
+  var dead = FIPlog.purgeDead();
+  var pruned = pruneStaleDayKeys(1);
   var compacted = compactPredLog(14);
-  var after = 0;
-  try { for (var j=0;j<localStorage.length;j++){ var k2=localStorage.key(j); after += k2.length + (localStorage.getItem(k2)||'').length; } } catch(e){}
+  var after = FIPlog.report();
+  var line = 'Freed ' + kb(Math.max(0, before.total - after.total)) + ' — removed '
+           + dead.removed + ' old model copies, ' + pruned.removed + ' old cached files, trimmed '
+           + compacted + ' old races.\n\n' + storageSummaryText(after);
   var el = document.getElementById('storageInfo');
-  var line = 'Freed ' + Math.round((used-after)/1024) + 'KB — removed ' + pruned.removed
-           + ' old cached files, trimmed ' + compacted + ' old races. Now ~' + Math.round(after/1024) + 'KB.';
-  if (el) el.textContent = line;
+  if (el) el.textContent = 'Freed ' + kb(Math.max(0, before.total - after.total)) + '. Now ~' + kb(after.total) + ' of ~5,000KB.';
   alert(line);
 }
 
@@ -6728,17 +6744,27 @@ function initCalibCount() {
 
 var PRED_LOG_KEY = 'rq_pred_log_v1';
 
+// Stored compressed, one key per month — see plog.js. Old-format data is
+// migrated automatically on first read.
 function getPredLog() {
-  try { return JSON.parse(localStorage.getItem(PRED_LOG_KEY) || '[]'); } catch(e) { return []; }
+  try { return FIPlog.read(); } catch(e) { console.error('getPredLog:', e); return []; }
 }
 
 function savePredLog(log) {
-  try { localStorage.setItem(PRED_LOG_KEY, JSON.stringify(log)); }
-  catch(e) {
+  if (FIPlog.write(log)) return true;
+  var err = FIPlog.lastError();
+  if (FIPlog.isQuota(err)) {
+    // Try to make room once (old caches, dead model copies), then retry.
+    pruneStaleDayKeys(1); FIPlog.purgeDead();
+    if (FIPlog.write(log)) return true;
+    var rep = FIPlog.report();
     alert('⚠ Could not save this result — device storage is full.\n\n' +
-          'Your existing log is safe. Export your results JSON now, then ' +
-          'consider clearing old data (Setup tab) to free space.');
+          'Your existing log is safe. ' + storageSummaryText(rep) +
+          '\nOpen Setup → Free up storage for details.');
+  } else {
+    alert('⚠ Could not save this result: ' + (err && err.message || 'unknown error'));
   }
+  return false;
 }
 
 function getPredictionLog(raceKey) {

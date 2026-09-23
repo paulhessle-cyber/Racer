@@ -208,6 +208,7 @@ canvas{width:100%!important;height:100%!important}
   </button>
 </div>
 
+<script src="plog.js?v=6.3"></script>
 <script>
 var SEED=[
   {date:'2025-03-19',type:'Lucky 15',spent:24,   won:98.66,notes:'',        retrain:false},
@@ -644,7 +645,7 @@ document.getElementById('fRetrain').addEventListener('change',function(){
 var PRED_LOG_KEY = 'rq_pred_log_v1';
 
 function getPredLog() {
-  try { return JSON.parse(localStorage.getItem(PRED_LOG_KEY) || '[]'); } catch(e) { return []; }
+  try { return FIPlog.read(); } catch(e) { return []; }
 }
 
 function sbox(v,l,c){return '<div class="sbox"><div class="sval '+c+'">'+v+'</div><div class="slbl">'+l+'</div></div>';}

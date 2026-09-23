@@ -198,6 +198,7 @@
   <!-- Import shown before data loads -->
 </div>
 
+<script src="plog.js?v=6.3"></script>
 <script>
 var LOG_KEY = 'rq_pred_log_v1';
 var loadedLog = null;
@@ -210,17 +211,9 @@ function classify(e){ return e.topPickWon?'win':e.topPickPlaced?'place':'loss'; 
 function pct(n,t){ return t?Math.round(n/t*100)+'%':'0%'; }
 function fmt(n){ return (n>=0?'+':'')+n.toFixed(2); }
 
+// The log is stored compressed by month (plog.js, shared with the predictor).
 function tryLocalStorage() {
-  try {
-    var raw = localStorage.getItem(LOG_KEY);
-    if (raw){ var d=JSON.parse(raw); if(Array.isArray(d)&&d.length) return d; }
-    for(var i=0;i<localStorage.length;i++){
-      var k=localStorage.key(i);
-      if(k&&k.indexOf('rq_pred')>-1){
-        try{ var d2=JSON.parse(localStorage.getItem(k)); if(Array.isArray(d2)&&d2.length&&d2[0].raceKey) return d2; }catch(e2){}
-      }
-    }
-  } catch(e){}
+  try { var d = FIPlog.read(); if (Array.isArray(d) && d.length) return d; } catch(e){}
   return null;
 }
 
@@ -1863,7 +1856,7 @@ function mergeServerLog(serverRaces) {
   });
   if (added) {
     loadedLog = local;
-    try { localStorage.setItem(LOG_KEY, JSON.stringify(local)); } catch(e){}
+    try { FIPlog.write(local); } catch(e){}
     renderAll();
   }
   return added;
