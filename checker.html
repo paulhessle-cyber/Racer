@@ -1947,12 +1947,16 @@ function loadFromServer(manual) {
 // Push this device's stored log up to the server in chunks of 500 races.
 // Chunking avoids mobile fetch timeouts on large logs (3000+ races = ~7MB).
 function pushToServer(manual) {
+  try {
   var base = getProxyBase();
+  alert('DEBUG: base=' + base + ' fetch=' + (typeof fetch));
   if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return; }
   var who = getOwnerId();
+  alert('DEBUG: who=' + who);
   if (!who) { setSyncStatus('No device ID — open the Predictor once on this device first.', 'warn'); return; }
   var log;
-  try { log = FIPlog.read() || []; } catch(e) { log = []; }
+  try { log = FIPlog.read() || []; } catch(e) { alert('DEBUG: FIPlog.read error: ' + e); log = []; }
+  alert('DEBUG: log.length=' + log.length);
   if (!log.length) { setSyncStatus('Nothing stored on this device to push.', 'warn'); return; }
 
   var CHUNK = 500;
@@ -1989,6 +1993,7 @@ function pushToServer(manual) {
   }
 
   sendChunk(0);
+  } catch(e) { alert('pushToServer error: ' + e); }
 }
 
 (function autoLoadFromServer() {
