@@ -229,14 +229,28 @@ function loadFile(input) {
   if (!file) return;
   var reader = new FileReader();
   reader.onload = function(e) {
+    var data;
     try {
-      var data = JSON.parse(e.target.result);
+      data = JSON.parse(e.target.result);
       if (!Array.isArray(data)||!data.length) throw new Error('Empty or invalid file');
       if (!data[0].raceKey) throw new Error('Not a Formintel results file');
-      loadedLog = data;
-      showTab('overview');
-      renderAll();
-    } catch(err) { alert('Could not read file: '+err.message); }
+    } catch(err) { alert('Could not read file: '+err.message); return; }
+    // Restore: ADD the file's races to what this device already holds and save
+    // them. Never replace — a backup from last week must not wipe newer races.
+    var r = mergeIntoStorage(data);
+    loadedLog = r.log;
+    showTab('overview');
+    renderAll();
+    if (!r.saved) {
+      alert('Showing ' + r.log.length + ' races, but they could not be saved on this device' +
+        (r.quota ? ' (storage is full — try Setup → Free up storage in the Predictor)' : '') +
+        '. Nothing already saved was changed.');
+    } else if (r.added) {
+      alert('Restored ' + r.added + ' races from the file and saved them on this device.\n' +
+        'You now have ' + r.log.length + ' races in total.');
+    } else {
+      alert('All ' + data.length + ' races in this file are already saved on this device.');
+    }
   };
   reader.readAsText(file);
 }
@@ -802,8 +816,8 @@ function renderImport() {
   document.getElementById('app').innerHTML =
     '<div class="import-zone"><input type="file" accept=".json" onchange="loadFile(this)">'
     + '<div class="import-icon">📂</div>'
-    + '<div class="import-title">Import Results</div>'
-    + '<div class="import-sub">Tap to load your exported results file<br>In the Predictor: tap <b>⬇ Export Results JSON</b></div>'
+    + '<div class="import-title">Import / Restore Results</div>'
+    + '<div class="import-sub">Tap to pick an exported results file<br>Its races are <b>added</b> to this device — nothing is replaced</div>'
     + '</div>'
     + '<button class="ls-btn" onclick="loadFromServer(true)">☁️ Load From Server</button>'
     + '<div id="syncStatus" style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:10px 14px;line-height:1.6"></div>'
@@ -1843,24 +1857,31 @@ function raceIdent(e) {
   return e.raceKey || '';
 }
 
+// Add races to the log SAVED on this device (not whatever is on screen, which
+// may be a file being viewed) and save the result. Existing races win.
+function mergeIntoStorage(races) {
+  var stored = [];
+  try { stored = FIPlog.read() || []; } catch(e) { stored = []; }
+  var merged = stored.slice(), seen = {}, added = 0;
+  merged.forEach(function(e){ var id = raceIdent(e); if (id) seen[id] = true; });
+  (races || []).forEach(function(e){
+    var id = raceIdent(e);
+    if (!id || seen[id]) return;
+    merged.push(e); seen[id] = true; added++;
+  });
+  var saved = true, quota = false;
+  if (added) {
+    try { saved = FIPlog.write(merged); } catch(e) { saved = false; }
+    if (!saved) { try { quota = FIPlog.isQuota(FIPlog.lastError()); } catch(e){} }
+  }
+  return { log: merged, added: added, saved: saved, quota: quota };
+}
+
 function mergeServerLog(serverRaces) {
   if (!Array.isArray(serverRaces) || !serverRaces.length) return 0;
-  var local = Array.isArray(loadedLog) ? loadedLog.slice() : [];
-  var seen = {};
-  local.forEach(function(e){ var id = raceIdent(e); if (id) seen[id] = true; });
-  var added = 0;
-  serverRaces.forEach(function(e){
-    var id = raceIdent(e);
-    if (!id) return;
-    if (seen[id]) return;             // already have it locally — keep local copy
-    local.push(e); seen[id] = true; added++;
-  });
-  if (added) {
-    loadedLog = local;
-    try { FIPlog.write(local); } catch(e){}
-    renderAll();
-  }
-  return added;
+  var r = mergeIntoStorage(serverRaces);
+  if (r.added) { loadedLog = r.log; renderAll(); }
+  return r.added;
 }
 
 // Show what the server sync actually did, on the import screen and as a
