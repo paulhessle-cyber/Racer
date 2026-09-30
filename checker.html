@@ -1938,8 +1938,8 @@ function loadFromServer(manual) {
     });
 }
 
-// Push this device's stored log up to the server. Called by "Save to Server"
-// button and after a file restore. Fire-and-forget on success; shows status.
+// Push this device's stored log up to the server in chunks of 500 races.
+// Chunking avoids mobile fetch timeouts on large logs (3000+ races = ~7MB).
 function pushToServer(manual) {
   var base = getProxyBase();
   if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return; }
@@ -1948,26 +1948,41 @@ function pushToServer(manual) {
   var log;
   try { log = FIPlog.read() || []; } catch(e) { log = []; }
   if (!log.length) { setSyncStatus('Nothing stored on this device to push.', 'warn'); return; }
-  setSyncStatus('Pushing ' + log.length + ' races to server…', 'warn');
-  fetch(base + '/log?owner=' + encodeURIComponent(who), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(log)
-  })
-  .then(function(r){
-    if (!r.ok) throw new Error('server returned ' + r.status);
-    return r.json();
-  })
-  .then(function(res){
-    var msg = '✓ Pushed ' + log.length + ' races — server merged ' + (res.merged || 0) + ' new.';
-    setSyncStatus(msg, 'ok');
-    if (!document.getElementById('syncStatus')) alert(msg);
-  })
-  .catch(function(err){
-    var msg = '⚠ Push failed: ' + err.message;
-    setSyncStatus(msg, 'err');
-    if (!document.getElementById('syncStatus')) alert(msg);
-  });
+
+  var CHUNK = 500;
+  var chunks = [];
+  for (var i = 0; i < log.length; i += CHUNK) chunks.push(log.slice(i, i + CHUNK));
+  var totalMerged = 0, sent = 0;
+
+  function sendChunk(idx) {
+    if (idx >= chunks.length) {
+      var msg = '✓ Pushed ' + log.length + ' races (' + chunks.length + ' batches) — server merged ' + totalMerged + ' new.';
+      setSyncStatus(msg, 'ok');
+      if (!document.getElementById('syncStatus')) alert(msg);
+      return;
+    }
+    setSyncStatus('Pushing batch ' + (idx+1) + ' of ' + chunks.length + ' (' + Math.round((idx/chunks.length)*100) + '%)…', 'warn');
+    fetch(base + '/log?owner=' + encodeURIComponent(who), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chunks[idx])
+    })
+    .then(function(r){
+      if (!r.ok) throw new Error('server returned ' + r.status + ' on batch ' + (idx+1));
+      return r.json();
+    })
+    .then(function(res){
+      totalMerged += (res.merged || 0);
+      sendChunk(idx + 1);
+    })
+    .catch(function(err){
+      var msg = '⚠ Push stopped at batch ' + (idx+1) + ': ' + err.message;
+      setSyncStatus(msg, 'err');
+      if (!document.getElementById('syncStatus')) alert(msg);
+    });
+  }
+
+  sendChunk(0);
 }
 
 (function autoLoadFromServer() {
