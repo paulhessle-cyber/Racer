@@ -193,6 +193,7 @@
   <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
   <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
   <button class="tab-btn" onclick="showTab('conf')">🎯 Confidence</button>
+  <button class="tab-btn" onclick="pushToServer(true)" title="Save to Server" style="margin-left:auto;opacity:.7">⬆️☁️</button>
 </div>
 
 <div id="app">
@@ -1958,10 +1959,14 @@ function pushToServer(manual) {
     return r.json();
   })
   .then(function(res){
-    setSyncStatus('✓ Pushed ' + log.length + ' races — server merged ' + (res.merged || 0) + ' new.', 'ok');
+    var msg = '✓ Pushed ' + log.length + ' races — server merged ' + (res.merged || 0) + ' new.';
+    setSyncStatus(msg, 'ok');
+    if (!document.getElementById('syncStatus')) alert(msg);
   })
   .catch(function(err){
-    setSyncStatus('⚠ Push failed: ' + err.message, 'err');
+    var msg = '⚠ Push failed: ' + err.message;
+    setSyncStatus(msg, 'err');
+    if (!document.getElementById('syncStatus')) alert(msg);
   });
 }
 
