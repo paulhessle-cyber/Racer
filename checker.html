@@ -184,6 +184,10 @@
             style="display:none;font-size:.7rem;padding:4px 8px;border-radius:6px;
                    border:1px solid var(--bd);background:transparent;color:var(--mt);
                    cursor:pointer;font-family:var(--mono)">⬆️ Sync</button>
+    <button id="syncid-btn" onclick="changeSyncId()" title="View or change sync ID"
+            style="display:none;font-size:.6rem;padding:3px 8px;border-radius:6px;
+                   border:1px solid var(--bd);background:transparent;color:var(--mt);
+                   cursor:pointer;font-family:var(--mono)">🔑 Sync ID</button>
   </div>
 </div>
 
@@ -282,7 +286,7 @@ function showTab(tab) {
   if (tab === 'conf') renderConfTab();
 }
 
-function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; var sb=document.getElementById('sync-btn'); if(sb) sb.style.display='none'; renderImport(); }
+function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
 function setFilter(val){ currentFilter=val; renderRaces(); }
 
 // ── Main render ─────────────────────────────────────────────
@@ -291,7 +295,7 @@ function renderAll() {
   if (!log||!log.length){ renderImport(); return; }
 
   document.getElementById('tab-bar').style.display='grid';
-  var sb=document.getElementById('sync-btn'); if(sb) sb.style.display='block';
+  ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='block';});
   var sorted = log.slice().sort(function(a,b){
     return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
   });
@@ -1895,11 +1899,39 @@ function mergeServerLog(serverRaces) {
 // Show what the server sync actually did, on the import screen and as a
 // subtitle note. Silent failure is what made this look like "nothing saves":
 // a 404, CORS block or empty server all looked identical (blank screen).
+// On the main screen there is no #syncStatus box, so progress goes on the Sync
+// button and final results pop up — but only for a sync the user started
+// (the silent auto-load on open shouldn't throw alerts at you when offline).
+var _manualSync = false;
 function setSyncStatus(msg, kind) {
   var el = document.getElementById('syncStatus');
-  if (!el) return;
-  var col = kind === 'ok' ? 'var(--green)' : kind === 'warn' ? 'var(--gold)' : 'var(--red)';
-  el.innerHTML = '<span style="color:' + col + '">' + msg + '</span>';
+  if (el) {
+    var col = kind === 'ok' ? 'var(--green)' : kind === 'warn' ? 'var(--gold)' : 'var(--red)';
+    el.innerHTML = '<span style="color:' + col + '">' + msg + '</span>';
+    return;
+  }
+  var sb = document.getElementById('sync-btn');
+  if (kind === 'warn' && sb && _manualSync) { sb.textContent = '⏳ ' + msg.replace(/<[^>]+>/g,'').slice(0, 18); return; }
+  if (sb) sb.textContent = '⬆️ Sync';
+  if (_manualSync && kind !== 'warn') alert(msg.replace(/<br>/g, '\n').replace(/<[^>]+>/g, ''));
+}
+
+// The sync ID ties devices together: every device using the same ID shares
+// one results history on the server. A random per-device ID meant each device
+// only ever synced with itself.
+function askForOwnerId() {
+  var cur = getOwnerId();
+  var v = prompt(
+    'Sync ID — use the SAME ID on every device (phone, laptop, Predictor, Results).\n\n' +
+    'Find it in the Predictor under Setup → Device ID, or type any code you like ' +
+    '(letters and numbers, e.g. paulracing).\n\n' +
+    (cur ? 'This device currently uses: ' + cur : 'This device has no ID yet.'),
+    cur || '');
+  if (v === null) return cur;               // cancelled
+  var id = String(v).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!id) return cur;
+  try { localStorage.setItem(OWNER_KEY, id); } catch(e) {}
+  return id;
 }
 
 function loadFromServer(manual) {
@@ -1944,56 +1976,69 @@ function loadFromServer(manual) {
     });
 }
 
-// Push this device's stored log up to the server in chunks of 500 races.
-// Chunking avoids mobile fetch timeouts on large logs (3000+ races = ~7MB).
+// Sync = push this device's races up (in 500-race batches, so a 3,000+ race
+// log doesn't time out on a phone), then pull down anything other devices
+// with the same sync ID have sent. Every outcome is reported — no silent exits.
 function pushToServer(manual) {
+  _manualSync = !!manual;
+  function done(msg, kind) { setSyncStatus(msg, kind); _manualSync = false; }
   try {
-  var base = getProxyBase();
-  alert('DEBUG: base=' + base + ' fetch=' + (typeof fetch));
-  if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return; }
-  var who = getOwnerId();
-  alert('DEBUG: who=' + who);
-  if (!who) { setSyncStatus('No device ID — open the Predictor once on this device first.', 'warn'); return; }
-  var log;
-  try { log = FIPlog.read() || []; } catch(e) { alert('DEBUG: FIPlog.read error: ' + e); log = []; }
-  alert('DEBUG: log.length=' + log.length);
-  if (!log.length) { setSyncStatus('Nothing stored on this device to push.', 'warn'); return; }
+    var base = getProxyBase();
+    if (!base || typeof fetch !== 'function') { done('⚠ No server address set.', 'err'); return; }
+    var who = getOwnerId();
+    if (!who && manual) who = askForOwnerId();
+    if (!who) { done('⚠ Sync needs a sync ID. Tap Sync again and enter one.', 'err'); return; }
 
-  var CHUNK = 500;
-  var chunks = [];
-  for (var i = 0; i < log.length; i += CHUNK) chunks.push(log.slice(i, i + CHUNK));
-  var totalMerged = 0, sent = 0;
+    var log;
+    try { log = FIPlog.read() || []; } catch(e) { log = []; }
 
-  function sendChunk(idx) {
-    if (idx >= chunks.length) {
-      var msg = '✓ Pushed ' + log.length + ' races (' + chunks.length + ' batches) — server merged ' + totalMerged + ' new.';
-      setSyncStatus(msg, 'ok');
-      if (!document.getElementById('syncStatus')) alert(msg);
-      return;
+    var CHUNK = 500, chunks = [];
+    for (var i = 0; i < log.length; i += CHUNK) chunks.push(log.slice(i, i + CHUNK));
+    var totalMerged = 0;
+
+    function pull() {
+      setSyncStatus('Downloading…', 'warn');
+      fetch(base + '/export?owner=' + encodeURIComponent(who))
+        .then(function(r){ if (!r.ok) throw new Error('server returned ' + r.status); return r.json(); })
+        .then(function(d){
+          var races = Array.isArray(d) ? d : (d && (d.log || d.races)) || [];
+          var added = races.length ? mergeServerLog(races) : 0;
+          var now = 0; try { now = (FIPlog.read() || []).length; } catch(e) {}
+          done('✓ Sync complete (ID: ' + who + ')\n\n' +
+               'Sent ' + log.length + ' races — ' + totalMerged + ' were new to the server.\n' +
+               'Received ' + added + ' new races from the server.\n' +
+               'Server now holds ' + races.length + ' races; this device holds ' + now + '.', 'ok');
+        })
+        .catch(function(err){ done('⚠ Upload worked but download failed: ' + err.message, 'err'); });
     }
-    setSyncStatus('Pushing batch ' + (idx+1) + ' of ' + chunks.length + ' (' + Math.round((idx/chunks.length)*100) + '%)…', 'warn');
-    fetch(base + '/log?owner=' + encodeURIComponent(who), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chunks[idx])
-    })
-    .then(function(r){
-      if (!r.ok) throw new Error('server returned ' + r.status + ' on batch ' + (idx+1));
-      return r.json();
-    })
-    .then(function(res){
-      totalMerged += (res.merged || 0);
-      sendChunk(idx + 1);
-    })
-    .catch(function(err){
-      var msg = '⚠ Push stopped at batch ' + (idx+1) + ': ' + err.message;
-      setSyncStatus(msg, 'err');
-      if (!document.getElementById('syncStatus')) alert(msg);
-    });
-  }
 
-  sendChunk(0);
-  } catch(e) { alert('pushToServer error: ' + e); }
+    function sendChunk(idx) {
+      if (idx >= chunks.length) { pull(); return; }
+      setSyncStatus('Sending ' + (idx+1) + '/' + chunks.length, 'warn');
+      fetch(base + '/log?owner=' + encodeURIComponent(who), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chunks[idx])
+      })
+      .then(function(r){ if (!r.ok) throw new Error('server returned ' + r.status); return r.json(); })
+      .then(function(res){ totalMerged += (res && res.merged) || 0; sendChunk(idx + 1); })
+      .catch(function(err){
+        done('⚠ Sync stopped at batch ' + (idx+1) + ' of ' + chunks.length + ': ' + err.message +
+             '\n\nNothing is lost — tap Sync again to carry on.', 'err');
+      });
+    }
+
+    sendChunk(0);
+  } catch(e) { done('⚠ Sync error: ' + e.message, 'err'); }
+}
+
+// Long-press alternative: a separate tap target to view or change the sync ID.
+function changeSyncId() {
+  var before = getOwnerId();
+  var after = askForOwnerId();
+  if (after && after !== before) {
+    if (confirm('Sync ID set to "' + after + '". Sync now?')) pushToServer(true);
+  }
 }
 
 (function autoLoadFromServer() {
