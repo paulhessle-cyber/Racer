@@ -820,6 +820,7 @@ function renderImport() {
     + '<div class="import-sub">Tap to pick an exported results file<br>Its races are <b>added</b> to this device — nothing is replaced</div>'
     + '</div>'
     + '<button class="ls-btn" onclick="loadFromServer(true)">☁️ Load From Server</button>'
+    + '<button class="ls-btn" onclick="pushToServer(true)" style="margin-top:6px">⬆️ Save to Server</button>'
     + '<div id="syncStatus" style="font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:center;padding:10px 14px;line-height:1.6"></div>'
     + '<button class="ls-btn" onclick="tryLS()">🔄 Try Load From This Device\'s Storage</button>';
 }
@@ -1911,7 +1912,7 @@ function loadFromServer(manual) {
     .then(function(d){
       var races = Array.isArray(d) ? d : (d && (d.log || d.races || d.results)) || [];
       if (!races.length) {
-        setSyncStatus('Connected, but the server has no results yet. Open the Predictor and tap ⬇ Export Results JSON to push them up.', 'warn');
+        setSyncStatus('Connected, but the server has no results yet. Log a race in the Predictor or tap ⬆ Save to Server to push your local races up.', 'warn');
         return 0;
       }
       // Set status BEFORE merging: a successful merge calls renderAll(), which
@@ -1934,6 +1935,34 @@ function loadFromServer(manual) {
         + '<br>Check ' + base + '/export opens in your browser.', 'err');
       return 0;
     });
+}
+
+// Push this device's stored log up to the server. Called by "Save to Server"
+// button and after a file restore. Fire-and-forget on success; shows status.
+function pushToServer(manual) {
+  var base = getProxyBase();
+  if (!base || typeof fetch !== 'function') { setSyncStatus('No proxy URL configured.', 'err'); return; }
+  var who = getOwnerId();
+  if (!who) { setSyncStatus('No device ID — open the Predictor once on this device first.', 'warn'); return; }
+  var log;
+  try { log = FIPlog.read() || []; } catch(e) { log = []; }
+  if (!log.length) { setSyncStatus('Nothing stored on this device to push.', 'warn'); return; }
+  setSyncStatus('Pushing ' + log.length + ' races to server…', 'warn');
+  fetch(base + '/log?owner=' + encodeURIComponent(who), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(log)
+  })
+  .then(function(r){
+    if (!r.ok) throw new Error('server returned ' + r.status);
+    return r.json();
+  })
+  .then(function(res){
+    setSyncStatus('✓ Pushed ' + log.length + ' races — server merged ' + (res.merged || 0) + ' new.', 'ok');
+  })
+  .catch(function(err){
+    setSyncStatus('⚠ Push failed: ' + err.message, 'err');
+  });
 }
 
 (function autoLoadFromServer() {
