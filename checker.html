@@ -178,7 +178,13 @@
     <div class="hdr-sub" id="subtitle">No data loaded</div>
     <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v6.2 · 13 Sep 2026</div>
   </div>
-  <div style="font-size:1.6rem">📊</div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+    <div style="font-size:1.6rem">📊</div>
+    <button id="sync-btn" onclick="pushToServer(true)" title="Save to Server"
+            style="display:none;font-size:.7rem;padding:4px 8px;border-radius:6px;
+                   border:1px solid var(--bd);background:transparent;color:var(--mt);
+                   cursor:pointer;font-family:var(--mono)">⬆️ Sync</button>
+  </div>
 </div>
 
 <div class="tabs" id="tab-bar" style="display:none">
@@ -193,7 +199,6 @@
   <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
   <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
   <button class="tab-btn" onclick="showTab('conf')">🎯 Confidence</button>
-  <button class="tab-btn" onclick="pushToServer(true)" title="Save to Server" style="margin-left:auto;opacity:.7">⬆️☁️</button>
 </div>
 
 <div id="app">
@@ -277,7 +282,7 @@ function showTab(tab) {
   if (tab === 'conf') renderConfTab();
 }
 
-function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; renderImport(); }
+function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; var sb=document.getElementById('sync-btn'); if(sb) sb.style.display='none'; renderImport(); }
 function setFilter(val){ currentFilter=val; renderRaces(); }
 
 // ── Main render ─────────────────────────────────────────────
@@ -286,6 +291,7 @@ function renderAll() {
   if (!log||!log.length){ renderImport(); return; }
 
   document.getElementById('tab-bar').style.display='grid';
+  var sb=document.getElementById('sync-btn'); if(sb) sb.style.display='block';
   var sorted = log.slice().sort(function(a,b){
     return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
   });
