@@ -2350,6 +2350,26 @@ function renderValueTab() {
   h += ' (' + vpEwWins + ' wins + ' + vpEwPlaces + ' places only)</span>';
   h += '</div>';
 
+  // ── Model's pick (v7.0+): races where the model's own choice differed
+  // from the market-calibrated top pick. Is the model worth trusting?
+  var mpRaces = sorted.filter(function(e){ return e.modelPickName && e.modelPickOdds > 1; });
+  h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-family:var(--mono);font-size:.68rem">';
+  h += '<div style="color:var(--mt);font-size:.6rem;letter-spacing:1px;margin-bottom:6px">🧠 MODEL\u2019S PICK (when it disagrees with the market)</div>';
+  if (!mpRaces.length) {
+    h += '<span style="color:var(--mt)">No data yet — tracked from v7.0 (3 Oct 2026).</span>';
+  } else {
+    var mpW = mpRaces.filter(function(e){ return e.modelPickWon; });
+    var mpPnl = mpW.reduce(function(t,e){ return t + e.modelPickOdds; }, 0) - mpRaces.length;
+    var tpW = mpRaces.filter(function(e){ return e.topPickWon; });
+    var tpPnl = tpW.reduce(function(t,e){ return t + (e.topPickOdds||0); }, 0) - mpRaces.length;
+    var mpRoi = mpPnl / mpRaces.length * 100, tpRoi = tpPnl / mpRaces.length * 100;
+    h += mpRaces.length + ' races. Model\u2019s pick: ' + mpW.length + ' won, <strong style="color:' + (mpRoi>=0?'var(--g)':'var(--re)') + '">'
+      + (mpRoi>=0?'+':'') + Math.round(mpRoi) + '% ROI</strong>. Top pick in the same races: ' + tpW.length + ' won, '
+      + (tpRoi>=0?'+':'') + Math.round(tpRoi) + '% ROI.';
+    if (mpRaces.length < 100) h += '<br><span style="color:#ffaa00">Small sample — wait for 100+ races before reading much into it.</span>';
+  }
+  h += '</div>';
+
   // ── Verdict ──────────────────────────────────────────────────────────────
   h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px;font-family:var(--mono);font-size:.7rem">';
   h += '<div style="color:var(--mt);font-size:.6rem;letter-spacing:1px;margin-bottom:6px">VERDICT</div>';

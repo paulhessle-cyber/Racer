@@ -3317,6 +3317,19 @@ function showResults(scored, val, race, paceInfo) {
     + '<div class="cb"><div class="cf" style="width:' + conf + '%;background:var(--g)"></div></div>'
     + '</div>';
 
+  // Model's pick badge: shown when the model on its own would pick a
+  // different horse from the market-calibrated top pick
+  var mp = modelPickOf(scored);
+  if (mp) {
+    h += '<div style="margin:8px 0;padding:8px 10px;border:1px solid rgba(255,193,7,.35);border-radius:8px;'
+      + 'background:rgba(255,193,7,.08);font-size:.72rem;line-height:1.45">'
+      + '🧠 <strong>Model\'s pick: ' + mp.name + '</strong>'
+      + (mp.odds > 0 ? ' @ ' + mp.odds.toFixed(1) : '')
+      + '<div style="color:var(--mt);font-size:.64rem">Before the market adjustment, the model rates this horse highest. '
+      + 'After weighing the market it rates it ' + Math.round(mp.score * 100) + '%. Tracked separately in your results.</div>'
+      + '</div>';
+  }
+
   // Value bet card
   if (val) {
     var vp = scored.indexOf(val) + 1;
@@ -3620,6 +3633,8 @@ function showResults(scored, val, race, paceInfo) {
   S._logPredictions = scored.map(function(r,i){
     return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), odds: r.odds||0 };
   });
+  var _mp = modelPickOf(scored);
+  S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
   // Value pick: within top 3, the runner with the biggest model-vs-market edge
   // Backtested on 199 logged races: +17% / +28% ROI in two independent samples
   S._logValuePick = (function(){
@@ -4087,6 +4102,16 @@ function finalProbsFor(blendNorm, active, ctx) {
 
 // Raw model figure as a % with one decimal, for the log (undefined if absent)
 function rawPct(r) { return (r && r._raw !== undefined) ? Math.round(r._raw * 1000) / 10 : undefined; }
+
+// The model's own favourite (highest raw figure, before market calibration).
+// Returns it only when it differs from the calibrated top pick, i.e. when the
+// model disagrees with the market. Logged so its record can be tracked.
+function modelPickOf(scored) {
+  if (!scored || scored.length < 2) return null;
+  var best = null;
+  scored.forEach(function(r){ if (r._raw !== undefined && !r._nr && (!best || r._raw > best._raw)) best = r; });
+  return (best && best.name !== scored[0].name) ? best : null;
+}
 
 // Race class: the feed's figure if it has one, else read it from the title
 // ("... (Class 4) ..."). Most logged races had cls 0 because the feed omits it.
@@ -6981,6 +7006,9 @@ function saveRaceResult(raceKey) {
     favWon:        favWon,
     cls:           raceClassOf(S.sel || race),
     title:         (race.title || (S.sel && S.sel.title) || ''),
+    modelPickName: S._logModelPick ? S._logModelPick.name : '',
+    modelPickOdds: S._logModelPick ? S._logModelPick.odds : 0,
+    modelPickWon:  !!(S._logModelPick && actual[0] === S._logModelPick.name),
     fieldSize:     fieldSize,
     napName:       (S._logRace && S._logRace.napName) || '',
     napWon:        !!(S._logRace && S._logRace.napName && actual[0] === S._logRace.napName),
@@ -7802,7 +7830,9 @@ function plockSave(race, scored, going) {
     var dN = dField >= 8 ? 3 : (dField >= 5 ? 2 : 1);
     var dSels = dWith.slice(0, dN).map(function(r){ return { name:r.name, odds:r.odds||0 }; });
     var all = plockAll();
+    var mpk = modelPickOf(scored);
     all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:raceClassOf(race), title:race.title||'',
+      modelPick: mpk ? { name:mpk.name, odds:mpk.odds||0 } : null,
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       valuePick:vPick,
@@ -7835,7 +7865,10 @@ function logResultHeadless(race, lock, resultObj) {
     topPickWon:topPickWon, topPickPlaced:topPickPlaced, anyTop3Placed:anyTop3,
     winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
     favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
-    cls:lock.cls||0, title:lock.title||'', fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
+    cls:lock.cls||0, title:lock.title||'',
+    modelPickName:lock.modelPick ? lock.modelPick.name : '', modelPickOdds:lock.modelPick ? lock.modelPick.odds : 0,
+    modelPickWon:!!(lock.modelPick && winner === lock.modelPick.name),
+    fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
     valuePick:      lock.valuePick ? lock.valuePick.name : '',
     valuePickOdds:  lock.valuePick ? lock.valuePick.odds : 0,
     valuePickEdge:  lock.valuePick ? lock.valuePick.edge : 0,
