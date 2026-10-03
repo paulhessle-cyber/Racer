@@ -359,11 +359,12 @@ header .sub {
   <div class="panel" id="panel2" style="opacity:.35; pointer-events:none;">
     <div class="panel-title">&#9881; Train Model</div>
     <p style="color:var(--mt); font-size:.85rem; margin-bottom:16px; line-height:1.6;">
-      Builds a weighted scoring model calibrated against your historical results.
-      Features used: horse win rate, place rate, going preference, distance preference,
-      course record, draw bias by course, jockey win rate, trainer win rate,
-      Official Rating, Racing Post Rating, Topspeed, and market odds (SP).
-      Feature weights are optimised by hill-climbing against your actual data.
+      <strong>v3:</strong> learns what each signal adds <em>beyond the starting price</em>.
+      Every race is scored using only results from earlier days (no look-ahead), with:
+      horse win and place rate, jockey and trainer win rate, draw by course, going, distance and
+      course record, freshness, Official Rating, the horse's previous RPR and Topspeed, and recent form.
+      The newest 20% of races are held back to test it against the market alone.
+      The app only uses the model if it beat the market on that test.
     </p>
     <button class="btn btn-g" id="trainBtn" onclick="trainModel()">&#9654; Start Training</button>
     <div class="pb"><div class="pf" id="pf"></div></div>
@@ -421,7 +422,7 @@ var rawData = [];
 var trainedModel = null;
 
 var REQ_COLS = ['date','course','horse','pos','jockey','trainer','dist','going'];
-var OPT_COLS = ['draw','sp','or','rpr','ts','age','wgt','ran','class','pattern','race_id'];
+var OPT_COLS = ['draw','sp','dec','or','rpr','ts','off','age','wgt','ran','class','pattern','race_id'];
 
 // ── Surface selection ─────────────────────────────────────────
 var currentSurface = 'turf'; // 'turf' or 'aw'
@@ -567,18 +568,36 @@ dz.addEventListener('drop', function(e) {
   var f = e.dataTransfer.files[0]; if (f) loadFile(f);
 });
 
+// Split one CSV line, respecting quotes: race names like "Handicap (0-80, 3yo+)"
+// contain commas, and a plain split shifted every later column on those rows.
+function splitCSVLine(line, sep) {
+  if (line.indexOf('"') === -1) return line.split(sep);
+  var out = [], cur = '', q = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line.charAt(i);
+    if (q) {
+      if (ch === '"') { if (line.charAt(i + 1) === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === sep) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
 function parseCSVText(text) {
   // Detect separator: tab or comma
   var firstLine = text.split('\n')[0];
   var sep = (firstLine.split('\t').length > firstLine.split(',').length) ? '\t' : ',';
 
   var lines = text.split('\n');
-  var headers = lines[0].split(sep).map(function(h){ return h.replace(/^\uFEFF/,'').replace(/[\r\n]/g,'').toLowerCase().trim(); });
+  var headers = splitCSVLine(lines[0], sep).map(function(h){ return h.replace(/^\uFEFF/,'').replace(/[\r\n]/g,'').toLowerCase().trim(); });
   var data = [];
   for (var i = 1; i < lines.length; i++) {
     var line = lines[i].replace(/[\r\n]/g, '');
     if (!line.trim()) continue;
-    var vals = line.split(sep);
+    var vals = splitCSVLine(line, sep);
     var row = {};
     headers.forEach(function(h, idx) {
       row[h] = (vals[idx] !== undefined ? vals[idx] : '').trim();
@@ -805,12 +824,15 @@ function parseDist(d) {
 }
 
 // sp: "4/1" "11/4F" "7/2" "Evens" "1/3F" -> decimal odds
+// Handles favourite markers: "11/4JF", "5/2C", "EvsF" (v2 dropped joint/co
+// favourites because the J/C stayed in, so whole races lost their SP)
 function parseSP(sp) {
   if (!sp) return 0;
-  sp = String(sp).toUpperCase().replace(/[F\s]/g, '').trim();
-  if (sp === 'EVENS' || sp === 'EVS') return 2;
-  var m = sp.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
+  sp = String(sp).toUpperCase().replace(/\s/g, '');
+  if (/^EV/.test(sp)) return 2;
+  var m = sp.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/);
   if (m) return parseFloat(m[1]) / parseFloat(m[2]) + 1;
+  if (/^\d+(\.\d+)?$/.test(sp) && parseFloat(sp) > 1) return parseFloat(sp);  // already decimal
   return 0;
 }
 
@@ -843,7 +865,117 @@ function goingScore(g) {
   return GOING_MAP[key] !== undefined ? GOING_MAP[key] : 4;
 }
 
-// ── Training ───────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// FORMINTEL v3 FEATURE CORE — keep IDENTICAL in horse_racing_trainer.html
+// and index.html. The trainer fits coefficients on these features; the app
+// recomputes the same features for today's runners. If the two copies drift
+// apart the model's coefficients no longer mean anything.
+// ══════════════════════════════════════════════════════════════════
+var V3 = {
+  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA'],
+  NAMES: ['Horse win rate','Horse place rate','Jockey win rate','Trainer win rate','Draw (course + stall)',
+          'Going record','Distance record','Course record','Freshness','Official Rating vs field','No Official Rating',
+          'Last RPR vs field','No previous RPR','Last Topspeed vs field','No previous Topspeed',
+          'Recent form (last 3 runs)','No form'],
+  HP: 8,    // horse prior: runs' worth of population average
+  JP: 30,   // jockey / trainer prior
+  DP: 30,   // course-stall prior
+  GOING: { 'firm':6, 'good to firm':5, 'good':4, 'good to yielding':3.5, 'good to soft':3, 'yielding':3,
+           'yielding to soft':2.5, 'soft':2, 'soft to heavy':1.5, 'heavy':1,
+           'fast':5, 'standard to fast':5, 'standard':4, 'standard to slow':3, 'slow':2 },
+
+  // "Kempton (AW)" / "Gowran Park (IRE)" -> "kempton" / "gowran park"
+  courseKey: function(c) { return String(c || '').toLowerCase().replace(/\s*\([^)]*\)/g, '').trim(); },
+  // "Sea The Moon (IRE)" -> "sea the moon"
+  horseKey:  function(h) { return String(h || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim(); },
+  // "R Havlin (3)" -> "r havlin"
+  personKey: function(p) { return String(p || '').toLowerCase().replace(/\s*\(\d+\)/g, '').trim(); },
+  // "Good To Soft (Good In Places)" / "Good To Soft-Good In Places" -> 3
+  goingScore: function(g) {
+    var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].split(',')[0].trim();
+    return V3.GOING[k] !== undefined ? V3.GOING[k] : 4;
+  },
+  // Finishing position -> recent-form points
+  posPts: function(p) { return p === 1 ? 1 : p === 2 ? 0.6 : p === 3 ? 0.4 : p === 4 ? 0.2 : 0; },
+  // Racecard form string ("3-2141", "P/21", "0F12") -> positions, most recent first
+  formToPositions: function(f) {
+    var out = [], s = String(f || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    for (var i = s.length - 1; i >= 0 && out.length < 3; i--) {
+      var ch = s.charAt(i);
+      if (/[1-9]/.test(ch)) out.push(parseInt(ch, 10));
+      else out.push(99);   // 0 = 10th or worse, letters = did not finish
+    }
+    return out;
+  },
+
+  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp }  (lp = positions, most recent first)
+  // st: { HS, JS, TS, CD, pop, popP }  (pop = population win rate, popP = place rate)
+  // Returns the feature vector before field-relative centring (or/rpr/ts are raw here).
+  raw: function(x, st) {
+    var pop = st.pop || 0.1;
+    var H = st.HS[x.h] || null, J = st.JS[x.j] || null, T = st.TS[x.t] || null;
+    var hr = H ? H.r : 0, hw = H ? H.w : 0, hp = H ? H.p : 0;
+    var hwr = (hw + V3.HP * pop) / (hr + V3.HP);
+    var popP = st.popP || pop * 3;
+    var hpr = (hp + V3.HP * popP) / (hr + V3.HP);
+    var jwr = ((J ? J.w : 0) + V3.JP * pop) / ((J ? J.r : 0) + V3.JP);
+    var twr = ((T ? T.w : 0) + V3.JP * pop) / ((T ? T.r : 0) + V3.JP);
+    var dd = (x.stall > 0 && st.CD[x.c]) ? st.CD[x.c][x.stall] : null;
+    var draw = dd ? (dd.w + V3.DP * pop) / (dd.r + V3.DP) : pop;
+    var wins = Math.max(hw, 1);
+    var gm = H && H.gw ? (H.gw[x.gs]   || 0) / (wins + 4) : 0;
+    var dm = H && H.dw ? (H.dw[x.dist] || 0) / (wins + 4) : 0;
+    var cm = H && H.cw ? (H.cw[x.c]    || 0) / (wins + 4) : 0;
+    var d = x.days > 0 ? x.days : 21;
+    var fr = d < 14 ? 1.0 : d < 28 ? 0.85 : d < 60 ? 0.6 : 0.3;
+    var lp = x.lp || [], wts = [0.5, 0.3, 0.2], fs = 0, fw = 0;
+    for (var i = 0; i < lp.length && i < 3; i++) { fs += wts[i] * V3.posPts(lp[i]); fw += wts[i]; }
+    var form = fw > 0 ? fs / fw : 0, formNA = fw > 0 ? 0 : 1;
+    return [hwr, hpr, jwr, twr, draw, gm, dm, cm, fr,
+            x.or > 0 ? x.or : 0, x.or > 0 ? 0 : 1,
+            x.lr > 0 ? x.lr : 0, x.lr > 0 ? 0 : 1,
+            x.lt > 0 ? x.lt : 0, x.lt > 0 ? 0 : 1,
+            form, formNA];
+  },
+
+  // Centre OR / last RPR / last TS on the field average of known values, in 10s of lbs.
+  centre: function(rows) {
+    [[9, 10], [11, 12], [13, 14]].forEach(function(pair) {
+      var v = pair[0], na = pair[1], s = 0, n = 0;
+      rows.forEach(function(f){ if (!f[na]) { s += f[v]; n++; } });
+      var mean = n ? s / n : 0;
+      rows.forEach(function(f){ f[v] = f[na] ? 0 : (f[v] - mean) / 10; });
+    });
+    return rows;
+  },
+
+  // Win probabilities: p ∝ exp(mkt·log(1/odds) + Σ coef·feature)
+  probs: function(rows, odds, model) {
+    var z = rows.map(function(f, i) {
+      var s = model.mkt * Math.log(1 / odds[i]);
+      for (var k = 0; k < f.length; k++) s += (model.coef[k] || 0) * f[k];
+      return s;
+    });
+    var mx = Math.max.apply(null, z);
+    var e = z.map(function(v){ return Math.exp(v - mx); });
+    var tot = e.reduce(function(a, b){ return a + b; }, 0) || 1;
+    return e.map(function(v){ return v / tot; });
+  }
+};
+
+// ── Training (v3) ──────────────────────────────────────────────
+// What changed from v2 and why:
+//  * No look-ahead. v2 built horse/jockey/trainer stats from ALL rows,
+//    including the race being scored, and used the RPR/Topspeed earned IN
+//    that race. Its accuracy figures were inflated by knowing the result.
+//    v3 walks the data day by day: features for a race use only results
+//    from earlier days, exactly what the app knows before the off.
+//  * Fitted against the market. v2 picked weights by hill-climbing win
+//    accuracy with SP squashed to 1-(sp-1)/35. v3 fits a conditional logit
+//    with log(1/SP) as one input, so every other weight measures what that
+//    signal adds BEYOND the price — the only thing that can beat the market.
+//  * Honest test. The newest 20% of races are held out and the model is
+//    compared with "market only" on them, including a value-bet check at SP.
 function log(msg, cls) {
   var el = document.getElementById('tlog');
   var d  = document.createElement('div');
@@ -854,6 +986,96 @@ function log(msg, cls) {
 }
 function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
 
+function v3RaceKey(r) {
+  return r.race_id ? 'id_' + r.race_id
+    : (r.date || '') + '|' + (r.course || '') + '|' + (r.off || r.time || '') + '|' + (r.dist || '');
+}
+function v3Odds(r) {
+  var d = parseFloat(r.dec);
+  if (d > 1) return d;
+  return parseSP(r.sp);
+}
+
+// Conditional-logit fit by Newton's method.
+//   P = number of parameters used (1 = market only; 1+K = market + features)
+//   V(i, p) gives parameter p's input for runner row i (p=0 is log(1/SP)).
+async function v3Fit(races, P, V, lambda, label) {
+  var th = new Float64Array(P); th[0] = 1;
+  var ll = 0;
+  for (var it = 0; it < 30; it++) {
+    var g = new Float64Array(P), H = new Float64Array(P * P), Ev = new Float64Array(P);
+    var vrow = new Float64Array(P);
+    ll = 0;
+    for (var ri = 0; ri < races.length; ri++) {
+      var rc = races[ri], s = rc.s, n = rc.n, zmax = -1e300, z = new Float64Array(n);
+      for (var a = 0; a < n; a++) {
+        var zz = 0;
+        for (var p = 0; p < P; p++) zz += th[p] * V(s + a, p);
+        z[a] = zz; if (zz > zmax) zmax = zz;
+      }
+      var tot = 0;
+      for (a = 0; a < n; a++) { z[a] = Math.exp(z[a] - zmax); tot += z[a]; }
+      ll += Math.log(z[rc.w] / tot);
+      for (p = 0; p < P; p++) Ev[p] = 0;
+      for (a = 0; a < n; a++) {
+        var q = z[a] / tot;
+        for (p = 0; p < P; p++) { vrow[p] = V(s + a, p); Ev[p] += q * vrow[p]; }
+        for (p = 0; p < P; p++) { var qv = q * vrow[p]; for (var p2 = p; p2 < P; p2++) H[p * P + p2] -= qv * vrow[p2]; }
+      }
+      for (p = 0; p < P; p++) {
+        g[p] += V(s + rc.w, p) - Ev[p];
+        for (p2 = p; p2 < P; p2++) H[p * P + p2] += Ev[p] * Ev[p2];
+      }
+    }
+    for (p = 0; p < P; p++) for (p2 = 0; p2 < p; p2++) H[p * P + p2] = H[p2 * P + p];
+    for (p = 1; p < P; p++) { g[p] -= lambda * th[p]; H[p * P + p] -= lambda; }
+    var step = v3Solve(H, g, P);            // H·step = g
+    var mxs = 0;
+    for (p = 0; p < P; p++) { th[p] -= step[p]; mxs = Math.max(mxs, Math.abs(step[p])); }
+    if (label && it % 3 === 0) { log(label + ' — pass ' + (it + 1) + ', log-likelihood ' + (ll / races.length).toFixed(4) + ' per race', 'info'); await sleep(0); }
+    if (mxs < 1e-6) break;
+  }
+  return { th: Array.prototype.slice.call(th), ll: ll };
+}
+
+// Solve A·x = b (Gaussian elimination, partial pivoting). A is P×P row-major.
+function v3Solve(A0, b0, P) {
+  var A = Array.prototype.slice.call(A0), b = Array.prototype.slice.call(b0);
+  for (var c = 0; c < P; c++) {
+    var piv = c;
+    for (var r = c + 1; r < P; r++) if (Math.abs(A[r * P + c]) > Math.abs(A[piv * P + c])) piv = r;
+    if (piv !== c) {
+      for (var k = 0; k < P; k++) { var t = A[c * P + k]; A[c * P + k] = A[piv * P + k]; A[piv * P + k] = t; }
+      var tb = b[c]; b[c] = b[piv]; b[piv] = tb;
+    }
+    var d = A[c * P + c] || 1e-12;
+    for (r = c + 1; r < P; r++) {
+      var f = A[r * P + c] / d;
+      if (!f) continue;
+      for (k = c; k < P; k++) A[r * P + k] -= f * A[c * P + k];
+      b[r] -= f * b[c];
+    }
+  }
+  var x = new Array(P);
+  for (c = P - 1; c >= 0; c--) {
+    var s = b[c];
+    for (k = c + 1; k < P; k++) s -= A[c * P + k] * x[k];
+    x[c] = s / (A[c * P + c] || 1e-12);
+  }
+  return x;
+}
+
+// Probabilities for one race under parameters th (for evaluation)
+function v3RaceProbs(rc, th, P, V) {
+  var z = [], mx = -1e300;
+  for (var a = 0; a < rc.n; a++) {
+    var s = 0; for (var p = 0; p < P; p++) s += th[p] * V(rc.s + a, p);
+    z.push(s); if (s > mx) mx = s;
+  }
+  var tot = 0; z = z.map(function(v){ var e = Math.exp(v - mx); tot += e; return e; });
+  return z.map(function(e){ return e / tot; });
+}
+
 async function trainModel() {
   if (!rawData.length) return;
   document.getElementById('trainBtn').disabled = true;
@@ -862,393 +1084,270 @@ async function trainModel() {
   try {
 
   log('Parsing ' + rawData.length.toLocaleString() + ' race records...', 'info');
-  await sleep(200);
-  pf.style.width = '8%';
+  await sleep(50);
+  pf.style.width = '5%';
 
-  // Sort chronologically so days-since-last-run can be calculated
   var sorted = rawData.slice().sort(function(a, b) {
-    return (a.date || '') < (b.date || '') ? -1 : 1;
+    var da = a.date || '', db = b.date || '';
+    if (da !== db) return da < db ? -1 : 1;
+    var oa = a.off || '', ob = b.off || '';
+    return oa < ob ? -1 : oa > ob ? 1 : 0;
   });
 
-  // ── Build lookup tables ────────────────────────────────────────
-  var HS = {};  // horse stats
-  var JS = {};  // jockey stats
-  var TS = {};  // trainer stats
-  var TC = {};  // trainer course counts (for long travel detection)
-  var CD = {};  // course draw stats
-  var horseLastRun = {};
+  var K = V3.KEYS.length, N = sorted.length;
+  var X   = new Float32Array(N * K);   // features per runner row
+  var MK  = new Float32Array(N);       // log(1/SP)
+  var SPv = new Float32Array(N);       // SP (decimal)
+  var POS = new Int16Array(N);         // finishing position
+  var races = [], nRow = 0;
+  var skip = { small: 0, sp: 0, winner: 0 };
 
-  sorted.forEach(function(r) {
-    // Strip country code from horse name for matching
-    var h = (r.horse   || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
-    var j = (r.jockey  || '').toLowerCase().trim();
-    var t = (r.trainer || '').toLowerCase().trim();
-    var c = (r.course  || '').toLowerCase().trim();
+  var HS = {}, JS = {}, TS = {}, TC = {}, CD = {}, horseLastRun = {};
+  var popN = 0, popW = 0, popP = 0;
+  var st = { HS: HS, JS: JS, TS: TS, CD: CD, pop: 0.1, popP: 0.3 };
 
-    var pos  = parsePos(r.pos);
-    var dist = parseDist(r.dist);
-    var gs   = goingScore(r.going);
-    var draw = parseInt(r.draw) || 0;
-
-    // Days since last run for this horse
-    var lastDate = horseLastRun[h];
-    var days = 21; // default if first run or unknown
-    if (lastDate && r.date) {
-      var d1 = new Date(lastDate), d2 = new Date(r.date);
-      if (!isNaN(d1) && !isNaN(d2)) {
-        days = Math.max(1, Math.round((d2 - d1) / 86400000));
-      }
+  function prep(r) {
+    var h = V3.horseKey(r.horse), H = HS[h];
+    var days = 0;
+    if (horseLastRun[h] && r.date) {
+      var d1 = new Date(horseLastRun[h]), d2 = new Date(r.date);
+      if (!isNaN(d1) && !isNaN(d2)) days = Math.max(1, Math.round((d2 - d1) / 86400000));
     }
-    r._days = days;
-    horseLastRun[h] = r.date;
+    return { h: h, j: V3.personKey(r.jockey), t: V3.personKey(r.trainer), c: V3.courseKey(r.course),
+             stall: parseInt(r.draw) || 0, dist: parseDist(r.dist), gs: V3.goingScore(r.going),
+             days: days, or: parseInt(r.or) || 0,
+             lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: H ? (H.lp || []) : [] };
+  }
 
-    // Horse stats
-    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0, bfCls:0, sex:'', gelded:false };
-    HS[h].r++;
-    if (t && !HS[h].tr) HS[h].tr = t; // store trainer name for travel alert
-
-    // Sex / gelding tracking
+  function update(r) {
+    var x = prep(r), pos = parsePos(r.pos), h = x.h;
+    popN++; if (pos === 1) popW++; if (pos > 0 && pos <= 3) popP++;
+    if (!HS[h]) HS[h] = { r:0, w:0, p:0, gw:{}, dw:{}, cw:{}, lp:[], lr:0, lt:0, tr:'', bfDate:'', bfCourse:'', bfSP:0, bfPos:0, bfCls:0, sex:'', gelded:false };
+    var H = HS[h];
+    H.r++;
+    if (x.t && !H.tr) H.tr = x.t;
+    if (pos === 1) { H.w++; H.gw[x.gs] = (H.gw[x.gs] || 0) + 1; H.dw[x.dist] = (H.dw[x.dist] || 0) + 1; H.cw[x.c] = (H.cw[x.c] || 0) + 1; }
+    if (pos > 0 && pos <= 3) H.p++;
+    H.lp.unshift(pos); if (H.lp.length > 3) H.lp.length = 3;
+    var rpr = parseInt(r.rpr) || 0, ts = parseInt(r.ts) || 0;
+    if (rpr > 0) H.lr = rpr;
+    if (ts > 0)  H.lt = ts;
     var sexVal = (r.sex || '').toUpperCase().trim();
-    if (sexVal) {
-      // If horse was previously a Colt (C) and is now a Gelding (G) = recently gelded
-      if (HS[h].sex === 'C' && sexVal === 'G') {
-        HS[h].gelded    = true;
-        HS[h].geldedDate = r.date || '';
-      }
-      HS[h].sex = sexVal; // keep most recent sex code
+    if (sexVal) { if (H.sex === 'C' && sexVal === 'G') { H.gelded = true; H.geldedDate = r.date || ''; } H.sex = sexVal; }
+    var spVal = v3Odds(r);
+    if (spVal > 1.0 && spVal < 2.0 && pos > 1 && r.date && (!H.bfDate || r.date > H.bfDate)) {
+      H.bfDate = r.date; H.bfCourse = x.c; H.bfSP = spVal; H.bfPos = pos;
+      H.bfCls = parseInt(String(r['class'] || '').replace(/^class\s*/i, '')) || 0;
     }
-    if (pos === 1)                     HS[h].w++;
-    if (pos <= 3 && pos > 0)           HS[h].p++;
-    if (pos === 1) {
-      HS[h].gw[gs]   = (HS[h].gw[gs]   || 0) + 1;
-      HS[h].dw[dist] = (HS[h].dw[dist] || 0) + 1;
-      HS[h].cw[c]    = (HS[h].cw[c]    || 0) + 1;
+    if (x.j) { if (!JS[x.j]) JS[x.j] = { r:0, w:0 }; JS[x.j].r++; if (pos === 1) JS[x.j].w++; }
+    if (x.t) { if (!TS[x.t]) TS[x.t] = { r:0, w:0 }; TS[x.t].r++; if (pos === 1) TS[x.t].w++; }
+    if (x.t && x.c) { if (!TC[x.t]) TC[x.t] = {}; TC[x.t][x.c] = (TC[x.t][x.c] || 0) + 1; }
+    if (x.stall > 0) {
+      if (!CD[x.c]) CD[x.c] = {};
+      if (!CD[x.c][x.stall]) CD[x.c][x.stall] = { r:0, w:0 };
+      CD[x.c][x.stall].r++; if (pos === 1) CD[x.c][x.stall].w++;
     }
+    if (r.date) horseLastRun[h] = r.date;
+  }
 
-    // Beaten odds-on favourite tracking
-    var spVal = parseSP(r.sp);
-    if (spVal > 1.0 && spVal < 2.0 && pos > 1 && r.date) {
-      if (!HS[h].bfDate || r.date > HS[h].bfDate) {
-        HS[h].bfDate   = r.date;
-        HS[h].bfCourse = c;
-        HS[h].bfSP     = spVal;
-        HS[h].bfPos    = pos;
-        HS[h].bfCls    = (function(){ var cv=String(r['class']||r.class_num||r.race_class||''); return parseInt(cv.replace(/^class\s*/i,'').trim())||0; })() || 0;
-      }
+  log('Building before-the-race features day by day (no look-ahead)...', 'info');
+  var i = 0, dayCount = 0;
+  while (i < N) {
+    var date = sorted[i].date, j = i;
+    while (j < N && sorted[j].date === date) j++;
+    st.pop  = popN ? popW / popN : 0.1;
+    st.popP = popN ? popP / popN : 0.3;
+    var groups = {}, order = [];
+    for (var k = i; k < j; k++) {
+      var key = v3RaceKey(sorted[k]);
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(sorted[k]);
     }
+    order.forEach(function(key) {
+      var rs = groups[key];
+      if (rs.length < 3) { skip.small++; return; }
+      var odds = rs.map(v3Odds);
+      if (odds.some(function(o){ return !(o > 1); })) { skip.sp++; return; }
+      var wins = [];
+      rs.forEach(function(r, a){ if (parsePos(r.pos) === 1) wins.push(a); });
+      if (wins.length !== 1) { skip.winner++; return; }
+      var rows = V3.centre(rs.map(function(r){ return V3.raw(prep(r), st); }));
+      var s = nRow;
+      rs.forEach(function(r, a) {
+        for (var q = 0; q < K; q++) X[nRow * K + q] = rows[a][q];
+        MK[nRow] = Math.log(1 / odds[a]); SPv[nRow] = odds[a]; POS[nRow] = parsePos(r.pos);
+        nRow++;
+      });
+      races.push({ s: s, n: rs.length, w: wins[0], d: date });
+    });
+    for (k = i; k < j; k++) update(sorted[k]);
+    i = j;
+    if (++dayCount % 200 === 0) { pf.style.width = (5 + 35 * i / N).toFixed(0) + '%'; await sleep(0); }
+  }
+  pf.style.width = '40%';
+  log('Races usable: ' + races.length.toLocaleString() + ' (skipped: ' + skip.small + ' under 3 runners, '
+      + skip.sp + ' missing an SP, ' + skip.winner + ' dead heat / no winner)', 'ok');
+  log('Horses: ' + Object.keys(HS).length.toLocaleString() + ' · Jockeys: ' + Object.keys(JS).length.toLocaleString()
+      + ' · Trainers: ' + Object.keys(TS).length.toLocaleString(), 'ok');
+  if (races.length < 500) throw new Error('Only ' + races.length + ' usable races — need SP for every runner. Check the sp/dec column.');
 
-    // Jockey stats
-    if (!JS[j]) JS[j] = { r:0, w:0 };
-    JS[j].r++;
-    if (pos === 1) JS[j].w++;
+  // Inputs: p=0 is log(1/SP), p>=1 are the K features
+  var V = function(row, p) { return p === 0 ? MK[row] : X[row * K + p - 1]; };
+  var LAMBDA = 2.0;   // light ridge so rare indicators can't run away
 
-    // Trainer stats
-    if (!TS[t]) TS[t] = { r:0, w:0 };
-    TS[t].r++;
-    if (pos === 1) TS[t].w++;
+  // ── Train on the oldest 80%, test on the newest 20% ───────────
+  var cut = Math.floor(races.length * 0.8);
+  var trainR = races.slice(0, cut), testR = races.slice(cut);
+  log('Train ' + trainR.length.toLocaleString() + ' races to ' + trainR[trainR.length - 1].d
+      + ' · test ' + testR.length.toLocaleString() + ' races from ' + testR[0].d, 'info');
 
-    // Trainer course counts — used for long travel detection
-    if (t && c) {
-      if (!TC[t]) TC[t] = {};
-      TC[t][c] = (TC[t][c] || 0) + 1;
-    }
-
-    // Draw bias by course (only when draw is known)
-    if (draw > 0) {
-      if (!CD[c]) CD[c] = {};
-      if (!CD[c][draw]) CD[c][draw] = { r:0, w:0 };
-      CD[c][draw].r++;
-      if (pos === 1) CD[c][draw].w++;
-    }
-  });
-
-  pf.style.width = '30%';
-  log('Horses tracked: '  + Object.keys(HS).length.toLocaleString(), 'ok');
-  log('Jockeys tracked: ' + Object.keys(JS).length.toLocaleString(), 'ok');
-  log('Trainers tracked: '+ Object.keys(TS).length.toLocaleString(), 'ok');
-  log('Trainer-course combos: ' + Object.values(TC).reduce(function(s,v){ return s+Object.keys(v).length; },0).toLocaleString(), 'ok');
-  log('Course/draw combos: ' + Object.values(CD).reduce(function(s,v){ return s + Object.keys(v).length; }, 0).toLocaleString(), 'ok');
-  await sleep(200);
-
-  log('Calibrating feature weights...', 'info');
-  await sleep(300);
+  var fitM = await v3Fit(trainR, 1, V, 0, 'Market only');
   pf.style.width = '50%';
+  var fitF = await v3Fit(trainR, 1 + K, V, LAMBDA, 'Market + Formintel');
+  pf.style.width = '70%';
 
-  // ── Train/test split ─────────────────────────────────────────
-  // Build stats from oldest 80% of data (trainData).
-  // Tune weights on trainData only.
-  // Report accuracy on newest 20% (testData) — races never seen during training.
-  // This prevents overfitting: weights that memorise history but fail on new races.
-  var splitIdx  = Math.floor(sorted.length * 0.8);
-  var trainData = sorted.slice(0, splitIdx);
-  var testData  = sorted.slice(splitIdx);
-
-  log('Train/test split: ' + trainData.length.toLocaleString() + ' train / ' + testData.length.toLocaleString() + ' test', 'info');
-  if (testData.length > 0) {
-    log('Test period starts: ' + testData[0].date, 'info');
-  }
-
-  // Population win/place rates from training data (used as priors)
-  var popW = 0, popP = 0;
-  trainData.forEach(function(r) {
-    var p = parsePos(r.pos);
-    if (p === 1) popW++;
-    if (p <= 3 && p > 0) popP++;
-  });
-  var POP_WIN   = popW / Math.max(trainData.length, 1);
-  var POP_PLACE = popP / Math.max(trainData.length, 1);
-
-  // ── Scoring function ──────────────────────────────────────────
-  // Uses Bayesian shrinkage: blends observed rates with population average.
-  // A horse with 2 runs gets mostly the population average, not a misleading 100%.
-  // Only horses/jockeys/trainers with many runs get rates close to their true record.
-  function scoreRow(r, w) {
-    var h = (r.horse   || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim();
-    var j = (r.jockey  || '').toLowerCase().trim();
-    var t = (r.trainer || '').toLowerCase().trim();
-    var c = (r.course  || '').toLowerCase().trim();
-    var dist = parseDist(r.dist);
-    var gs   = goingScore(r.going);
-    var draw = parseInt(r.draw) || 0;
-
-    var H = HS[h] || { r:0, w:0, p:0, gw:{}, dw:{}, cw:{} };
-    var J = JS[j] || { r:0, w:0 };
-    var T = TS[t] || { r:0, w:0 };
-
-    // Horse win/place rate: prior weight = 8 runs worth of population average
-    var HP = 8;
-    var wr = (H.w + HP * POP_WIN)   / (H.r + HP);
-    var pr = (H.p + HP * POP_PLACE) / (H.r + HP);
-
-    // Jockey/trainer: prior = 15 rides at 12% (typical flat win rate)
-    var JP = 15;
-    var jwr = (J.w + JP * 0.12) / (J.r + JP);
-    var twr = (T.w + JP * 0.12) / (T.r + JP);
-
-    // Draw bias: only use when 4+ samples at this stall on this course
-    var dd = draw > 0 ? ((CD[c] || {})[draw] || { r:0, w:0 }) : { r:0, w:0 };
-    var db = dd.r >= 4 ? dd.w / dd.r : POP_WIN;
-
-    // Going/distance/course preference: shrink toward 0 when wins are few
-    var hw = Math.max(H.w, 1);
-    var gm = (H.gw[gs]   || 0) / (hw + 4);
-    var dm = (H.dw[dist] || 0) / (hw + 4);
-    var cm = (H.cw[c]    || 0) / (hw + 4);
-
-    // Freshness (days since last run)
-    var days = r._days || 21;
-    var fr = days < 14 ? 1.0 : days < 28 ? 0.85 : days < 60 ? 0.60 : 0.30;
-
-    // Market confidence from SP (favourite wins ~30% of flat races — strong signal)
-    var sp = parseSP(r.sp);
-    var os = sp > 1 ? Math.max(0, 1 - (sp - 1) / 35) : 0.1;
-
-    // Official Rating normalised 0-1 (missing = mid-range 0.45)
-    var orVal = parseInt(r.or)  || 0;
-    var ors   = orVal  > 0 ? Math.min(orVal  / 130, 1) : 0.45;
-
-    // Racing Post Rating normalised 0-1
-    var rprVal = parseInt(r.rpr) || 0;
-    var rprs   = rprVal > 0 ? Math.min(rprVal / 130, 1) : 0.45;
-
-    return [wr, pr, jwr, twr, db, gm, dm, cm, fr, os, ors, rprs]
-      .reduce(function(s, f, i) { return s + (w[i] || 0) * f; }, 0);
-  }
-
-  // ── Evaluate on any subset of races ──────────────────────────
-  function evalOn(data, weights) {
-    var groups = {};
-    data.forEach(function(r) {
-      var k = r.race_id
-        ? 'id_' + r.race_id
-        : (r.date || '') + '|' + (r.course || '') + '|' + (r.dist || '');
-      if (!groups[k]) groups[k] = [];
-      groups[k].push(r);
+  function evaluate(rs, th, P) {
+    var ll = 0, top = 0, topPl = 0, vb = 0, vw = 0, vpnl = 0;
+    rs.forEach(function(rc) {
+      var pr = v3RaceProbs(rc, th, P, V), best = 0;
+      for (var a = 0; a < rc.n; a++) {
+        if (pr[a] > pr[best]) best = a;
+        var sp = SPv[rc.s + a];
+        if (pr[a] * sp > 1.10) { vb++; if (a === rc.w) { vw++; vpnl += sp - 1; } else vpnl -= 1; }
+      }
+      ll += Math.log(pr[rc.w]);
+      if (best === rc.w) top++;
+      var bp = POS[rc.s + best]; if (bp > 0 && bp <= 3) topPl++;
     });
-    var wC = 0, pC = 0, tot = 0;
-    Object.values(groups).forEach(function(runners) {
-      if (runners.length < 3) return;
-      var sc = runners.map(function(r) { return { r:r, s:scoreRow(r, weights) }; });
-      sc.sort(function(a, b) { return b.s - a.s; });
-      var pos = parsePos(sc[0].r.pos);
-      if (pos === 1)           wC++;
-      if (pos <= 3 && pos > 0) pC++;
-      tot++;
-    });
-    return { wa: wC / Math.max(tot, 1), pa: pC / Math.max(tot, 1), tot: tot };
+    return { ll: ll / rs.length, top: top / rs.length, place: topPl / rs.length,
+             vb: vb, vw: vw, vroi: vb ? vpnl / vb : 0 };
   }
+  var eM = evaluate(testR, fitM.th, 1), eF = evaluate(testR, fitF.th, 1 + K);
+  var gain = eF.ll - eM.ll;
+  log('TEST (unseen races) — market only: top pick won ' + (eM.top * 100).toFixed(1) + '%, log-score ' + eM.ll.toFixed(4), 'ok');
+  log('TEST (unseen races) — Formintel v3: top pick won ' + (eF.top * 100).toFixed(1) + '%, log-score ' + eF.ll.toFixed(4)
+      + ' (' + (gain >= 0 ? '+' : '') + gain.toFixed(4) + ' vs market)', gain > 0 ? 'ok' : 'err');
+  log('TEST value bets (model × SP > 1.10): ' + eF.vb.toLocaleString() + ' bets, ' + eF.vw + ' won, ROI at SP '
+      + (eF.vroi * 100).toFixed(1) + '%', eF.vroi > 0 ? 'ok' : 'info');
 
-  // ── Hill-climbing on TRAIN data only ─────────────────────────
-  var bW = [0.13, 0.07, 0.11, 0.09, 0.06, 0.09, 0.08, 0.06, 0.06, 0.10, 0.08, 0.07];
-  var s0 = bW.reduce(function(a, b) { return a + b; }, 0);
-  bW = bW.map(function(w) { return w / s0; });
-  var bAcc = evalOn(trainData, bW);
-
-  var iters = Math.min(200, Math.max(80, Math.floor(trainData.length / 400)));
-  for (var i = 0; i < iters; i++) {
-    var idx   = Math.floor(Math.random() * bW.length);
-    var delta = (Math.random() - 0.5) * 0.05;
-    var nW    = bW.slice();
-    nW[idx]   = Math.max(0.005, nW[idx] + delta);
-    var sn    = nW.reduce(function(a, b) { return a + b; }, 0);
-    nW        = nW.map(function(w) { return w / sn; });
-    var acc   = evalOn(trainData, nW);
-    if (acc.wa > bAcc.wa) { bW = nW; bAcc = acc; }
-  }
-
-  // ── Evaluate on held-out test set ────────────────────────────
-  var testAcc = evalOn(testData, bW);
-
+  // ── Final fit on everything, for export ───────────────────────
+  var fitAll = await v3Fit(races, 1 + K, V, LAMBDA, 'Final fit on all races');
   pf.style.width = '88%';
-  log('Train win acc:  ' + (bAcc.wa * 100).toFixed(1) + '%  (' + bAcc.tot.toLocaleString() + ' races)', 'ok');
-  log('TEST win acc:   ' + (testAcc.wa * 100).toFixed(1) + '%  (' + testAcc.tot.toLocaleString() + ' unseen races)', 'ok');
-  log('Test place acc: ' + (testAcc.pa * 100).toFixed(1) + '% (top 3)', 'ok');
-  if (testAcc.wa < bAcc.wa - 0.04) {
-    log('Gap between train/test suggests mild overfitting — model still exports fine', 'info');
+  var th = fitAll.th;
+
+  // Effect size: how much a typical (1 s.d.) difference in each feature
+  // multiplies a horse's chances, after allowing for its price.
+  var sd = [];
+  for (var q = 0; q < K; q++) {
+    var s1 = 0, s2 = 0;
+    for (var rr = 0; rr < nRow; rr++) { var v = X[rr * K + q]; s1 += v; s2 += v * v; }
+    var mean = s1 / nRow; sd.push(Math.sqrt(Math.max(s2 / nRow - mean * mean, 0)));
   }
-  await sleep(300);
-  pf.style.width = '100%';
+  var effects = V3.NAMES.map(function(n, q){ return { name: n, coef: th[q + 1], mult: Math.exp(th[q + 1] * sd[q]) }; });
 
-  var fNames = [
-    'Horse Win Rate',
-    'Horse Place Rate',
-    'Jockey Win Rate',
-    'Trainer Win Rate',
-    'Draw Bias (course)',
-    'Going Preference',
-    'Distance Preference',
-    'Course Record',
-    'Freshness',
-    'Market Confidence (SP)',
-    'Official Rating (OR)',
-    'Racing Post Rating (RPR)'
-  ];
-
-  // ── Compact stats before saving ─────────────────────────────
-  // Strip horse names with only 1 run (not useful for prediction)
-  // and limit gw/dw/cw to keep JSON size manageable.
+  // ── Compact stats for export ─────────────────────────────────
   var HS_compact = {};
   Object.keys(HS).forEach(function(h) {
-    var s = HS[h];
-    if (s.r < 2) return; // skip horses with only 1 run
-    HS_compact[h] = { r:s.r, w:s.w, p:s.p, gw:s.gw, dw:s.dw, cw:s.cw, tr:s.tr||'', bfDate:s.bfDate||'', bfCourse:s.bfCourse||'', bfSP:s.bfSP||0, bfPos:s.bfPos||0, bfCls:s.bfCls||0, sex:s.sex||'', gelded:s.gelded||false, geldedDate:s.geldedDate||'' };
+    var s = HS[h], o = { r: s.r, w: s.w, p: s.p };
+    if (s.w) { o.gw = s.gw; o.dw = s.dw; o.cw = s.cw; }
+    if (s.lp && s.lp.length) o.lp = s.lp;
+    if (s.lr) o.lr = s.lr;
+    if (s.lt) o.lt = s.lt;
+    if (s.tr) o.tr = s.tr;
+    if (s.bfDate) { o.bfDate = s.bfDate; o.bfCourse = s.bfCourse; o.bfSP = s.bfSP; o.bfPos = s.bfPos; o.bfCls = s.bfCls; }
+    if (s.sex) o.sex = s.sex;
+    if (s.gelded) { o.gelded = true; o.geldedDate = s.geldedDate || ''; }
+    HS_compact[h] = o;
   });
 
+  // Legacy weights kept so older app builds still score with this file
+  var bW = [0.13, 0.07, 0.11, 0.09, 0.06, 0.09, 0.08, 0.06, 0.06, 0.10, 0.08, 0.07];
+  var s0 = bW.reduce(function(a, b){ return a + b; }, 0); bW = bW.map(function(w){ return w / s0; });
+
   trainedModel = {
-    version:           '2.1',
-    created:           new Date().toISOString(),
-    surface:           currentSurface,
-    trainingRecords:   rawData.length,
-    weights:           bW,
-    featureNames:      fNames,
-    winAccuracy:       testAcc.wa,
-    placeAccuracy:     testAcc.pa,
-    trainWinAccuracy:  bAcc.wa,
-    racesEvaluated:    testAcc.tot,
-    horseStats:        HS_compact,
-    jockeyStats:       JS,
-    trainerStats:      TS,
-    trainerCourses:    TC,
-    courseDrawStats:   CD,
-    goingMap:          GOING_MAP,
-    popWinRate:        POP_WIN
+    version:          '3.0',
+    created:          new Date().toISOString(),
+    surface:          currentSurface,
+    trainingRecords:  rawData.length,
+    dataTo:           races[races.length - 1].d,
+    v3: { keys: V3.KEYS, names: V3.NAMES, mkt: th[0], coef: th.slice(1),
+          test: { races: testR.length, from: testR[0].d, marketLL: eM.ll, modelLL: eF.ll,
+                  marketTop: eM.top, modelTop: eF.top, valueBets: eF.vb, valueWins: eF.vw, valueROI: eF.vroi } },
+    weights:          bW,
+    featureNames:     ['Horse Win Rate','Horse Place Rate','Jockey Win Rate','Trainer Win Rate','Draw Bias (course)',
+                       'Going Preference','Distance Preference','Course Record','Freshness','Market Confidence (SP)',
+                       'Official Rating (OR)','Racing Post Rating (RPR)'],
+    winAccuracy:      eF.top,
+    placeAccuracy:    eF.place,
+    racesEvaluated:   testR.length,
+    horseStats:       HS_compact,
+    jockeyStats:      JS,
+    trainerStats:     TS,
+    trainerCourses:   TC,
+    courseDrawStats:  CD,
+    goingMap:         V3.GOING,
+    popWinRate:       popN ? popW / popN : 0.1,
+    popPlaceRate:     popN ? popP / popN : 0.3
   };
+  log('Model ready: ' + Object.keys(HS_compact).length.toLocaleString() + ' horses, data to ' + trainedModel.dataTo, 'ok');
 
-  log('Horses in model: ' + Object.keys(HS_compact).length.toLocaleString()
-    + ' (2+ runs) of ' + Object.keys(HS).length.toLocaleString() + ' total', 'ok');
-  log('Model serialised and ready to export!', 'ok');
-
-  // ── Feature importance table ────────────────────────────────────
-  var pairs = fNames.map(function(n, i) { return [n, bW[i]]; });
-  pairs.sort(function(a, b) { return b[1] - a[1]; });
-  var mx = pairs[0][1];
-
-  var ft = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;'
-         + 'color:var(--g);letter-spacing:2px;margin-bottom:10px;">Feature Importance</div>'
-         + '<table class="ft"><thead><tr><th>Feature</th><th>Weight</th><th>Relative Importance</th></tr></thead><tbody>';
-  pairs.forEach(function(p) {
-    ft += '<tr><td>' + p[0] + '</td>'
-        + '<td style="color:var(--gold)">' + (p[1] * 100).toFixed(1) + '%</td>'
-        + '<td><div class="bar-cell"><div class="mini-bar">'
-        + '<div class="mini-fill" style="width:' + Math.round(p[1] / mx * 100) + '%"></div>'
-        + '</div></div></td></tr>';
+  // ── Results panels ───────────────────────────────────────────
+  effects.sort(function(a, b){ return Math.abs(Math.log(b.mult)) - Math.abs(Math.log(a.mult)); });
+  var ft = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:6px;">What each signal adds beyond the price</div>'
+         + '<div style="font-size:.75rem;color:var(--mt);margin-bottom:10px">How much a typical difference in each signal changes a horse\'s chance once its SP is taken into account. ×1.00 = adds nothing the market didn\'t already know.</div>'
+         + '<table class="ft"><thead><tr><th>Signal</th><th>Effect</th><th></th></tr></thead><tbody>';
+  var mxe = Math.max.apply(null, effects.map(function(e){ return Math.abs(Math.log(e.mult)); })) || 1;
+  effects.forEach(function(e) {
+    var up = e.mult >= 1, w = Math.round(Math.abs(Math.log(e.mult)) / mxe * 100);
+    ft += '<tr><td>' + e.name + '</td>'
+        + '<td style="color:' + (up ? 'var(--g)' : 'var(--re, #ff6b6b)') + '">×' + e.mult.toFixed(2) + '</td>'
+        + '<td><div class="bar-cell"><div class="mini-bar"><div class="mini-fill" style="width:' + w + '%"></div></div></div></td></tr>';
   });
   ft += '</tbody></table>';
   document.getElementById('featImp').innerHTML = ft;
   document.getElementById('featImp').style.display = 'block';
 
-  // ── Accuracy ring ────────────────────────────────────────────────
-  var C = 2 * Math.PI * 30;
+  var pct = function(x){ return (x * 100).toFixed(1) + '%'; };
+  var verdict = gain > 0.002
+    ? '<span style="color:var(--g)">✓ Beats the market on unseen races.</span>'
+    : gain > 0
+      ? '<span style="color:var(--gold)">Slightly better than the market alone — a small edge.</span>'
+      : '<span style="color:#ff6b6b">✗ No better than the market on unseen races.</span>';
   document.getElementById('accDisplay').innerHTML =
-    '<div class="acc-box">'
-    + '<div class="ring">'
-    + '<svg width="76" height="76" viewBox="0 0 76 76">'
-    + '<circle cx="38" cy="38" r="30" fill="none" stroke="var(--bd)" stroke-width="7"/>'
-    + '<circle cx="38" cy="38" r="30" fill="none" stroke="var(--g)" stroke-width="7"'
-    + ' stroke-dasharray="' + C.toFixed(1) + '"'
-    + ' stroke-dashoffset="' + (C * (1 - testAcc.wa)).toFixed(1) + '"'
-    + ' stroke-linecap="round"/>'
-    + '</svg>'
-    + '<div class="pct">' + (testAcc.wa * 100).toFixed(0) + '%</div>'
-    + '</div>'
-    + '<div>'
-    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--tx);letter-spacing:2px;">WIN ACCURACY &mdash; HELD-OUT TEST SET</div>'
-    + '<div style="color:var(--mt);font-size:.8rem;margin-top:3px;">Tested on '
-    + testAcc.tot.toLocaleString() + ' unseen races &bull; trained on ' + bAcc.tot.toLocaleString() + ' races</div>'
-    + '<div style="margin-top:6px;font-family:\'IBM Plex Mono\',monospace;font-size:.8rem;">'
-    + 'Place acc (top 3): <span style="color:var(--gold)">' + (testAcc.pa * 100).toFixed(1) + '%</span>'
-    + ' &nbsp;&bull;&nbsp; Train win acc: <span style="color:var(--mt)">' + (bAcc.wa * 100).toFixed(1) + '%</span></div>'
-    + '<div style="margin-top:5px;font-size:.73rem;color:var(--mt);">Test accuracy reflects real-world performance on races the model never saw during training.</div>'
-    + '</div></div>';
+    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--tx);letter-spacing:2px;margin-bottom:6px">HELD-OUT TEST — ' + testR.length.toLocaleString() + ' races from ' + testR[0].d + '</div>'
+    + '<table class="ft"><thead><tr><th></th><th>Market only (SP)</th><th>Formintel v3</th></tr></thead><tbody>'
+    + '<tr><td>Top pick won</td><td>' + pct(eM.top) + '</td><td>' + pct(eF.top) + '</td></tr>'
+    + '<tr><td>Top pick placed</td><td>' + pct(eM.place) + '</td><td>' + pct(eF.place) + '</td></tr>'
+    + '<tr><td>Log-score per race (higher is better)</td><td>' + eM.ll.toFixed(4) + '</td><td>' + eF.ll.toFixed(4) + '</td></tr>'
+    + '<tr><td>Value bets at SP (model × SP &gt; 1.10)</td><td>—</td><td>' + eF.vb.toLocaleString() + ' bets, ROI ' + (eF.vroi * 100).toFixed(1) + '%</td></tr>'
+    + '</tbody></table>'
+    + '<div style="margin-top:8px;font-size:.8rem">' + verdict + '</div>'
+    + '<div style="margin-top:4px;font-size:.73rem;color:var(--mt)">Test races were never used for fitting. The exported model is then refitted on all ' + races.length.toLocaleString() + ' races.</div>';
   document.getElementById('accDisplay').style.display = 'block';
+  pf.style.width = '100%';
 
   document.getElementById('s2').className = 'step done';
   document.getElementById('s3').className = 'step active';
   document.getElementById('dlSection').style.display = 'block';
 
-  // Populate the text box FIRST, then scroll to it
   try {
-    var fname  = 'racing_model_' + (trainedModel.surface || 'turf') + '.json';
+    var fname  = 'model_' + (trainedModel.surface || 'turf') + '.json';
     var jsonStr = JSON.stringify(trainedModel);
     var tb = document.getElementById('jsonTextBox');
     tb.value = jsonStr;
     document.getElementById('jsonFilename').textContent = fname;
     document.getElementById('jsonCharCount').textContent =
-      'JSON ready — ' + (jsonStr.length / 1024).toFixed(0) + ' KB — click Select All Text then Ctrl+C';
-    setTimeout(function() {
-      tb.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 300);
+      'JSON ready — ' + (jsonStr.length / 1024).toFixed(0) + ' KB — use Download, or Select All Text then Ctrl+C';
+    setTimeout(function(){ tb.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
   } catch(e) {
     log('Export error: ' + e.message, 'err');
-    // Fallback: try without pretty-print and with fewer horses
-    try {
-      var slim = JSON.parse(JSON.stringify(trainedModel));
-      // Keep only horses with 3+ runs if still too big
-      var hkeys = Object.keys(slim.horseStats || {});
-      var removed = 0;
-      hkeys.forEach(function(h) {
-        if ((slim.horseStats[h].r || 0) < 3) { delete slim.horseStats[h]; removed++; }
-      });
-      log('Retrying with ' + removed + ' low-run horses removed...', 'info');
-      var jsonStr2 = JSON.stringify(slim);
-      var tb2 = document.getElementById('jsonTextBox');
-      tb2.value = jsonStr2;
-      document.getElementById('jsonCharCount').textContent =
-        'JSON ready (trimmed) — ' + (jsonStr2.length / 1024).toFixed(0) + ' KB';
-      document.getElementById('jsonFilename').textContent = fname;
-      tb2.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      trainedModel = slim;
-    } catch(e2) {
-      log('Could not serialise model: ' + e2.message, 'err');
-    }
   }
 
   } catch(err) {
-    // Top-level catch — surfaces any silent crash in the training pipeline
     log('ERROR: ' + err.message, 'err');
-    log('(Line: ' + (err.lineNumber || err.stack || 'unknown') + ')', 'err');
-    document.getElementById('trainBtn').disabled = false;
+    log('(' + (err.stack || 'no stack').split('\n').slice(0, 2).join(' | ') + ')', 'err');
   }
+  document.getElementById('trainBtn').disabled = false;
 }
 
 // ── Export ─────────────────────────────────────────────────────
@@ -1259,7 +1358,7 @@ function dlModel() {
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');
   a.href     = url;
-  a.download = 'racing_model_' + (trainedModel.surface || 'turf') + '.json';
+  a.download = 'model_' + (trainedModel.surface || 'turf') + '.json';
   document.body.appendChild(a);
   a.click();
   setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);

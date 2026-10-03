@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v7.0 · 3 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.0 · 3 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -2568,7 +2568,7 @@ function predict() {
   var blendTotal = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
   var blendNorm  = blended.map(function(b){ return b / blendTotal; });
   // Model figure, then market calibration (see MARKET CALIBRATION)
-  var finalProbs = finalProbsFor(blendNorm, activeRunners, ctx);
+  var finalProbs = finalProbsFor(blendNorm, activeRunners, ctx, race);
 
   var scored = activeRunners.map(function(r, i) {
     return Object.assign({}, r, { score: finalProbs[i] });
@@ -3158,7 +3158,7 @@ function buildMeetingBrief(meeting) {
       try {
         var sc = scoreRaceHeadless(race);
         if (sc && sc.length) preds = sc.map(function(r){
-          return { name:r.name, odds:r.odds || 0, score:Math.round((r.score||0)*100), raw:rawPct(r) };
+          return { name:r.name, odds:r.odds || 0, score:Math.round((r.score||0)*100), raw:rawPct(r), v3:v3Pct(r) };
         });
       } catch(e) {}
     }
@@ -3631,7 +3631,7 @@ function showResults(scored, val, race, paceInfo) {
   // Store race key and predictions for saving
   S._logRaceKey  = raceKey;
   S._logPredictions = scored.map(function(r,i){
-    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), odds: r.odds||0 };
+    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0 };
   });
   var _mp = modelPickOf(scored);
   S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
@@ -4043,7 +4043,105 @@ function selRace(i) {
 
 
 // ══════════════════════════════════════════════════════════════════
-// MARKET CALIBRATION (v7.0) — replaces the old Platt band multipliers
+// FORMINTEL v3 FEATURE CORE — keep IDENTICAL in horse_racing_trainer.html
+// and index.html. The trainer fits coefficients on these features; the app
+// recomputes the same features for today's runners. If the two copies drift
+// apart the model's coefficients no longer mean anything.
+// ══════════════════════════════════════════════════════════════════
+var V3 = {
+  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA'],
+  NAMES: ['Horse win rate','Horse place rate','Jockey win rate','Trainer win rate','Draw (course + stall)',
+          'Going record','Distance record','Course record','Freshness','Official Rating vs field','No Official Rating',
+          'Last RPR vs field','No previous RPR','Last Topspeed vs field','No previous Topspeed',
+          'Recent form (last 3 runs)','No form'],
+  HP: 8,    // horse prior: runs' worth of population average
+  JP: 30,   // jockey / trainer prior
+  DP: 30,   // course-stall prior
+  GOING: { 'firm':6, 'good to firm':5, 'good':4, 'good to yielding':3.5, 'good to soft':3, 'yielding':3,
+           'yielding to soft':2.5, 'soft':2, 'soft to heavy':1.5, 'heavy':1,
+           'fast':5, 'standard to fast':5, 'standard':4, 'standard to slow':3, 'slow':2 },
+
+  // "Kempton (AW)" / "Gowran Park (IRE)" -> "kempton" / "gowran park"
+  courseKey: function(c) { return String(c || '').toLowerCase().replace(/\s*\([^)]*\)/g, '').trim(); },
+  // "Sea The Moon (IRE)" -> "sea the moon"
+  horseKey:  function(h) { return String(h || '').toLowerCase().replace(/\s*\([a-z]{2,3}\)\s*$/i, '').trim(); },
+  // "R Havlin (3)" -> "r havlin"
+  personKey: function(p) { return String(p || '').toLowerCase().replace(/\s*\(\d+\)/g, '').trim(); },
+  // "Good To Soft (Good In Places)" / "Good To Soft-Good In Places" -> 3
+  goingScore: function(g) {
+    var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].split(',')[0].trim();
+    return V3.GOING[k] !== undefined ? V3.GOING[k] : 4;
+  },
+  // Finishing position -> recent-form points
+  posPts: function(p) { return p === 1 ? 1 : p === 2 ? 0.6 : p === 3 ? 0.4 : p === 4 ? 0.2 : 0; },
+  // Racecard form string ("3-2141", "P/21", "0F12") -> positions, most recent first
+  formToPositions: function(f) {
+    var out = [], s = String(f || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    for (var i = s.length - 1; i >= 0 && out.length < 3; i--) {
+      var ch = s.charAt(i);
+      if (/[1-9]/.test(ch)) out.push(parseInt(ch, 10));
+      else out.push(99);   // 0 = 10th or worse, letters = did not finish
+    }
+    return out;
+  },
+
+  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp }  (lp = positions, most recent first)
+  // st: { HS, JS, TS, CD, pop, popP }  (pop = population win rate, popP = place rate)
+  // Returns the feature vector before field-relative centring (or/rpr/ts are raw here).
+  raw: function(x, st) {
+    var pop = st.pop || 0.1;
+    var H = st.HS[x.h] || null, J = st.JS[x.j] || null, T = st.TS[x.t] || null;
+    var hr = H ? H.r : 0, hw = H ? H.w : 0, hp = H ? H.p : 0;
+    var hwr = (hw + V3.HP * pop) / (hr + V3.HP);
+    var popP = st.popP || pop * 3;
+    var hpr = (hp + V3.HP * popP) / (hr + V3.HP);
+    var jwr = ((J ? J.w : 0) + V3.JP * pop) / ((J ? J.r : 0) + V3.JP);
+    var twr = ((T ? T.w : 0) + V3.JP * pop) / ((T ? T.r : 0) + V3.JP);
+    var dd = (x.stall > 0 && st.CD[x.c]) ? st.CD[x.c][x.stall] : null;
+    var draw = dd ? (dd.w + V3.DP * pop) / (dd.r + V3.DP) : pop;
+    var wins = Math.max(hw, 1);
+    var gm = H && H.gw ? (H.gw[x.gs]   || 0) / (wins + 4) : 0;
+    var dm = H && H.dw ? (H.dw[x.dist] || 0) / (wins + 4) : 0;
+    var cm = H && H.cw ? (H.cw[x.c]    || 0) / (wins + 4) : 0;
+    var d = x.days > 0 ? x.days : 21;
+    var fr = d < 14 ? 1.0 : d < 28 ? 0.85 : d < 60 ? 0.6 : 0.3;
+    var lp = x.lp || [], wts = [0.5, 0.3, 0.2], fs = 0, fw = 0;
+    for (var i = 0; i < lp.length && i < 3; i++) { fs += wts[i] * V3.posPts(lp[i]); fw += wts[i]; }
+    var form = fw > 0 ? fs / fw : 0, formNA = fw > 0 ? 0 : 1;
+    return [hwr, hpr, jwr, twr, draw, gm, dm, cm, fr,
+            x.or > 0 ? x.or : 0, x.or > 0 ? 0 : 1,
+            x.lr > 0 ? x.lr : 0, x.lr > 0 ? 0 : 1,
+            x.lt > 0 ? x.lt : 0, x.lt > 0 ? 0 : 1,
+            form, formNA];
+  },
+
+  // Centre OR / last RPR / last TS on the field average of known values, in 10s of lbs.
+  centre: function(rows) {
+    [[9, 10], [11, 12], [13, 14]].forEach(function(pair) {
+      var v = pair[0], na = pair[1], s = 0, n = 0;
+      rows.forEach(function(f){ if (!f[na]) { s += f[v]; n++; } });
+      var mean = n ? s / n : 0;
+      rows.forEach(function(f){ f[v] = f[na] ? 0 : (f[v] - mean) / 10; });
+    });
+    return rows;
+  },
+
+  // Win probabilities: p ∝ exp(mkt·log(1/odds) + Σ coef·feature)
+  probs: function(rows, odds, model) {
+    var z = rows.map(function(f, i) {
+      var s = model.mkt * Math.log(1 / odds[i]);
+      for (var k = 0; k < f.length; k++) s += (model.coef[k] || 0) * f[k];
+      return s;
+    });
+    var mx = Math.max.apply(null, z);
+    var e = z.map(function(v){ return Math.exp(v - mx); });
+    var tot = e.reduce(function(a, b){ return a + b; }, 0) || 1;
+    return e.map(function(v){ return v / tot; });
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════
+// MARKET CALIBRATION (v7.0, modes added v8.0) — replaces the old Platt band multipliers
 //
 // The old Platt code never ran: the log stores topPickConf as 0-100 but
 // the bands were 0-1, so every race fell outside every band and the
@@ -4061,30 +4159,41 @@ function selRace(i) {
 // "Calibrate Now" refits A and B from this device's log.
 // ══════════════════════════════════════════════════════════════════
 
-var CALIB_KEY = 'rq_calib_v2';
-var CALIB_DEFAULT = { a:0.891, b:0.275, n:1502, from:'2026-08-01', to:'2026-10-03', source:'built-in' };
+// Two calibration modes:
+//  'v2' — legacy models: anchor = market (1/odds), model = the composite score
+//  'v3' — trained v3 models: anchor = the v3 probability (already includes the
+//         market), model = the composite score (pace, jockey multipliers etc.).
+//         Starts as a=1, b=0 (trust v3 as trained); Calibrate Now learns from
+//         this device's results whether the composite adds anything on top.
+var CALIB_KEYS = { v2: 'rq_calib_v2', v3: 'rq_calib_v3' };
+var CALIB_DEFAULTS = {
+  v2: { a:0.891, b:0.275, n:1502, from:'2026-08-01', to:'2026-10-03', source:'built-in' },
+  v3: { a:1, b:0, n:0, from:'', to:'', source:'built-in' }
+};
 var CALIB_MIN_RACES = 300;
-var _calibCache = null;
+var _calibCache = {};
 
-function loadCalib() {
-  if (_calibCache) return _calibCache;
+function loadCalib(mode) {
+  mode = mode || 'v2';
+  if (_calibCache[mode]) return _calibCache[mode];
   var c = null;
-  try { c = JSON.parse(localStorage.getItem(CALIB_KEY) || 'null'); } catch(e) {}
-  _calibCache = (c && isFinite(c.a) && isFinite(c.b)) ? c : CALIB_DEFAULT;
-  return _calibCache;
+  try { c = JSON.parse(localStorage.getItem(CALIB_KEYS[mode]) || 'null'); } catch(e) {}
+  _calibCache[mode] = (c && isFinite(c.a) && isFinite(c.b)) ? c : CALIB_DEFAULTS[mode];
+  return _calibCache[mode];
 }
 
-// modelProbs: the model's own probabilities (power-scaled blend, sums to 1).
-// Returns calibrated probabilities. Needs a price for every runner — with
-// missing prices there's no market to anchor to, so the model is used as-is.
-function calibrateProbs(modelProbs, active, ctx) {
+// modelProbs: the composite model's probabilities (power-scaled blend).
+// anchor: v3 probabilities when a v3 model scored the race, else omitted and
+// the market price is the anchor. Needs a price for every runner — with
+// missing prices there's nothing to anchor to, so the composite is used as-is.
+function calibrateProbs(modelProbs, active, ctx, anchor) {
   if (!active || !active.length) return modelProbs;
   for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return modelProbs;
-  var c = loadCalib();
+  var c = loadCalib(anchor ? 'v3' : 'v2');
   var z = active.map(function(r, i) {
     // 1/odds, matching how A and B were fitted (scale cancels in the normalisation)
-    var mkt = 1 / r.odds;
-    return c.a * Math.log(Math.max(mkt, 1e-4)) + c.b * Math.log(Math.max(modelProbs[i] || 0, 0.005));
+    var base = anchor ? anchor[i] : 1 / r.odds;
+    return c.a * Math.log(Math.max(base, 1e-4)) + c.b * Math.log(Math.max(modelProbs[i] || 0, 0.005));
   });
   var mx = Math.max.apply(null, z);
   var e = z.map(function(v){ return Math.exp(v - mx); });
@@ -4092,16 +4201,50 @@ function calibrateProbs(modelProbs, active, ctx) {
   return e.map(function(v){ return v / s; });
 }
 
-// Model probabilities -> calibrated probabilities, attaching the raw model
-// figure to each runner as _raw so it can be logged for future refits.
-function finalProbsFor(blendNorm, active, ctx) {
+// v3 model probabilities for a race, or null when the race's model isn't v3
+// or a runner has no price. Uses the shared V3 feature core above.
+function v3ModelProbs(active, race, m) {
+  if (!m || !m.v3 || !m.v3.coef || !race || !active || active.length < 2) return null;
+  // Safety: a model that did worse than the market on its own held-out test
+  // is ignored, and the race is scored the v2 way instead
+  if (m.v3.test && !(m.v3.test.modelLL > m.v3.test.marketLL)) return null;
+  for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return null;
+  var st = { HS: m.horseStats || {}, JS: m.jockeyStats || {}, TS: m.trainerStats || {},
+             CD: m.courseDrawStats || {}, pop: m.popWinRate || 0.1, popP: m.popPlaceRate || 0.3 };
+  var c = V3.courseKey(race.course), dist = parseDist(race.dist);
+  var rows = active.map(function(r) {
+    var h = V3.horseKey(r.name), H = st.HS[h];
+    var lp = V3.formToPositions(r.form);
+    if (!lp.length && H && H.lp) lp = H.lp;          // feed gave no form: use the model's history
+    return V3.raw({ h: h, j: V3.personKey(r.jockey), t: V3.personKey(r.trainer), c: c,
+                    stall: parseInt(r.draw || r.stall) || 0, dist: dist,
+                    gs: V3.goingScore(r.going || race.going),
+                    days: r.daysSince > 0 ? r.daysSince : 0, or: parseInt(r.or) || 0,
+                    lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: lp }, st);
+  });
+  V3.centre(rows);
+  return V3.probs(rows, active.map(function(r){ return r.odds; }), m.v3);
+}
+
+// Composite figure -> final probabilities. Attaches _raw (composite) and _v3
+// (trained model, when present) to each runner so both can be logged.
+function finalProbsFor(blendNorm, active, ctx, race) {
   var raw = powerScaleProbs(blendNorm);
-  active.forEach(function(r, i){ r._raw = raw[i]; });
+  active.forEach(function(r, i){ r._raw = raw[i]; r._v3 = undefined; });
+  var v3 = null;
+  try { v3 = v3ModelProbs(active, race, race ? getModelForRace(race) : null); } catch(e) { v3 = null; }
+  if (v3) {
+    active.forEach(function(r, i){ r._v3 = v3[i]; });
+    return calibrateProbs(raw, active, ctx, v3);
+  }
   return calibrateProbs(raw, active, ctx);
 }
 
 // Raw model figure as a % with one decimal, for the log (undefined if absent)
 function rawPct(r) { return (r && r._raw !== undefined) ? Math.round(r._raw * 1000) / 10 : undefined; }
+function v3Pct(r)  { return (r && r._v3 !== undefined)  ? Math.round(r._v3  * 1000) / 10 : undefined; }
+// Which model scored a logged race: 3 if any runner carries a v3 figure
+function predsModelVersion(preds) { return (preds || []).some(function(p){ return p.v3 !== undefined; }) ? 3 : 2; }
 
 // The model's own favourite (highest raw figure, before market calibration).
 // Returns it only when it differs from the calibrated top pick, i.e. when the
@@ -4121,21 +4264,27 @@ function raceClassOf(race) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
-// Pull usable races from the log: every runner priced, model figure present.
-// Uses p.raw (logged from v7.0) or p.score (older logs, where score was the
-// uncalibrated model figure because the old Platt step never fired).
-function calibRacesFromLog(log) {
+// Pull usable races from the log for one mode: every runner priced, figures present.
+// v2: anchor 1/odds, model = p.raw (from v7.0) or p.score (older logs, where
+//     score was the uncalibrated figure because the old Platt step never fired).
+// v3: anchor = p.v3, model = p.raw; only races a v3 model scored.
+function calibRacesFromLog(log, mode) {
+  mode = mode || 'v2';
   var out = [];
   (log || []).forEach(function(e) {
     var P = e.predictions || [], win = (e.actual || [])[0];
     if (P.length < 3 || !win) return;
+    var isV3 = e.mv === 3 || predsModelVersion(P) === 3;
+    if ((mode === 'v3') !== isV3) return;
     var rows = [];
     for (var i = 0; i < P.length; i++) {
       var p = P[i];
       if (!(p.odds > 1)) return;
       var m = (p.raw !== undefined) ? p.raw : p.score;
       if (!(m >= 0)) return;
-      rows.push({ m: Math.log(1 / p.odds), s: Math.log(Math.max(m, 0.5) / 100), w: p.name === win, odds: p.odds });
+      var anc = mode === 'v3' ? (p.v3 > 0 ? p.v3 / 100 : null) : 1 / p.odds;
+      if (!anc) return;
+      rows.push({ m: Math.log(anc), s: Math.log(Math.max(m, 0.5) / 100), w: p.name === win, odds: p.odds });
     }
     var full = !e.fieldSize || e.fieldSize === P.length;
     out.push({ date: e.date || '', rows: rows, full: full, hasWinner: rows.some(function(r){ return r.w; }) });
@@ -4173,36 +4322,43 @@ function fitCalib(races) {
   return { a: a, b: b };
 }
 
-// Refit from this device's log (most recent 1,500 usable races).
-function rebuildCalib() {
-  var races = calibRacesFromLog(getPredLog()).filter(function(r){ return r.hasWinner; });
+// Refit one mode from this device's log (most recent 1,500 usable races).
+function rebuildCalibMode(mode) {
+  var races = calibRacesFromLog(getPredLog(), mode).filter(function(r){ return r.hasWinner; });
   // Prefer races where every runner was logged (older logs kept only the top 8)
   var fullOnly = races.filter(function(r){ return r.full; });
   if (fullOnly.length >= CALIB_MIN_RACES) races = fullOnly;
   races.sort(function(x, y){ return x.date < y.date ? -1 : 1; });
   races = races.slice(-1500);   // recent races: the model changed a lot over summer 2026
-  if (races.length < CALIB_MIN_RACES) return { ok: false, n: races.length };
+  if (races.length < CALIB_MIN_RACES) return { ok: false, n: races.length, mode: mode };
   var f = fitCalib(races);
-  if (!isFinite(f.a) || !isFinite(f.b)) return { ok: false, n: races.length };
+  if (!isFinite(f.a) || !isFinite(f.b)) return { ok: false, n: races.length, mode: mode };
   var c = { a: Math.min(Math.max(f.a, 0.5), 1.5), b: Math.min(Math.max(f.b, 0), 1),
             n: races.length, from: races[0].date, to: races[races.length - 1].date,
             source: 'fitted ' + new Date().toISOString().slice(0, 10) };
-  try { localStorage.setItem(CALIB_KEY, JSON.stringify(c)); } catch(e) {}
+  try { localStorage.setItem(CALIB_KEYS[mode], JSON.stringify(c)); } catch(e) {}
   try { localStorage.removeItem('rq_platt_v1'); } catch(e) {}
-  _calibCache = c;
-  return { ok: true, calib: c };
+  _calibCache[mode] = c;
+  return { ok: true, calib: c, mode: mode };
+}
+function rebuildCalib() { return rebuildCalibMode(activeCalibMode()); }
+
+// v3 if any loaded model is a trained v3 model, else v2
+function activeCalibMode() {
+  var ms = [S.modelTurf, S.modelAW, S.modelJumps, S.model];
+  return ms.some(function(m){ return m && m.v3; }) ? 'v3' : 'v2';
 }
 
 // Reliability table: calibrated top-pick probability vs how often it won.
 // Only full-field races, so the percentages are the ones the app shows.
-function calibReliability(c) {
+function calibReliability(c, mode) {
   var bands = [
     { min:0,    max:0.20, label:'Under 20%' }, { min:0.20, max:0.30, label:'20–30%' },
     { min:0.30, max:0.40, label:'30–40%' },    { min:0.40, max:0.55, label:'40–55%' },
     { min:0.55, max:1.01, label:'55%+' }
   ];
   bands.forEach(function(b){ b.n = 0; b.wins = 0; b.sumP = 0; });
-  calibRacesFromLog(getPredLog()).forEach(function(rc) {
+  calibRacesFromLog(getPredLog(), mode).forEach(function(rc) {
     if (!rc.full || rc.rows.length < 3) return;
     var z = rc.rows.map(function(r){ return c.a * r.m + c.b * r.s; });
     var mx = Math.max.apply(null, z);
@@ -5201,7 +5357,7 @@ function runPlacepot() {
     });
     var ppBlendTotal = ppBlended.reduce(function(a,b){return a+b;},0)||1;
     var ppBlendNorm  = ppBlended.map(function(b){return b/ppBlendTotal;});
-    var finalProbs=finalProbsFor(ppBlendNorm, active, ctx);
+    var finalProbs=finalProbsFor(ppBlendNorm, active, ctx, race);
 
     var scored=active.map(function(r,i){ return Object.assign({},r,{score:finalProbs[i]}); });
     scored.sort(function(a,b){return b.score-a.score;});
@@ -5417,7 +5573,7 @@ function buildLocalAnalysis(ppRaces, going) {
     });
     var ppBT    = ppBlended.reduce(function(a,b){return a+b;},0)||1;
     var ppBNorm = ppBlended.map(function(b){return b/ppBT;});
-    var ppProbs = finalProbsFor(ppBNorm, active, ctx);
+    var ppProbs = finalProbsFor(ppBNorm, active, ctx, race);
     var ppSorted = active.map(function(r,i){return Object.assign({},r,{prob:ppProbs[i]});});
     ppSorted.sort(function(a,b){return b.prob-a.prob;});
     var placepotPick = ppSorted[0]; // what the placepot tab is showing
@@ -5705,7 +5861,7 @@ function computeConfidencePicks() {
         return mkt*mktW + formNorm[i]*(1.0-mktW);
       });
       var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
-      var probs = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx);
+      var probs = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx, race);
 
       // Rank this race
       var ranked = active.map(function(r,i){ return { r:r, p:probs[i] }; })
@@ -6000,7 +6156,7 @@ function runL15(strategy) {
           return mkt*mktW + formNorm[i]*(1.0-mktW);
         });
         var bt = blended.reduce(function(a,b){return a+b;},0)||1;
-        var finalProbs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx);
+        var finalProbs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx, race);
 
         // Don't offer a horse the model has already dismissed in its own race.
         // Previously every runner with a price went into the pool, so the
@@ -6659,7 +6815,7 @@ function runMonteCarloPlacepot(ppRaces, going, nSims) {
       return mkt*mktW+formNorm[i]*(1-mktW);
     });
     var bt=blended.reduce(function(a,b){return a+b;},0)||1;
-    var probs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx);
+    var probs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx, race);
 
     // Estimate place probabilities from win probs
     // Places paid: field>=12 → 4, >=8 → 3, >=5 → 2
@@ -6755,8 +6911,14 @@ function runMCPlacepot() {
 // ── PREDICTION ACCURACY LOG ───────────────────────────────
 // ══════════════════════════════════════════════════════════
 
-function calibStatusText(c) {
+function calibStatusText(c, mode) {
   var mw = Math.round(c.b * 100);
+  if (mode === 'v3') {
+    return (c.source === 'built-in'
+        ? 'Trained v3 model in use, as fitted on the race history.'
+        : 'Trained v3 model, adjusted on this device — ' + c.n.toLocaleString() + ' races (' + c.from + ' to ' + c.to + ').')
+      + ' Composite weight ' + mw + '% (pace, jockey bonuses etc. on top of the trained model).';
+  }
   return (c.source === 'built-in' ? 'Built-in calibration' : 'Calibrated on this device')
     + ' — ' + c.n.toLocaleString() + ' races (' + c.from + ' to ' + c.to + '). '
     + 'Model weight ' + mw + '% (0% = market only, 100% = model taken at face value).';
@@ -6769,22 +6931,23 @@ function runCalibration() {
   var statusEl = document.getElementById('calib-status');
   var chartEl  = document.getElementById('calib-chart');
 
-  var res = rebuildCalib();
-  var c = loadCalib();
+  var mode = activeCalibMode();
+  var res = rebuildCalibMode(mode);
+  var c = loadCalib(mode);
   if (statusEl) {
     if (res.ok) {
-      statusEl.textContent = '✓ ' + calibStatusText(c) + ' Predictions now use this.';
+      statusEl.textContent = '✓ ' + calibStatusText(c, mode) + ' Predictions now use this.';
       statusEl.style.color = 'var(--g)';
     } else {
-      statusEl.textContent = 'Only ' + res.n + ' usable races on this device (need ' + CALIB_MIN_RACES
-        + ', every runner priced). Still using: ' + calibStatusText(c);
+      statusEl.textContent = 'Only ' + res.n + ' usable ' + (mode === 'v3' ? 'v3-scored ' : '') + 'races on this device (need '
+        + CALIB_MIN_RACES + ', every runner priced). Still using: ' + calibStatusText(c, mode);
       statusEl.style.color = 'var(--mt)';
     }
   }
 
   // Reliability chart: what the app says for its top pick vs how often it won
   if (chartEl) {
-    var bands = calibReliability(c), ch = '';
+    var bands = calibReliability(c, mode), ch = '';
     bands.forEach(function(b) {
       if (b.n < 1) return;
       var actual = Math.round(b.wins / b.n * 100);
@@ -6819,7 +6982,8 @@ function initCalibCount() {
   if (countEl) countEl.textContent = getPredLog().length + ' races';
   var statusEl = document.getElementById('calib-status');
   if (statusEl) {
-    statusEl.textContent = '✓ ' + calibStatusText(loadCalib());
+    var mode = activeCalibMode();
+    statusEl.textContent = '✓ ' + calibStatusText(loadCalib(mode), mode);
     statusEl.style.color = 'var(--g)';
   }
 }
@@ -7006,6 +7170,7 @@ function saveRaceResult(raceKey) {
     favWon:        favWon,
     cls:           raceClassOf(S.sel || race),
     title:         (race.title || (S.sel && S.sel.title) || ''),
+    mv:            predsModelVersion(preds),
     modelPickName: S._logModelPick ? S._logModelPick.name : '',
     modelPickOdds: S._logModelPick ? S._logModelPick.odds : 0,
     modelPickWon:  !!(S._logModelPick && actual[0] === S._logModelPick.name),
@@ -7779,7 +7944,7 @@ function scoreRaceHeadless(race, going) {
     return mkt * W + fn[i] * (1 - W);
   });
   var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
-  var fp = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx);
+  var fp = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx, race);
   var scored = active.map(function(r, i){ return Object.assign({}, r, { score: fp[i] }); });
   scored.sort(function(a,b){ return b.score - a.score; });
   race._mainScored = scored.slice();
@@ -7793,7 +7958,7 @@ function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); 
 function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
 function plockSave(race, scored, going) {
   try {
-    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), odds:r.odds||0 }; });
+    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0 }; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
@@ -7866,6 +8031,7 @@ function logResultHeadless(race, lock, resultObj) {
     winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
     favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
     cls:lock.cls||0, title:lock.title||'',
+    mv:predsModelVersion(preds),
     modelPickName:lock.modelPick ? lock.modelPick.name : '', modelPickOdds:lock.modelPick ? lock.modelPick.odds : 0,
     modelPickWon:!!(lock.modelPick && winner === lock.modelPick.name),
     fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
