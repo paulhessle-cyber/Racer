@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v6.3 · 23 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v7.0 · 3 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -739,8 +739,8 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   <div class="card" id="calib-card">
     <div class="ct">⚡ Prediction Calibration</div>
     <p class="mu" style="margin-bottom:12px">
-      Compares your logged results against model confidence to detect over/under-confidence.
-      Needs 30+ races. Logged: <strong id="calib-count">—</strong>
+      Learns from your logged results how far the model should move the market price.
+      Needs 300+ races with prices. Logged: <strong id="calib-count">—</strong>
     </p>
     <div id="calib-status" style="margin-bottom:12px;font-size:.78rem;color:var(--mt)">
       Tap Calibrate to check if your model needs adjustment.
@@ -2567,15 +2567,8 @@ function predict() {
   // Step 4: normalise blended scores, then power-scale for spread
   var blendTotal = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
   var blendNorm  = blended.map(function(b){ return b / blendTotal; });
-  var finalProbs = powerScaleProbs(blendNorm);
-  // Apply Platt scaling calibration if available
-  var plattBands = loadPlattCalibration();
-  if (plattBands) {
-    finalProbs = finalProbs.map(function(p){ return applyPlattCorrection(p); });
-    // Re-normalise after correction so they sum to ~1
-    var plattSum = finalProbs.reduce(function(s,p){ return s+p; }, 0);
-    if (plattSum > 0) finalProbs = finalProbs.map(function(p){ return p/plattSum; });
-  }
+  // Model figure, then market calibration (see MARKET CALIBRATION)
+  var finalProbs = finalProbsFor(blendNorm, activeRunners, ctx);
 
   var scored = activeRunners.map(function(r, i) {
     return Object.assign({}, r, { score: finalProbs[i] });
@@ -3165,7 +3158,7 @@ function buildMeetingBrief(meeting) {
       try {
         var sc = scoreRaceHeadless(race);
         if (sc && sc.length) preds = sc.map(function(r){
-          return { name:r.name, odds:r.odds || 0, score:Math.round((r.score||0)*100) };
+          return { name:r.name, odds:r.odds || 0, score:Math.round((r.score||0)*100), raw:rawPct(r) };
         });
       } catch(e) {}
     }
@@ -3625,7 +3618,7 @@ function showResults(scored, val, race, paceInfo) {
   // Store race key and predictions for saving
   S._logRaceKey  = raceKey;
   S._logPredictions = scored.map(function(r,i){
-    return { name: r.name, rank: i+1, score: Math.round(r.score*100), odds: r.odds||0 };
+    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), odds: r.odds||0 };
   });
   // Value pick: within top 3, the runner with the biggest model-vs-market edge
   // Backtested on 199 logged races: +17% / +28% ROI in two independent samples
@@ -4035,81 +4028,170 @@ function selRace(i) {
 
 
 // ══════════════════════════════════════════════════════════════════
-// PLATT SCALING CALIBRATION
-// Reads logged results, computes actual win rate per confidence band,
-// applies a correction multiplier so future predictions are calibrated.
-// Needs 30+ logged races to be meaningful.
+// MARKET CALIBRATION (v7.0) — replaces the old Platt band multipliers
+//
+// The old Platt code never ran: the log stores topPickConf as 0-100 but
+// the bands were 0-1, so every race fell outside every band and the
+// correction was always x1.0.
+//
+// New approach, fitted on logged results:
+//     p(horse) ∝ market^A × model^B      (normalised across the field)
+// A = how much to trust the market price, B = how much the model's own
+// opinion should move it. B=0 means the model adds nothing; B=1 means
+// take the model at face value. Fitted on 1,502 full-field logged races
+// (1 Aug – 3 Oct 2026): A=0.891, B=0.275. The model adds real but modest
+// information over the market, so the market does most of the work.
+// Out-of-sample check (fit 1 Aug–7 Sep, test 8 Sep–3 Oct, 901 races): top
+// picks shown at 46% won 50%; before this they were shown at 43% and won 59%.
+// "Calibrate Now" refits A and B from this device's log.
 // ══════════════════════════════════════════════════════════════════
 
-var PLATT_KEY = 'rq_platt_v1'; // stored separately so it persists
+var CALIB_KEY = 'rq_calib_v2';
+var CALIB_DEFAULT = { a:0.891, b:0.275, n:1502, from:'2026-08-01', to:'2026-10-03', source:'built-in' };
+var CALIB_MIN_RACES = 300;
+var _calibCache = null;
 
-function computePlattCalibration() {
-  var log = getPredLog();
-  if (log.length < 30) return null; // not enough data
+function loadCalib() {
+  if (_calibCache) return _calibCache;
+  var c = null;
+  try { c = JSON.parse(localStorage.getItem(CALIB_KEY) || 'null'); } catch(e) {}
+  _calibCache = (c && isFinite(c.a) && isFinite(c.b)) ? c : CALIB_DEFAULT;
+  return _calibCache;
+}
 
-  // Confidence bands: 0-10%, 10-20%, 20-30%, 30-40%, 40-50%, 50%+
-  var bands = [
-    { min:0,   max:0.10, label:'0–10%'  },
-    { min:0.10,max:0.20, label:'10–20%' },
-    { min:0.20,max:0.30, label:'20–30%' },
-    { min:0.30,max:0.40, label:'30–40%' },
-    { min:0.40,max:0.50, label:'40–50%' },
-    { min:0.50,max:1.00, label:'50%+'   },
-  ];
-
-  bands.forEach(function(b) {
-    var entries = log.filter(function(e) {
-      var conf = e.topPickConf || 0;
-      return conf >= b.min && conf < b.max;
-    });
-    b.n       = entries.length;
-    b.wins    = entries.filter(function(e){ return e.topPickWon; }).length;
-    b.actual  = b.n > 0 ? b.wins / b.n : null;          // actual win rate
-    b.midConf = (b.min + b.max) / 2;                     // midpoint confidence
-    // Multiplier: if model says 25% but actual is 18%, multiply by 18/25 = 0.72
-    // Only apply if we have 5+ samples in the band
-    b.multiplier = (b.n >= 5 && b.actual !== null && b.midConf > 0)
-      ? Math.min(Math.max(b.actual / b.midConf, 0.4), 2.0)  // clamp 0.4–2.0
-      : 1.0;
+// modelProbs: the model's own probabilities (power-scaled blend, sums to 1).
+// Returns calibrated probabilities. Needs a price for every runner — with
+// missing prices there's no market to anchor to, so the model is used as-is.
+function calibrateProbs(modelProbs, active, ctx) {
+  if (!active || !active.length) return modelProbs;
+  for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return modelProbs;
+  var c = loadCalib();
+  var z = active.map(function(r, i) {
+    // 1/odds, matching how A and B were fitted (scale cancels in the normalisation)
+    var mkt = 1 / r.odds;
+    return c.a * Math.log(Math.max(mkt, 1e-4)) + c.b * Math.log(Math.max(modelProbs[i] || 0, 0.005));
   });
-
-  return bands;
+  var mx = Math.max.apply(null, z);
+  var e = z.map(function(v){ return Math.exp(v - mx); });
+  var s = e.reduce(function(a, b){ return a + b; }, 0) || 1;
+  return e.map(function(v){ return v / s; });
 }
 
-function savePlattCalibration(bands) {
-  try {
-    localStorage.setItem(PLATT_KEY, JSON.stringify(bands));
-  } catch(e) {}
+// Model probabilities -> calibrated probabilities, attaching the raw model
+// figure to each runner as _raw so it can be logged for future refits.
+function finalProbsFor(blendNorm, active, ctx) {
+  var raw = powerScaleProbs(blendNorm);
+  active.forEach(function(r, i){ r._raw = raw[i]; });
+  return calibrateProbs(raw, active, ctx);
 }
 
-function loadPlattCalibration() {
-  try {
-    var raw = localStorage.getItem(PLATT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+// Raw model figure as a % with one decimal, for the log (undefined if absent)
+function rawPct(r) { return (r && r._raw !== undefined) ? Math.round(r._raw * 1000) / 10 : undefined; }
+
+// Race class: the feed's figure if it has one, else read it from the title
+// ("... (Class 4) ..."). Most logged races had cls 0 because the feed omits it.
+function raceClassOf(race) {
+  if (race && race.cls) return race.cls;
+  var m = ((race && race.title) || '').match(/class\s*(\d)/i);
+  return m ? parseInt(m[1], 10) : 0;
 }
 
-function applyPlattCorrection(rawScore) {
-  // Apply calibration multiplier to a raw confidence score
-  var bands = loadPlattCalibration();
-  if (!bands) return rawScore; // no calibration yet — use raw
-
-  for (var i = 0; i < bands.length; i++) {
-    var b = bands[i];
-    if (rawScore >= b.min && rawScore < b.max) {
-      return Math.min(rawScore * b.multiplier, 0.95); // cap at 95%
+// Pull usable races from the log: every runner priced, model figure present.
+// Uses p.raw (logged from v7.0) or p.score (older logs, where score was the
+// uncalibrated model figure because the old Platt step never fired).
+function calibRacesFromLog(log) {
+  var out = [];
+  (log || []).forEach(function(e) {
+    var P = e.predictions || [], win = (e.actual || [])[0];
+    if (P.length < 3 || !win) return;
+    var rows = [];
+    for (var i = 0; i < P.length; i++) {
+      var p = P[i];
+      if (!(p.odds > 1)) return;
+      var m = (p.raw !== undefined) ? p.raw : p.score;
+      if (!(m >= 0)) return;
+      rows.push({ m: Math.log(1 / p.odds), s: Math.log(Math.max(m, 0.5) / 100), w: p.name === win, odds: p.odds });
     }
-  }
-  return rawScore;
+    var full = !e.fieldSize || e.fieldSize === P.length;
+    out.push({ date: e.date || '', rows: rows, full: full, hasWinner: rows.some(function(r){ return r.w; }) });
+  });
+  return out;
 }
 
-function rebuildPlattCalibration() {
-  var bands = computePlattCalibration();
-  if (!bands) {
-    alert('Need at least 30 logged races to calibrate. You have ' + getPredLog().length + ' so far.');
-    return null;
+// Conditional logit fit of A and B by Newton's method. Each race contributes
+// P(winner | winner is among the logged runners), which stays valid when the
+// log holds only part of the field.
+function fitCalib(races) {
+  var a = 1, b = 0;
+  for (var it = 0; it < 50; it++) {
+    var ga = 0, gb = 0, haa = 0, hbb = 0, hab = 0;
+    races.forEach(function(rc) {
+      var z = rc.rows.map(function(r){ return a * r.m + b * r.s; });
+      var mx = Math.max.apply(null, z);
+      var e = z.map(function(v){ return Math.exp(v - mx); });
+      var S = e.reduce(function(x, y){ return x + y; }, 0);
+      var Em = 0, Es = 0, Emm = 0, Ess = 0, Ems = 0;
+      rc.rows.forEach(function(r, k) {
+        var q = e[k] / S;
+        Em += q * r.m; Es += q * r.s; Emm += q * r.m * r.m; Ess += q * r.s * r.s; Ems += q * r.m * r.s;
+        if (r.w) { ga += r.m; gb += r.s; }
+      });
+      ga -= Em; gb -= Es;
+      haa -= Emm - Em * Em; hbb -= Ess - Es * Es; hab -= Ems - Em * Es;
+    });
+    var det = haa * hbb - hab * hab;
+    if (!isFinite(det) || Math.abs(det) < 1e-12) break;
+    var da = (hbb * ga - hab * gb) / det, db = (haa * gb - hab * ga) / det;
+    a -= da; b -= db;
+    if (Math.abs(da) + Math.abs(db) < 1e-7) break;
   }
-  savePlattCalibration(bands);
+  return { a: a, b: b };
+}
+
+// Refit from this device's log (most recent 1,500 usable races).
+function rebuildCalib() {
+  var races = calibRacesFromLog(getPredLog()).filter(function(r){ return r.hasWinner; });
+  // Prefer races where every runner was logged (older logs kept only the top 8)
+  var fullOnly = races.filter(function(r){ return r.full; });
+  if (fullOnly.length >= CALIB_MIN_RACES) races = fullOnly;
+  races.sort(function(x, y){ return x.date < y.date ? -1 : 1; });
+  races = races.slice(-1500);   // recent races: the model changed a lot over summer 2026
+  if (races.length < CALIB_MIN_RACES) return { ok: false, n: races.length };
+  var f = fitCalib(races);
+  if (!isFinite(f.a) || !isFinite(f.b)) return { ok: false, n: races.length };
+  var c = { a: Math.min(Math.max(f.a, 0.5), 1.5), b: Math.min(Math.max(f.b, 0), 1),
+            n: races.length, from: races[0].date, to: races[races.length - 1].date,
+            source: 'fitted ' + new Date().toISOString().slice(0, 10) };
+  try { localStorage.setItem(CALIB_KEY, JSON.stringify(c)); } catch(e) {}
+  try { localStorage.removeItem('rq_platt_v1'); } catch(e) {}
+  _calibCache = c;
+  return { ok: true, calib: c };
+}
+
+// Reliability table: calibrated top-pick probability vs how often it won.
+// Only full-field races, so the percentages are the ones the app shows.
+function calibReliability(c) {
+  var bands = [
+    { min:0,    max:0.20, label:'Under 20%' }, { min:0.20, max:0.30, label:'20–30%' },
+    { min:0.30, max:0.40, label:'30–40%' },    { min:0.40, max:0.55, label:'40–55%' },
+    { min:0.55, max:1.01, label:'55%+' }
+  ];
+  bands.forEach(function(b){ b.n = 0; b.wins = 0; b.sumP = 0; });
+  calibRacesFromLog(getPredLog()).forEach(function(rc) {
+    if (!rc.full || rc.rows.length < 3) return;
+    var z = rc.rows.map(function(r){ return c.a * r.m + c.b * r.s; });
+    var mx = Math.max.apply(null, z);
+    var e = z.map(function(v){ return Math.exp(v - mx); });
+    var S = e.reduce(function(x, y){ return x + y; }, 0);
+    var top = 0;
+    for (var k = 1; k < z.length; k++) if (z[k] > z[top]) top = k;
+    var p = e[top] / S;
+    for (var j = 0; j < bands.length; j++) {
+      if (p >= bands[j].min && p < bands[j].max) {
+        bands[j].n++; bands[j].sumP += p; if (rc.rows[top].w) bands[j].wins++; break;
+      }
+    }
+  });
   return bands;
 }
 
@@ -5094,7 +5176,7 @@ function runPlacepot() {
     });
     var ppBlendTotal = ppBlended.reduce(function(a,b){return a+b;},0)||1;
     var ppBlendNorm  = ppBlended.map(function(b){return b/ppBlendTotal;});
-    var finalProbs=powerScaleProbs(ppBlendNorm);
+    var finalProbs=finalProbsFor(ppBlendNorm, active, ctx);
 
     var scored=active.map(function(r,i){ return Object.assign({},r,{score:finalProbs[i]}); });
     scored.sort(function(a,b){return b.score-a.score;});
@@ -5310,7 +5392,7 @@ function buildLocalAnalysis(ppRaces, going) {
     });
     var ppBT    = ppBlended.reduce(function(a,b){return a+b;},0)||1;
     var ppBNorm = ppBlended.map(function(b){return b/ppBT;});
-    var ppProbs = powerScaleProbs(ppBNorm);
+    var ppProbs = finalProbsFor(ppBNorm, active, ctx);
     var ppSorted = active.map(function(r,i){return Object.assign({},r,{prob:ppProbs[i]});});
     ppSorted.sort(function(a,b){return b.prob-a.prob;});
     var placepotPick = ppSorted[0]; // what the placepot tab is showing
@@ -5524,11 +5606,14 @@ function renderAnalysis(a) {
 // ── CONFIDENCE PREDICTOR ──────────────────────────────────
 // Scans EVERY race across all loaded meetings and lists the horses the model
 // separates most clearly from their nearest rival. Qualifying rule: the gap
-// between the top-rated horse and the second must be GREATER than 20
-// percentage points (so 44% vs 19% = 25pt gap qualifies; 30% vs 10% = 20pt
+// between the top-rated horse and the second must be GREATER than 30
+// percentage points (so 55% vs 20% = 35pt gap qualifies; 45% vs 15% = 30pt
 // does not). Up to 10, ordered by the horse's own confidence, highest first.
+// v7.0: raised from 20 to 30 because calibrated percentages are more spread
+// out. On 901 test races, >30 on the new scale picked 64 horses (64% won),
+// close to the old >20 rule (46 horses, 65% won); >20 would have picked 155.
 // If only 3 qualify, it shows 3 — it never pads the list.
-var CONF_GAP_MIN = 20;   // percentage points, must be EXCEEDED
+var CONF_GAP_MIN = 30;   // percentage points, must be EXCEEDED
 var CONF_MAX     = 10;
 
 function computeConfidencePicks() {
@@ -5595,7 +5680,7 @@ function computeConfidencePicks() {
         return mkt*mktW + formNorm[i]*(1.0-mktW);
       });
       var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
-      var probs = powerScaleProbs(blended.map(function(b){ return b/bt; }));
+      var probs = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx);
 
       // Rank this race
       var ranked = active.map(function(r,i){ return { r:r, p:probs[i] }; })
@@ -5605,7 +5690,7 @@ function computeConfidencePicks() {
 
       var topPct = top.p * 100, secPct = second.p * 100;
       var gap = topPct - secPct;
-      if (!(gap > CONF_GAP_MIN)) return;    // strictly greater than 20 points
+      if (!(gap > CONF_GAP_MIN)) return;    // strictly greater than CONF_GAP_MIN points
 
       out.push({
         name:    top.r.name,
@@ -5890,7 +5975,7 @@ function runL15(strategy) {
           return mkt*mktW + formNorm[i]*(1.0-mktW);
         });
         var bt = blended.reduce(function(a,b){return a+b;},0)||1;
-        var finalProbs = powerScaleProbs(blended.map(function(b){return b/bt;}));
+        var finalProbs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx);
 
         // Don't offer a horse the model has already dismissed in its own race.
         // Previously every runner with a price went into the pool, so the
@@ -6549,7 +6634,7 @@ function runMonteCarloPlacepot(ppRaces, going, nSims) {
       return mkt*mktW+formNorm[i]*(1-mktW);
     });
     var bt=blended.reduce(function(a,b){return a+b;},0)||1;
-    var probs = powerScaleProbs(blended.map(function(b){return b/bt;}));
+    var probs = finalProbsFor(blended.map(function(b){return b/bt;}), active, ctx);
 
     // Estimate place probabilities from win probs
     // Places paid: field>=12 → 4, >=8 → 3, >=5 → 2
@@ -6645,84 +6730,61 @@ function runMCPlacepot() {
 // ── PREDICTION ACCURACY LOG ───────────────────────────────
 // ══════════════════════════════════════════════════════════
 
+function calibStatusText(c) {
+  var mw = Math.round(c.b * 100);
+  return (c.source === 'built-in' ? 'Built-in calibration' : 'Calibrated on this device')
+    + ' — ' + c.n.toLocaleString() + ' races (' + c.from + ' to ' + c.to + '). '
+    + 'Model weight ' + mw + '% (0% = market only, 100% = model taken at face value).';
+}
+
 function runCalibration() {
   var log     = getPredLog();
   var countEl = document.getElementById('calib-count');
   if (countEl) countEl.textContent = log.length + ' races';
-
-  var bands    = rebuildPlattCalibration();
   var statusEl = document.getElementById('calib-status');
   var chartEl  = document.getElementById('calib-chart');
 
-  if (!bands) {
-    if (statusEl) {
-      statusEl.textContent = 'Need at least 30 logged races. You have ' + log.length + ' so far.';
+  var res = rebuildCalib();
+  var c = loadCalib();
+  if (statusEl) {
+    if (res.ok) {
+      statusEl.textContent = '✓ ' + calibStatusText(c) + ' Predictions now use this.';
+      statusEl.style.color = 'var(--g)';
+    } else {
+      statusEl.textContent = 'Only ' + res.n + ' usable races on this device (need ' + CALIB_MIN_RACES
+        + ', every runner priced). Still using: ' + calibStatusText(c);
       statusEl.style.color = 'var(--mt)';
     }
-    if (chartEl) chartEl.innerHTML = '';
-    return;
   }
 
-  var applied = bands.filter(function(b){ return b.n >= 5 && Math.abs(b.multiplier - 1) > 0.05; });
-
-  if (statusEl) {
-    statusEl.textContent = applied.length
-      ? '✓ Corrections applied to ' + applied.length + ' band(s) — predictions updated'
-      : '✓ Well calibrated — no corrections needed';
-    statusEl.style.color = 'var(--g)';
-  }
-
-  // Always draw the band chart so you can see how well calibrated it is
+  // Reliability chart: what the app says for its top pick vs how often it won
   if (chartEl) {
-    var ch = '';
-
+    var bands = calibReliability(c), ch = '';
     bands.forEach(function(b) {
       if (b.n < 1) return;
-      var actual = b.actual !== null ? Math.round(b.actual * 100) : 0;
-      var model  = Math.round(b.midConf * 100);
-      var maxPct = 70; // scale: 70% = full bar width
-      var aW     = Math.round(Math.min(actual / maxPct, 1) * 100);
-      var mW     = Math.round(Math.min(model  / maxPct, 1) * 100);
-      var diff   = actual - model;
-      var col    = diff > 4 ? 'var(--g)' : diff < -4 ? 'var(--re)' : 'var(--mt)';
-      var faint  = b.n < 5 ? 'opacity:.35;' : '';
-      var mult   = b.n >= 5
-        ? (Math.abs(b.multiplier - 1) > 0.05
-            ? ' <span style="color:var(--gold)">×' + b.multiplier.toFixed(2) + '</span>'
-            : ' <span style="color:var(--g)">✓</span>')
-        : ' <span style="color:var(--mt);font-size:.55rem">need 5+</span>';
-
+      var actual = Math.round(b.wins / b.n * 100);
+      var model  = Math.round(b.sumP / b.n * 100);
+      var maxPct = 80;
+      var aW = Math.round(Math.min(actual / maxPct, 1) * 100);
+      var mW = Math.round(Math.min(model  / maxPct, 1) * 100);
+      var diff = actual - model;
+      var col = Math.abs(diff) <= 4 ? 'var(--g)' : 'var(--gold)';
+      var faint = b.n < 20 ? 'opacity:.35;' : '';
       ch += '<div style="margin-bottom:9px;' + faint + '">'
-          + '<div style="display:flex;justify-content:space-between;align-items:baseline;'
-          + 'font-size:.62rem;margin-bottom:3px">'
-          + '<span style="color:var(--mt)">' + b.label
-          + ' <span style="opacity:.6">(' + b.n + ')</span></span>'
-          + '<span style="color:' + col + '">'
-          + actual + '% actual · ' + model + '% model' + mult
-          + '</span>'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.62rem;margin-bottom:3px">'
+          + '<span style="color:var(--mt)">' + b.label + ' <span style="opacity:.6">(' + b.n + ')</span></span>'
+          + '<span style="color:' + col + '">' + actual + '% won · ' + model + '% predicted</span>'
           + '</div>'
           + '<div style="position:relative;height:10px;background:rgba(255,255,255,.05);border-radius:3px">'
-          // Actual win rate bar
-          + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;'
-          + 'background:rgba(0,230,118,.5);border-radius:3px"></div>'
-          // Model predicted line
-          + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:14px;'
-          + 'background:rgba(255,255,255,.55);border-radius:1px"></div>'
-          + '</div>'
-          + '</div>';
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;background:rgba(0,230,118,.5);border-radius:3px"></div>'
+          + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:14px;background:rgba(255,255,255,.55);border-radius:1px"></div>'
+          + '</div></div>';
     });
-
-    // Compact legend below chart
-    ch += '<div style="display:flex;gap:14px;margin-top:10px;font-size:.58rem;color:var(--mt)">'
-        + '<span><span style="display:inline-block;width:10px;height:10px;'
-        + 'background:rgba(0,230,118,.5);border-radius:2px;vertical-align:middle;margin-right:4px"></span>'
-        + 'Actual win rate</span>'
-        + '<span><span style="display:inline-block;width:2px;height:10px;'
-        + 'background:rgba(255,255,255,.55);vertical-align:middle;margin-right:4px"></span>'
-        + 'Model predicted</span>'
-        + '<span style="opacity:.5">faded = &lt;5 races</span>'
-        + '</div>';
-
+    if (!ch) ch = '<div class="mu" style="font-size:.65rem">No full-field priced races in the log yet.</div>';
+    ch += '<div style="display:flex;gap:14px;margin-top:10px;font-size:.58rem;color:var(--mt);flex-wrap:wrap">'
+        + '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(0,230,118,.5);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Top pick actually won</span>'
+        + '<span><span style="display:inline-block;width:2px;height:10px;background:rgba(255,255,255,.55);vertical-align:middle;margin-right:4px"></span>App predicted</span>'
+        + '<span style="opacity:.5">faded = under 20 races</span></div>';
     chartEl.innerHTML = ch;
   }
 }
@@ -6730,17 +6792,10 @@ function runCalibration() {
 function initCalibCount() {
   var countEl = document.getElementById('calib-count');
   if (countEl) countEl.textContent = getPredLog().length + ' races';
-  // If calibration exists, show it
-  var bands = loadPlattCalibration();
-  if (bands) {
-    var statusEl = document.getElementById('calib-status');
-    var applied = bands.filter(function(b){ return b.n>=5 && Math.abs(b.multiplier-1)>0.05; });
-    if (statusEl) {
-      statusEl.textContent = applied.length
-        ? '✓ Calibration active — ' + applied.length + ' correction(s) applied'
-        : '✓ Calibration active — model is well calibrated';
-      statusEl.style.color = 'var(--g)';
-    }
+  var statusEl = document.getElementById('calib-status');
+  if (statusEl) {
+    statusEl.textContent = '✓ ' + calibStatusText(loadCalib());
+    statusEl.style.color = 'var(--g)';
   }
 }
 
@@ -6924,7 +6979,8 @@ function saveRaceResult(raceKey) {
     favName:       fav ? fav.name : '',
     favOdds:       fav ? fav.odds : 0,
     favWon:        favWon,
-    cls:           (S.sel && S.sel.cls) || 0,
+    cls:           raceClassOf(S.sel || race),
+    title:         (race.title || (S.sel && S.sel.title) || ''),
     fieldSize:     fieldSize,
     napName:       (S._logRace && S._logRace.napName) || '',
     napWon:        !!(S._logRace && S._logRace.napName && actual[0] === S._logRace.napName),
@@ -7664,7 +7720,7 @@ function raceKeyFor(race){
 }
 
 // DOM-free clone of predict()'s scoring pipeline (model select, pace,
-// dynamic market weight, power-scale, Platt) — same numbers, no render.
+// dynamic market weight, power-scale, calibration) — same numbers, no render.
 function scoreRaceHeadless(race, going) {
   going = going || (document.getElementById('gsel')||{}).value || 'Good';
   var mdl = getModelForRace(race);
@@ -7695,13 +7751,7 @@ function scoreRaceHeadless(race, going) {
     return mkt * W + fn[i] * (1 - W);
   });
   var bt = blended.reduce(function(a,b){ return a+b; }, 0) || 1;
-  var fp = powerScaleProbs(blended.map(function(b){ return b/bt; }));
-  var pb = loadPlattCalibration();
-  if (pb) {
-    fp = fp.map(function(p){ return applyPlattCorrection(p); });
-    var ps = fp.reduce(function(a,b){ return a+b; }, 0);
-    if (ps > 0) fp = fp.map(function(p){ return p/ps; });
-  }
+  var fp = finalProbsFor(blended.map(function(b){ return b/bt; }), active, ctx);
   var scored = active.map(function(r, i){ return Object.assign({}, r, { score: fp[i] }); });
   scored.sort(function(a,b){ return b.score - a.score; });
   race._mainScored = scored.slice();
@@ -7715,7 +7765,7 @@ function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); 
 function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
 function plockSave(race, scored, going) {
   try {
-    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), odds:r.odds||0 }; });
+    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), odds:r.odds||0 }; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
@@ -7752,7 +7802,7 @@ function plockSave(race, scored, going) {
     var dN = dField >= 8 ? 3 : (dField >= 5 ? 2 : 1);
     var dSels = dWith.slice(0, dN).map(function(r){ return { name:r.name, odds:r.odds||0 }; });
     var all = plockAll();
-    all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:race.cls||0,
+    all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:raceClassOf(race), title:race.title||'',
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       valuePick:vPick,
@@ -7785,7 +7835,7 @@ function logResultHeadless(race, lock, resultObj) {
     topPickWon:topPickWon, topPickPlaced:topPickPlaced, anyTop3Placed:anyTop3,
     winnerRank:winnerRank||0, topPickOdds:preds[0]?preds[0].odds:0, topPickConf:preds[0]?preds[0].score:0,
     favName:lock.favName||'', favOdds:lock.favOdds||0, favWon:!!(lock.favName && lock.favName===winner),
-    cls:lock.cls||0, fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
+    cls:lock.cls||0, title:lock.title||'', fieldSize:fieldSize, napName:lock.napName||'', napWon:!!(lock.napName && winner===lock.napName),
     valuePick:      lock.valuePick ? lock.valuePick.name : '',
     valuePickOdds:  lock.valuePick ? lock.valuePick.odds : 0,
     valuePickEdge:  lock.valuePick ? lock.valuePick.edge : 0,
