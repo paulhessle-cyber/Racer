@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.1 · 4 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.2 · 4 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3809,6 +3809,36 @@ function restoreTodaysCards() {
   return restored;
 }
 
+// ── Nap timing ──────────────────────────────────────────────
+// The Nap is locked once a day, so it has to be picked on prices with real
+// money behind them. Early in the morning the Betfair exchange is nearly
+// empty (see bfPrice), so the Nap stays provisional until 10:30 UK time, or
+// 90 minutes before the meeting's first race if that comes sooner.
+var NAP_READY_HHMM = '10:30';
+function ukNowMinutes() {
+  try {
+    var s = new Date().toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false });
+    var m = s.match(/(\d{1,2}):(\d{2})/);
+    if (m) return (parseInt(m[1], 10) % 24) * 60 + parseInt(m[2], 10);
+  } catch(e) {}
+  var d = new Date(); return d.getHours() * 60 + d.getMinutes();
+}
+// "16:40" -> 1000. Cards sometimes use 12-hour times ("4:40"); UK/IRE racing
+// doesn't start before 10:00, so an hour of 1-9 means the afternoon.
+function hhmmToMin(t) {
+  var m = String(t || '').match(/(\d{1,2})[:.](\d{2})/);
+  if (!m) return null;
+  var h = parseInt(m[1], 10); if (h < 10) h += 12;
+  return h * 60 + parseInt(m[2], 10);
+}
+function napMarketReady(times) {
+  var now = ukNowMinutes();
+  if (now >= hhmmToMin(NAP_READY_HHMM)) return true;
+  var first = null;
+  (times || []).forEach(function(t){ var m = hhmmToMin(t); if (m !== null && (first === null || m < first)) first = m; });
+  return first !== null && first - now <= 90;
+}
+
 // ── Nap lock persistence ────────────────────────────────────
 // The Nap must survive Safari iOS page reloads, so the lock is stored
 // per meeting per day and reconstituted against the reloaded card.
@@ -3822,7 +3852,8 @@ function napSave(races, nap) {
     localStorage.setItem(napKey(races), JSON.stringify({
       time: nap.race.time, name: nap.runner.name,
       gap: nap.gap, conf1: nap.conf1, conf2: nap.conf2,
-      bod: nap.bod||0, reason: nap.reason||'', isBF: !!nap.isBF, isDrop: !!nap.isDrop
+      bod: nap.bod||0, reason: nap.reason||'', isBF: !!nap.isBF, isDrop: !!nap.isDrop,
+      ready: true   // saved after the market filled (v8.2); older saves are ignored
     }));
   } catch(e){}
 }
@@ -3831,6 +3862,7 @@ function napRestore(races) {
     var raw = localStorage.getItem(napKey(races));
     if (!raw) return null;
     var d = JSON.parse(raw);
+    if (!d.ready) return null;   // locked on early, thin prices before v8.2 — pick again
     for (var ri = 0; ri < races.length; ri++) {
       if (races[ri].time !== d.time) continue;
       var rs = races[ri].runners || [];
@@ -5366,13 +5398,16 @@ function runPlacepot() {
     // so the Nap is always consistent with the main screen ranking.
     // Only update if the Nap isn't already locked for this session.
     if (!S._napLocked) {
+      // Only races where every runner has a real price can supply the Nap —
+      // an unpriced runner usually means the market hasn't formed yet
+      var allPricedG = active.every(function(x){ return x.odds > 1; });
       var napSrc = (race._mainScored && race._mainScored.length >= 2) ? race._mainScored : scored;
       var oddsInG = active.filter(function(x){ return x.odds > 0; }).map(function(x){ return x.odds; });
       var minOddsG = oddsInG.length ? Math.min.apply(null, oddsInG) : 0;
       if (napSrc.length >= 2) {
         var gap = Math.round((napSrc[0].score - napSrc[1].score) * 100);
         var agreeG = minOddsG <= 0 || (napSrc[0].odds > 0 && napSrc[0].odds <= minOddsG * 1.15);
-        if (gap > napScore && agreeG) {
+        if (allPricedG && gap > napScore && agreeG) {
           napScore = gap;
           napCandidate = {runner: napSrc[0], race: race, raceIdx: ri, gap: gap,
             conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100)};
@@ -5389,7 +5424,7 @@ function runPlacepot() {
       active.forEach(function(rr){
         computeBF(rr, race);   // ensure BF flags exist even if Predict wasn't tapped
         var bod = bestOfDayScore(rr, race, ctx);
-        var eligible = rr.name === rank1Name &&
+        var eligible = allPricedG && rr.name === rank1Name &&
                        (minOdds <= 0 || (rr.odds > 0 && rr.odds <= minOdds * 1.15));
         if (eligible && bod > bodBest) {
           bodBest = bod;
@@ -5469,9 +5504,12 @@ function runPlacepot() {
 
   // NAP — lock after first calculation so it doesn't shift during the day.
   // Persisted to localStorage so it survives Safari iOS page reloads.
+  // Not locked before the market has filled: until then it's shown as provisional.
   if (!S._napLocked) S._napLocked = napRestore(races);
-  if (!S._napLocked && napCandidate) { S._napLocked = napCandidate; napSave(races, napCandidate); }
+  var napReady = napMarketReady(races.map(function(r){ return r.time; }));
+  if (!S._napLocked && napCandidate && napReady) { S._napLocked = napCandidate; napSave(races, napCandidate); }
   if (S._napLocked) napCandidate = S._napLocked;
+  else if (napCandidate) napCandidate.provisional = true;
 
   var napEl=document.getElementById('pp-nap');
   if (napCandidate&&napEl) {
@@ -5496,7 +5534,9 @@ function runPlacepot() {
     var confBit = napCandidate.conf1 ? ' · '+napCandidate.conf1+'% vs '+napCandidate.conf2+'% (+'+napCandidate.gap+'% gap)' : '';
     document.getElementById('nap-meta').textContent='Draw '+drawOf(nr)+(nr.or>0?' · OR '+nr.or:'')+' · '+jn+confBit;
     var reasonEl = document.getElementById('nap-reason');
-    if (reasonEl) reasonEl.textContent = napCandidate.reason || '';
+    if (reasonEl) reasonEl.textContent = (napCandidate.reason || '')
+      + (napCandidate.provisional ? (napCandidate.reason ? ' · ' : '')
+         + 'Provisional — the Nap locks at ' + NAP_READY_HHMM + ' once the betting market has filled' : '');
     napEl.style.display='block';
   } else if (napEl) napEl.style.display='none';
 
@@ -8301,6 +8341,7 @@ function ensureNapForToday() {
       // The app's own pick always wins, even if we previously stored a computed
       // one — otherwise a wrong Nap written earlier today would stick forever.
       if (existing && existing.name && !existing.fromApp) existing = null;
+      if (existing && existing.fromApp && !existing.ready) existing = null;   // copied from a pre-v8.2 early lock
 
       // FIRST: use the Nap the app itself already chose for this course.
       // The app picks its Nap with a composite "best of the day" score plus
@@ -8314,7 +8355,7 @@ function ensureNapForToday() {
           var appKey = 'rp_nap_' + new Date().toISOString().slice(0,10) + '_' +
                        String(course).replace(/[^a-z0-9]/gi,'_');
           var appNap = JSON.parse(localStorage.getItem(appKey) || 'null');
-          if (appNap && appNap.name && appNap.time) {
+          if (appNap && appNap.name && appNap.time && appNap.ready) {
             // Find the locked race matching that course + off-time
             var match = byCourse[course].filter(function(it){
               return (it.lock.time || '') === appNap.time;
@@ -8323,7 +8364,7 @@ function ensureNapForToday() {
               existing = { raceKey: match.raceKey, course: course, time: appNap.time,
                            name: appNap.name,
                            odds: (match.lock.preds.filter(function(p){ return p.name === appNap.name; })[0] || {}).odds || 0,
-                           score: appNap.conf1 || 0, gap: appNap.gap || 0, fromApp: true };
+                           score: appNap.conf1 || 0, gap: appNap.gap || 0, fromApp: true, ready: true };
               try { localStorage.setItem(key, JSON.stringify(existing)); } catch(e){}
             }
           }
@@ -8331,6 +8372,7 @@ function ensureNapForToday() {
       }
 
       if (!existing || !existing.name) {
+        if (!napMarketReady(byCourse[course].map(function(it){ return it.lock.time; }))) return;
         var best = null;
         byCourse[course].forEach(function(item){
           var L = item.lock, p = L.preds[0];
@@ -8807,12 +8849,16 @@ function autoFetchAllOdds(races) {
   function next() {
     if (i >= races.length) {
       S._autoFetching = false;
-      try { localStorage.setItem(afKey, '1'); } catch(e){}
+      // Before the market has filled, don't mark today as done, so the next
+      // open after 10:30 fetches fresh prices and locks the Nap on those
+      var ready = napMarketReady(races.map(function(r){ return r.time; }));
+      if (ready) { try { localStorage.setItem(afKey, '1'); } catch(e){} }
       lsSave();
       var doneMsg = '✓ Auto-loaded odds for ' + got + '/' + races.length + ' races.';
       if (fixedN) doneMsg += ' ✎ ' + fixedN + ' name' + (fixedN>1?'s':'') + ' corrected from Betfair.';
       if (addedN) doneMsg += ' ➕ ' + addedN + ' missing runner' + (addedN>1?'s':'') + ' added.';
-      doneMsg += ' Nap locked on this snapshot — further refreshes are manual via Live Odds.';
+      doneMsg += ready ? ' Nap locked on this snapshot — further refreshes are manual via Live Odds.'
+                       : ' Early prices are thin — the Nap stays provisional until ' + NAP_READY_HHMM + '; open the app again after then.';
       showLiveStatus(doneMsg, 'ok');
       if (S.sel && typeof renderRunners === 'function') renderRunners();
       // Compute + lock the Nap on the complete odds snapshot
