@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.2 · 4 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.3 · 4 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -8683,18 +8683,21 @@ function nameSim(a, b) {
 
 // Turn a Betfair exchange runner (back / lay / last traded) into one usable
 // price, or 0 when the market has no real price for it yet.
-// Early in the day the exchange is nearly empty: at 04:10 on 4 Oct Kelso's
-// 16:40 had Theirshegoes at back 1.03 / lay 60 with nothing matched. Taking
-// the back price made two 9/1 shots look like 1.03 favourites.
-//   1. Tight market (lay within 25% of back): the back price, as before.
-//   2. Wide market: the last traded price if it sits inside the spread.
-//   3. Wide but sane (lay up to 3x back): midpoint in probability terms.
-//   4. Anything else: no price — better blank than wrong.
+// The back price is what you can actually bet at right now, so it's used
+// whenever it's genuine. Two ways it goes wrong in thin markets:
+//  * 04:10 Kelso: Theirshegoes back 1.03 / lay 60, nothing matched — a stray
+//    order, not a price. Taken at face value it made a 9/1 shot favourite.
+//    A back under 1.25 with a lay more than 3x it is treated as stray.
+//  * Last matched prices go stale: at 12:26 Killarney had Cerulean Summer
+//    last matched at 60 while you could back it at 21 (Sportsbook 13/1), so
+//    last-traded is only a fallback when there is no usable back price.
+// Checked against Betfair Sportsbook on both races: the back price was the
+// closest of back / last matched / midpoint.
 function bfPrice(rn) {
   var b = +(rn && rn.back) || 0, l = +(rn && rn.lay) || 0, t = +(rn && rn.last) || 0;
-  if (b > 1 && l > 1 && l <= b * 1.25) return b;
-  if (t > 1 && (!(b > 1) || t >= b / 1.1) && (!(l > 1) || t <= l * 1.1)) return t;
-  if (b > 1 && l > 1 && l <= b * 3) return Math.round(200 / (1 / b + 1 / l)) / 100;
+  var strayBack = b > 1 && b < 1.25 && l > b * 3;
+  if (b > 1 && !strayBack) return b;
+  if (t > 1 && (!(l > 1) || t <= l * 1.1)) return t;
   return 0;
 }
 
