@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.3 · 4 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.4 · 4 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3306,7 +3306,7 @@ function showResults(scored, val, race, paceInfo) {
     + '<div class="slbl">🏆 Predicted Winner</div>'
     + '<div class="bn gn">' + w.name + paceMk + '</div>'
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
-    + row('Jockey', w.jockey.replace(/\s*\(\d+\)/,'') || '—')
+    + row('Jockey', (w.jockey.replace(/\s*\(\d+\)/,'') || '—') + (w._jockeyWas ? ' <span style="color:#ffb300">🔄 was ' + esc(w._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : ''))
     + row('Draw (stall)', drawOf(w) || '—')
     + row('Cloth no.', clothOf(w) || '—')
     + (w.or > 0 ? row('Official Rating', w.or) : '')
@@ -3527,7 +3527,9 @@ function showResults(scored, val, race, paceInfo) {
       + '<div class="ri2">'
         + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert
           + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
-        + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—') + ' · Draw ' + drawOf(r) + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
+        + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—')
+        + (r._jockeyWas ? ' <span style="color:#ffb300;font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
+        + ' · Draw ' + drawOf(r) + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
       + '<div class="rr">'
@@ -7592,6 +7594,7 @@ function bfRunnerToAppRunner(r, i) {
     trainer: r.trainer || '', _liveCard: true };
   if (odds) run._openingOdds = odds;
   if (r.wearing) run._headgear = r.wearing;
+  if (r.jockeyWas) run._jockeyWas = r.jockeyWas;   // jockey change (proxy, from Sporting Life)
   return run;
 }
 
@@ -8703,7 +8706,16 @@ function bfPrice(rn) {
 
 function applyLiveOdds(race, data) {
   function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
-  var bf = (data.runners||[]).map(function(rn){ return {name: rn.name, back: bfPrice(rn), used: false}; });
+  var bf = (data.runners||[]).map(function(rn){ return {name: rn.name, back: bfPrice(rn), used: false,
+    jockey: rn.jockey || '', claim: rn.claim || 0, jockeyWas: rn.jockeyWas || ''}; });
+  // Jockey change reported by the proxy (Betfair's own runner data misses them)
+  function applyJockey(r, x) {
+    if (!x.jockeyWas || !x.jockey) return;
+    var nj = x.jockey + (x.claim ? ' (' + x.claim + ')' : '');
+    if ((r.jockey || '') === nj) return;
+    r._jockeyWas = x.jockeyWas;
+    r.jockey = nj;
+  }
   var byName = {};
   bf.forEach(function(x){ byName[norm(x.name)] = x; });
 
@@ -8734,6 +8746,7 @@ function applyLiveOdds(race, data) {
   race.runners.forEach(function(r){
     if (r._nr) return;
     var hit = byName[norm(r.name)];
+    if (hit) applyJockey(r, hit);
     if (hit && hit.back > 1) { setPrice(r, hit.back); hit.used = true; matched++; }
     else if (hit) {
       // Matched, but no reliable price yet: drop any junk price saved earlier
@@ -8755,6 +8768,7 @@ function applyLiveOdds(race, data) {
     });
     if (best && bestS >= 0.55) {
       if (norm(best.name) !== rn) { fixed.push(r.name + ' → ' + best.name); r.name = best.name; }
+      applyJockey(r, best);
       if (best.back > 1) { setPrice(r, best.back); matched++; }
       best.used = true;
     }
@@ -8765,7 +8779,7 @@ function applyLiveOdds(race, data) {
     if (x.used) return;
     var maxStall = race.runners.reduce(function(m,r){ return Math.max(m, r.stall||0); }, 0);
     var nr = { stall: maxStall+1, draw: maxStall+1, form: '', name: x.name,
-               age: 0, wst: 0, wlbs: 0, jockey: '', or: 0, daysSince: 21,
+               age: 0, wst: 0, wlbs: 0, jockey: x.jockey ? x.jockey + (x.claim ? ' (' + x.claim + ')' : '') : '', or: 0, daysSince: 21,
                rf: parseForm(''), odds: 0, _pace: '', _addedFromBetfair: true };
     if (x.back > 1) { nr.odds = x.back; nr._openingOdds = x.back; }
     race.runners.push(nr);
