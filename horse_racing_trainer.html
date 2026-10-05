@@ -492,21 +492,59 @@ function setSurface(s) {
 
 var JUMPS_TYPES = {'chase':1,'hurdle':1,'nh flat':1,'national hunt flat':1,'bumper':1,'jump':1,'jumps':1,'national hunt':1};
 
+// ── UK / Ireland only ─────────────────────────────────────────────────────
+// The old origin filter only dropped courses carrying a country tag like
+// "(USA)", so untagged foreign tracks got through: the Oct 2026 models had
+// 9% of turf runs from Sha Tin, Happy Valley, Longchamp, Meydan etc., and 7%
+// of AW runs from Deauville, Chantilly, Woodbine... Now a row must have a
+// GB/IRE region, or (if the file has no region column) a known UK/IRE course.
+var UK_IRE_COURSES = {};
+('aintree ascot ayr ballinrobe bangor bangorondee bath bellewstown beverley brighton carlisle cartmel catterick '
+ + 'chelmsford chelmsfordcity cheltenham chepstow chester clonmel cork curragh doncaster downpatrick downroyal '
+ + 'dundalk epsom epsomdowns exeter fairyhouse fakenham ffoslas folkestone fontwell galway goodwood gowranpark '
+ + 'hamilton haydock hereford hexham huntingdon kelso kempton kilbeggan killarney laytown leicester leopardstown '
+ + 'limerick lingfield listowel ludlow marketrasen musselburgh naas navan newbury newcastle newmarket newtonabbot '
+ + 'nottingham perth plumpton pontefract punchestown redcar ripon roscommon salisbury sandown sedgefield sligo '
+ + 'southwell stratford taunton thirsk thurles tipperary towcester tramore uttoxeter warwick wetherby wexford '
+ + 'wincanton windsor wolverhampton worcester yarmouth greatyarmouth york').split(' ').forEach(function(c){ UK_IRE_COURSES[c] = 1; });
+function courseNorm(c) { return String(c || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z]/g, ''); }
+function isUkIre(row) {
+  var reg = String(row.region || row.country || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (reg) return reg === 'GB' || reg === 'IRE' || reg === 'UK' || reg === 'IE' || reg === 'GBIRE';
+  return !!UK_IRE_COURSES[courseNorm(row.course)];
+}
+
+// ── All-weather detection ──────────────────────────────────────────────────
+// Surface column if the file has one; else an "(AW)" course tag; else an AW
+// going ("Standard", "Standard To Slow", "Standard / Slow" — any going that
+// starts standard/slow/fast); else a course whose flat racing is all AW.
+var AW_ONLY_FLAT = { kempton:1, wolverhampton:1, chelmsford:1, chelmsfordcity:1, dundalk:1 };
+function isAWRow(row) {
+  var surf = String(row.surface || '').toLowerCase();
+  if (surf) {
+    if (/(^aw$|all.?weather|polytrack|tapeta|fibresand|artificial|synthetic|dirt)/.test(surf)) return true;
+    if (/(turf|grass)/.test(surf)) return false;
+  }
+  var course = String(row.course || '').toLowerCase();
+  if (/\(a\.?w\.?\)/.test(course)) return true;
+  var g = String(row.going || '').toLowerCase().trim();
+  if (/^(standard|slow|fast)\b/.test(g)) return true;
+  var type = String(row.type || '').toLowerCase().trim();
+  if ((!type || type === 'flat') && AW_ONLY_FLAT[courseNorm(row.course)]) return true;
+  return false;
+}
+var filterCounts = { foreign: 0, surface: 0, date: 0 };
+
 function isValidRow(row) {
   // ── Date filter ──────────────────────────────────────────
   var rowDate = row.date || row.Date || '';
   if (rowDate) {
     var year = parseInt(String(rowDate).slice(0, 4));
-    if (year && (year < dateFromYear || year > dateToYear)) return false;
+    if (year && (year < dateFromYear || year > dateToYear)) { filterCounts.date++; return false; }
   }
 
   // ── Origin filter — UK/Ireland only ──────────────────────
-  if (currentOrigin === 'uk') {
-    var c = (row.course || '').toLowerCase();
-    // Reject if course has a foreign country suffix e.g. (usa) (aus) (ger) (fr) (hk) etc
-    if (/\((usa|aus|nz|ger|fr|jpn|hk|uae|ire outside|saf|chi|brz|arg|uru|per|qa|tur|swe|den|nor|bel|ita|spa|por|cze|hun|pol|ind|sin|mex|cad|jor|bah|kuw)\)/i.test(c)) return false;
-    // Note: (ire) is KEPT — Irish courses are valid
-  }
+  if (currentOrigin === 'uk' && !isUkIre(row)) { filterCounts.foreign++; return false; }
 
   // All Data mode — no filtering at all beyond date/origin
   if (currentSurface === 'all') return true;
@@ -515,26 +553,22 @@ function isValidRow(row) {
   var course = (row.course || '').toLowerCase().trim();
   var going  = (row.going  || '').toLowerCase().trim();
 
+  var aw = isAWRow(row);
   if (currentSurface === 'jumps') {
-    // Jumps: must be a jump race type, turf only (no AW)
-    // Accept ALL courses — the Kaggle CSV is UK/Ireland only
-    if (!JUMPS_TYPES[type]) return false;
-    if (course.indexOf('(aw)') !== -1) return false;
-    if (AW_GOING_VALS[going]) return false;
-    return true; // any non-AW course is valid
+    // Jumps: must be a jump race type, on turf
+    if (!JUMPS_TYPES[type] || aw) { filterCounts.surface++; return false; }
+    return true;
   }
 
   // Flat modes: must be flat (or no type field set)
-  if (type && type !== 'flat') return false;
+  if (type && type !== 'flat') { filterCounts.surface++; return false; }
 
   if (currentSurface === 'aw') {
-    var isAWCourse = course.indexOf('(aw)') !== -1 || AW_COURSES[course];
-    var isAWGoing  = AW_GOING_VALS[going];
-    return isAWCourse || isAWGoing;
+    if (!aw) filterCounts.surface++;
+    return aw;
   } else {
-    // Turf flat — exclude AW courses/goings and known jumps-only courses
-    if (course.indexOf('(aw)') !== -1) return false;
-    if (AW_GOING_VALS[going]) return false;
+    // Turf flat — exclude AW rows and known jumps-only courses
+    if (aw) { filterCounts.surface++; return false; }
 
     // If type field IS populated, reject any non-flat race type
     // (catches bumpers/hurdles/chases when CSV has a type column)
@@ -730,6 +764,7 @@ function loadFile(f) {
       if (!data || !data.length) { alert('No data rows found in file.'); return; }
       // Filter based on selected surface
       var totalRows = data.length;
+      filterCounts = { foreign: 0, surface: 0, date: 0 };
       var filtered = data.filter(isValidRow);
       rawData = filtered;
       showDataInfo(filtered, f.name, totalRows);
@@ -781,7 +816,8 @@ function showDataInfo(data, fname, totalRows) {
   var filterNote = (totalRows > data.length)
     ? '<div class="alert alert-i" style="margin-top:10px;">&#128504; Auto-filtered: kept '
       + data.length.toLocaleString() + ' ' + surfLabel + ' rows from '
-      + totalRows.toLocaleString() + ' total (' + (totalRows - data.length).toLocaleString() + ' removed — wrong surface type).</div>'
+      + totalRows.toLocaleString() + ' total. Removed: ' + filterCounts.surface.toLocaleString() + ' other race types/surfaces, '
+      + filterCounts.foreign.toLocaleString() + ' outside UK/Ireland, ' + filterCounts.date.toLocaleString() + ' outside the date range.</div>'
     : '<div class="alert alert-s" style="margin-top:10px;">&#10003; ' + data.length.toLocaleString() + ' ' + surfLabel + ' rows loaded.</div>';
 
   document.getElementById('dataStats').innerHTML =
@@ -1308,11 +1344,12 @@ async function trainModel() {
   document.getElementById('featImp').style.display = 'block';
 
   var pct = function(x){ return (x * 100).toFixed(1) + '%'; };
-  var verdict = gain > 0.002
-    ? '<span style="color:var(--g)">✓ Beats the market on unseen races.</span>'
+  // The app only uses a v3 model that beats the market by 0.002 or more (V3_MIN_GAIN in index.html)
+  var verdict = gain >= 0.002
+    ? '<span style="color:var(--g)">✓ Beats the market on unseen races — the app will use this model.</span>'
     : gain > 0
-      ? '<span style="color:var(--gold)">Slightly better than the market alone — a small edge.</span>'
-      : '<span style="color:#ff6b6b">✗ No better than the market on unseen races.</span>';
+      ? '<span style="color:var(--gold)">Only fractionally better than the market (+' + gain.toFixed(4) + ', within chance) — the app will keep using its calibrated composite for this surface, with this file\'s up-to-date horse stats.</span>'
+      : '<span style="color:#ff6b6b">✗ No better than the market on unseen races — the app will keep using its calibrated composite for this surface, with this file\'s up-to-date horse stats.</span>';
   document.getElementById('accDisplay').innerHTML =
     '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--tx);letter-spacing:2px;margin-bottom:6px">HELD-OUT TEST — ' + testR.length.toLocaleString() + ' races from ' + testR[0].d + '</div>'
     + '<table class="ft"><thead><tr><th></th><th>Market only (SP)</th><th>Formintel v3</th></tr></thead><tbody>'

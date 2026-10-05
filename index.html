@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.4 · 4 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.5 · 5 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -4199,6 +4199,7 @@ var V3 = {
 //         market), model = the composite score (pace, jockey multipliers etc.).
 //         Starts as a=1, b=0 (trust v3 as trained); Calibrate Now learns from
 //         this device's results whether the composite adds anything on top.
+var V3_MIN_GAIN = 0.002;   // log-score per race a v3 model must beat the market by
 var CALIB_KEYS = { v2: 'rq_calib_v2', v3: 'rq_calib_v3' };
 var CALIB_DEFAULTS = {
   v2: { a:0.891, b:0.275, n:1502, from:'2026-08-01', to:'2026-10-03', source:'built-in' },
@@ -4239,9 +4240,12 @@ function calibrateProbs(modelProbs, active, ctx, anchor) {
 // or a runner has no price. Uses the shared V3 feature core above.
 function v3ModelProbs(active, race, m) {
   if (!m || !m.v3 || !m.v3.coef || !race || !active || active.length < 2) return null;
-  // Safety: a model that did worse than the market on its own held-out test
-  // is ignored, and the race is scored the v2 way instead
-  if (m.v3.test && !(m.v3.test.modelLL > m.v3.test.marketLL)) return null;
+  // Safety: a model must beat the market on its own held-out test by a real
+  // margin, or it's ignored and the race is scored the v2 way (calibrated
+  // composite, which keeps the elite-jockey and pace signals). 0.002 per race
+  // is roughly the size of chance differences over ~5,000 test races; the
+  // first v3 turf model (+0.0008) was inside that.
+  if (m.v3.test && !(m.v3.test.modelLL > m.v3.test.marketLL + V3_MIN_GAIN)) return null;
   for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return null;
   var st = { HS: m.horseStats || {}, JS: m.jockeyStats || {}, TS: m.trainerStats || {},
              CD: m.courseDrawStats || {}, pop: m.popWinRate || 0.1, popP: m.popPlaceRate || 0.3 };
