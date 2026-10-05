@@ -533,7 +533,22 @@ function isAWRow(row) {
   if ((!type || type === 'flat') && AW_ONLY_FLAT[courseNorm(row.course)]) return true;
   return false;
 }
-var filterCounts = { foreign: 0, surface: 0, date: 0 };
+var filterCounts = { foreign: 0, surface: 0, date: 0, relabelled: 0 };
+
+// rpscrape-community labels all-weather FLAT races "NH Flat" — e.g. the
+// Wolverhampton 6f handicap on 2 Oct 2026 — so from late Aug 2026 every new
+// AW race was thrown out (AW data stopped at 20 Aug). A genuine NH Flat race
+// (bumper) is named as one and is at least 1m4f; anything else labelled
+// "NH Flat" on the all-weather is a flat race.
+function effectiveType(row, aw) {
+  var type = String(row.type || '').toLowerCase().trim();
+  if (aw && (type === 'nh flat' || type === 'national hunt flat')) {
+    var name = String(row.race_name || '').toLowerCase();
+    var bumper = /national hunt flat|nh flat|bumper/.test(name) && parseDist(row.dist) >= 12;
+    if (!bumper) { filterCounts.relabelled++; return 'flat'; }
+  }
+  return type;
+}
 
 function isValidRow(row) {
   // ── Date filter ──────────────────────────────────────────
@@ -549,11 +564,11 @@ function isValidRow(row) {
   // All Data mode — no filtering at all beyond date/origin
   if (currentSurface === 'all') return true;
 
-  var type   = (row.type   || '').toLowerCase().trim();
   var course = (row.course || '').toLowerCase().trim();
   var going  = (row.going  || '').toLowerCase().trim();
 
   var aw = isAWRow(row);
+  var type = effectiveType(row, aw);
   if (currentSurface === 'jumps') {
     // Jumps: must be a jump race type, on turf
     if (!JUMPS_TYPES[type] || aw) { filterCounts.surface++; return false; }
@@ -764,7 +779,7 @@ function loadFile(f) {
       if (!data || !data.length) { alert('No data rows found in file.'); return; }
       // Filter based on selected surface
       var totalRows = data.length;
-      filterCounts = { foreign: 0, surface: 0, date: 0 };
+      filterCounts = { foreign: 0, surface: 0, date: 0, relabelled: 0 };
       var filtered = data.filter(isValidRow);
       rawData = filtered;
       showDataInfo(filtered, f.name, totalRows);
@@ -817,7 +832,8 @@ function showDataInfo(data, fname, totalRows) {
     ? '<div class="alert alert-i" style="margin-top:10px;">&#128504; Auto-filtered: kept '
       + data.length.toLocaleString() + ' ' + surfLabel + ' rows from '
       + totalRows.toLocaleString() + ' total. Removed: ' + filterCounts.surface.toLocaleString() + ' other race types/surfaces, '
-      + filterCounts.foreign.toLocaleString() + ' outside UK/Ireland, ' + filterCounts.date.toLocaleString() + ' outside the date range.</div>'
+      + filterCounts.foreign.toLocaleString() + ' outside UK/Ireland, ' + filterCounts.date.toLocaleString() + ' outside the date range.'
+      + (filterCounts.relabelled ? ' Fixed ' + filterCounts.relabelled.toLocaleString() + ' all-weather flat rows mislabelled "NH Flat".' : '') + '</div>'
     : '<div class="alert alert-s" style="margin-top:10px;">&#10003; ' + data.length.toLocaleString() + ' ' + surfLabel + ' rows loaded.</div>';
 
   document.getElementById('dataStats').innerHTML =
