@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.5 · 5 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.6 · 13 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3320,14 +3320,28 @@ function showResults(scored, val, race, paceInfo) {
   // Model's pick badge: shown when the model on its own would pick a
   // different horse from the market-calibrated top pick
   var mp = modelPickOf(scored);
+  if (mp) rememberModelPick(race, mp, w.name);
+  var mpOld = mp ? null : rememberedModelPick(race);
   if (mp) {
     h += '<div style="margin:8px 0;padding:8px 10px;border:1px solid rgba(255,193,7,.35);border-radius:8px;'
       + 'background:rgba(255,193,7,.08);font-size:.72rem;line-height:1.45">'
-      + '🧠 <strong>Model\'s pick: ' + mp.name + '</strong>'
+      + '🧠 <strong>Model\'s pick: ' + esc(mp.name) + '</strong>'
       + (mp.odds > 0 ? ' @ ' + mp.odds.toFixed(1) : '')
       + '<div style="color:var(--mt);font-size:.64rem">Before the market adjustment, the model rates this horse highest. '
       + 'After weighing the market it rates it ' + Math.round(mp.score * 100) + '%. Tracked separately in your results.</div>'
       + '</div>';
+  } else if (mpOld) {
+    var curOld = scored.filter(function(r){ return r.name === mpOld.name; })[0];
+    h += '<div style="margin:8px 0;padding:8px 10px;border:1px dashed rgba(255,193,7,.35);border-radius:8px;'
+      + 'background:rgba(255,193,7,.04);font-size:.72rem;line-height:1.45">'
+      + '🧠 <strong>Model\'s pick earlier: ' + esc(mpOld.name) + '</strong>'
+      + (mpOld.odds > 0 ? ' @ ' + (+mpOld.odds).toFixed(1) : '')
+      + ' <span style="color:var(--mt)">(' + (mpOld.seen === mpOld.last ? 'at ' + mpOld.seen : mpOld.seen + '–' + mpOld.last) + ')</span>'
+      + '<div style="color:var(--mt);font-size:.64rem">'
+      + (mpOld.name === w.name ? 'Prices have moved since and it is now the top pick as well.'
+                               : 'Prices have moved since and the model now agrees with the top pick.')
+      + (curOld ? ' Now ' + (curOld.odds > 0 ? curOld.odds.toFixed(1) + ', ' : '') + 'rated ' + Math.round(curOld.score * 100) + '%.' : '')
+      + '</div></div>';
   }
 
   // Value bet card
@@ -3704,7 +3718,7 @@ function lsRestore(races) {
   } catch(e){}
 }
 function lsPurgeOld() {
-  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0||k.indexOf('rp_plock_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
+  try { var t=new Date().toISOString().slice(0,10); Object.keys(localStorage).forEach(function(k){ if((k.indexOf('rp_odds_')===0||k.indexOf('rp_nap_')===0||k.indexOf('rp_af_')===0||k.indexOf('rp_card_')===0||k.indexOf('rp_plock_')===0||k.indexOf('rp_mpick_')===0)&&k.indexOf(t)===-1)localStorage.removeItem(k); }); } catch(e){}
 }
 lsPurgeOld();
 try { FIPlog.purgeDead(); FIPlog.read(); } catch(e) { console.warn('plog init:', e); }
@@ -4293,6 +4307,25 @@ function modelPickOf(scored) {
   scored.forEach(function(r){ if (r._raw !== undefined && !r._nr && (!best || r._raw > best._raw)) best = r; });
   return (best && best.name !== scored[0].name) ? best : null;
 }
+
+// Remember Model's picks for the day. The badge is worked out afresh each
+// time a race is predicted, so once prices moved and the model came back into
+// line with the market it vanished with no trace. Each race's latest
+// disagreement is kept here (per day) so it can still be shown as "earlier".
+function mpickKey() { return 'rp_mpick_' + new Date().toISOString().slice(0,10); }
+function mpickAll() { try { return JSON.parse(localStorage.getItem(mpickKey()) || '{}'); } catch(e) { return {}; } }
+function rememberModelPick(race, mp, topName) {
+  if (!race || !mp) return;
+  try {
+    var all = mpickAll(), k = raceKeyFor(race), now = new Date();
+    var hhmm = now.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' });
+    var prev = all[k];
+    all[k] = { name: mp.name, odds: mp.odds || 0, score: Math.round((mp.score || 0) * 100),
+               top: topName || '', seen: (prev && prev.name === mp.name) ? prev.seen : hhmm, last: hhmm };
+    localStorage.setItem(mpickKey(), JSON.stringify(all));
+  } catch(e) {}
+}
+function rememberedModelPick(race) { try { return race ? (mpickAll()[raceKeyFor(race)] || null) : null; } catch(e) { return null; } }
 
 // Race class: the feed's figure if it has one, else read it from the title
 // ("... (Class 4) ..."). Most logged races had cls 0 because the feed omits it.
@@ -6507,7 +6540,7 @@ function renderL15Stake() {
 // alone reaches ~5.7MB at 3,000 races, and on top of that the app writes a
 // set of per-day keys (cards, odds, locks, naps) for EVERY meeting on EVERY
 // day and never deleted any of them. So saves eventually fail outright.
-var DAY_KEY_PREFIXES = ['rp_card_','rp_odds_','rp_plock_','rp_nap_','rp_napday_','rp_af_'];
+var DAY_KEY_PREFIXES = ['rp_card_','rp_odds_','rp_plock_','rp_nap_','rp_napday_','rp_af_','rp_mpick_'];
 
 // Remove per-day keys older than keepDays. Today's locks are needed for
 // result logging, so keep a few days' margin.
@@ -8043,6 +8076,7 @@ function plockSave(race, scored, going) {
     var dSels = dWith.slice(0, dN).map(function(r){ return { name:r.name, odds:r.odds||0 }; });
     var all = plockAll();
     var mpk = modelPickOf(scored);
+    if (mpk) rememberModelPick(race, mpk, scored[0] ? scored[0].name : '');
     all[raceKeyFor(race)] = { preds:preds, going:going||'', dist:race.dist||'', cls:raceClassOf(race), title:race.title||'',
       modelPick: mpk ? { name:mpk.name, odds:mpk.odds||0 } : null,
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
