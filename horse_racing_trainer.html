@@ -371,6 +371,7 @@ header .sub {
     <div class="log" id="tlog"><span class="info">Waiting for data&#8230;</span></div>
     <div id="featImp"    style="display:none; margin-top:20px;"></div>
     <div id="accDisplay" style="display:none; margin-top:16px;"></div>
+    <div id="classReport" style="display:none; margin-top:16px;"></div>
   </div>
 
   <!-- ── STEP 3: Export ────────────────────────────────────────── -->
@@ -1042,6 +1043,14 @@ function v3RaceKey(r) {
   return r.race_id ? 'id_' + r.race_id
     : (r.date || '') + '|' + (r.course || '') + '|' + (r.off || r.time || '') + '|' + (r.dist || '');
 }
+// "Class 4" -> 4; Irish races have no class -> 0 (unknown)
+function raceClassNum(r) {
+  var m = String((r && r['class']) || '').match(/(\d)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+// Class change codes for the class-drop report
+var CLS_UNKNOWN = 0, CLS_UP = 1, CLS_SAME = 2, CLS_DROP1 = 3, CLS_DROP2 = 4;
+
 function v3Odds(r) {
   var d = parseFloat(r.dec);
   if (d > 1) return d;
@@ -1128,6 +1137,52 @@ function v3RaceProbs(rc, th, P, V) {
   return z.map(function(e){ return e / tot; });
 }
 
+// ── Class-drop report ─────────────────────────────────────────
+// For every runner whose last run and this run both have a class (GB races —
+// Irish races carry none): how often did horses dropping in class win,
+// compared with what their starting prices said? "Actual ÷ expected" above
+// 1.00 means they won more often than the market priced them to.
+function renderClassReport(races, testR, CLS, SPv, POS) {
+  function tally(rs) {
+    var b = {}; [CLS_DROP2, CLS_DROP1, CLS_SAME, CLS_UP].forEach(function(k){ b[k] = { n:0, w:0, exp:0, pnl:0 }; });
+    rs.forEach(function(rc) {
+      var over = 0;
+      for (var a = 0; a < rc.n; a++) over += 1 / SPv[rc.s + a];
+      for (a = 0; a < rc.n; a++) {
+        var i = rc.s + a, c = CLS[i];
+        if (!b[c]) continue;
+        var won = a === rc.w;
+        b[c].n++; if (won) b[c].w++;
+        b[c].exp += (1 / SPv[i]) / over;
+        b[c].pnl += won ? SPv[i] - 1 : -1;
+      }
+    });
+    return b;
+  }
+  function table(b, title) {
+    var rows = [[CLS_DROP2, 'Dropped 2+ classes'], [CLS_DROP1, 'Dropped 1 class'], [CLS_SAME, 'Same class'], [CLS_UP, 'Up in class']];
+    var h = '<div style="font-size:.8rem;color:var(--tx);margin:10px 0 6px">' + title + '</div>'
+      + '<table class="ft"><thead><tr><th></th><th>Runners</th><th>Won</th><th>Win %</th><th>Price said</th><th>Actual ÷ expected</th><th>ROI at SP</th></tr></thead><tbody>';
+    rows.forEach(function(rw) {
+      var x = b[rw[0]];
+      if (!x.n) { h += '<tr><td>' + rw[1] + '</td><td colspan="6" style="color:var(--mt)">none</td></tr>'; return; }
+      var ae = x.exp ? x.w / x.exp : 0, roi = x.pnl / x.n;
+      h += '<tr><td>' + rw[1] + '</td><td>' + x.n.toLocaleString() + '</td><td>' + x.w.toLocaleString() + '</td>'
+        + '<td>' + (100 * x.w / x.n).toFixed(1) + '%</td><td>' + (100 * x.exp / x.n).toFixed(1) + '%</td>'
+        + '<td style="color:' + (ae >= 1.03 ? 'var(--g)' : ae <= 0.97 ? '#ff6b6b' : 'var(--tx)') + '">' + ae.toFixed(2) + '</td>'
+        + '<td style="color:' + (roi >= 0 ? 'var(--g)' : 'var(--mt)') + '">' + (roi >= 0 ? '+' : '') + (100 * roi).toFixed(1) + '%</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  var el = document.getElementById('classReport');
+  el.innerHTML = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:4px">Class drops</div>'
+    + '<div style="font-size:.75rem;color:var(--mt)">This race\'s class vs the horse\'s last run, for GB races (Irish races have no class). '
+    + '"Price said" is the average chance its starting price gave it. Actual ÷ expected above 1.00 = won more often than the market expected.</div>'
+    + table(tally(races), 'All ' + races.length.toLocaleString() + ' races (' + races[0].d + ' to ' + races[races.length - 1].d + ')')
+    + table(tally(testR), 'Most recent ' + testR.length.toLocaleString() + ' races (from ' + testR[0].d + ')');
+  el.style.display = 'block';
+}
+
 async function trainModel() {
   if (!rawData.length) return;
   document.getElementById('trainBtn').disabled = true;
@@ -1151,6 +1206,7 @@ async function trainModel() {
   var MK  = new Float32Array(N);       // log(1/SP)
   var SPv = new Float32Array(N);       // SP (decimal)
   var POS = new Int16Array(N);         // finishing position
+  var CLS = new Int8Array(N);          // class change vs the horse's last run (report only)
   var races = [], nRow = 0;
   var skip = { small: 0, sp: 0, winner: 0 };
 
@@ -1180,6 +1236,7 @@ async function trainModel() {
     if (x.t && !H.tr) H.tr = x.t;
     if (pos === 1) { H.w++; H.gw[x.gs] = (H.gw[x.gs] || 0) + 1; H.dw[x.dist] = (H.dw[x.dist] || 0) + 1; H.cw[x.c] = (H.cw[x.c] || 0) + 1; }
     if (pos > 0 && pos <= 3) H.p++;
+    H.lc = raceClassNum(r);            // class of this run, for the next run's class change
     H.lp.unshift(pos); if (H.lp.length > 3) H.lp.length = 3;
     var rpr = parseInt(r.rpr) || 0, ts = parseInt(r.ts) || 0;
     if (rpr > 0) H.lr = rpr;
@@ -1228,6 +1285,9 @@ async function trainModel() {
       rs.forEach(function(r, a) {
         for (var q = 0; q < K; q++) X[nRow * K + q] = rows[a][q];
         MK[nRow] = Math.log(1 / odds[a]); SPv[nRow] = odds[a]; POS[nRow] = parsePos(r.pos);
+        var lastC = (HS[V3.horseKey(r.horse)] || {}).lc || 0, nowC = raceClassNum(r);
+        CLS[nRow] = (!lastC || !nowC) ? CLS_UNKNOWN : nowC - lastC >= 2 ? CLS_DROP2 : nowC - lastC === 1 ? CLS_DROP1
+                  : nowC === lastC ? CLS_SAME : CLS_UP;
         nRow++;
       });
       races.push({ s: s, n: rs.length, w: wins[0], d: date });
@@ -1305,6 +1365,7 @@ async function trainModel() {
     if (s.lp && s.lp.length) o.lp = s.lp;
     if (s.lr) o.lr = s.lr;
     if (s.lt) o.lt = s.lt;
+    if (s.lc) o.lc = s.lc;            // last run's class (for class-drop flags in the app)
     if (s.tr) o.tr = s.tr;
     if (s.bfDate) { o.bfDate = s.bfDate; o.bfCourse = s.bfCourse; o.bfSP = s.bfSP; o.bfPos = s.bfPos; o.bfCls = s.bfCls; }
     if (s.sex) o.sex = s.sex;
@@ -1377,6 +1438,7 @@ async function trainModel() {
     + '<div style="margin-top:8px;font-size:.8rem">' + verdict + '</div>'
     + '<div style="margin-top:4px;font-size:.73rem;color:var(--mt)">Test races were never used for fitting. The exported model is then refitted on all ' + races.length.toLocaleString() + ' races.</div>';
   document.getElementById('accDisplay').style.display = 'block';
+  try { renderClassReport(races, testR, CLS, SPv, POS); } catch (e) { log('Class report failed: ' + e.message, 'err'); }
   pf.style.width = '100%';
 
   document.getElementById('s2').className = 'step done';
