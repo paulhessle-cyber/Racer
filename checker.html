@@ -176,7 +176,7 @@
   <div>
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v6.2 · 13 Sep 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v7.0 · 14 Oct 2026</div>
   </div>
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
     <div style="font-size:1.6rem">📊</div>
@@ -2463,6 +2463,48 @@ function renderValueTab() {
 
 
 // ══ PLACEPOT ANALYSIS ════════════════════════════════════════════════════════
+// Tap a meeting card to open a list of each race's winner and price, and how
+// our top pick finished. Prices come from the log: the Betfair price when the
+// prediction was locked (usually 5 minutes before the off), not the official SP,
+// which the log doesn't record.
+var _ppOpen = {};          // "course|date" -> open, so a re-render keeps it open
+var _ppMeetingKeys = [];   // index -> "course|date" for the current render
+
+function ppPrice(o) { return o > 1 ? (+o).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') : ''; }
+
+function ppMeetingDetails(m, mi, open) {
+  _ppMeetingKeys[mi] = (m.course || '') + '|' + (m.date || '');
+  var h = '<div id="pp-det-' + mi + '" style="display:' + (open ? 'block' : 'none') + ';margin-top:10px;border-top:1px solid var(--bd);padding-top:8px">';
+  m.races.forEach(function(e, ri) {
+    var preds = e.predictions || [];
+    var winner = (e.actual || [])[0] || '';
+    var wp = preds.filter(function(p){ return p.name === winner; })[0];
+    var pick = preds[0] ? preds[0].name : '';
+    var res = e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L';
+    var rc  = res === 'W' ? '#00e676' : res === 'P' ? '#ffc107' : '#ff5252';
+    var pickTxt = e.topPickWon ? 'won' : e.topPickPlaced ? 'placed' : 'unplaced';
+    h += '<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;' + (ri ? 'border-top:1px dashed var(--bd);' : '') + (ri >= 6 ? 'opacity:.55;' : '') + '">'
+      + '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);min-width:38px;padding-top:2px">' + esc(e.time || '') + '</div>'
+      + '<div style="width:16px;height:16px;border-radius:3px;background:' + rc + ';color:#000;font-family:var(--mono);font-size:.55rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">' + res + '</div>'
+      + '<div style="font-size:.72rem;line-height:1.4;min-width:0">'
+      + (winner ? '🏆 <strong>' + esc(winner) + '</strong>' + (wp && wp.odds > 1 ? ' <span style="color:var(--gold);font-family:var(--mono)">@ ' + ppPrice(wp.odds) + '</span>' : '')
+               : '<span style="color:var(--mt)">Result not recorded</span>')
+      + (pick && pick !== winner ? '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">Our pick: ' + esc(pick)
+          + (preds[0].odds > 1 ? ' @ ' + ppPrice(preds[0].odds) : '') + ' \u2014 ' + pickTxt + '</div>' : '')
+      + '</div></div>';
+  });
+  h += '<div style="font-family:var(--mono);font-size:.52rem;color:var(--mt);margin-top:6px">Prices are Betfair\'s when the prediction was locked, usually 5 min before the off \u2014 close to SP but not the official SP.</div>';
+  return h + '</div>';
+}
+
+function togglePPMeeting(mi) {
+  var key = _ppMeetingKeys[mi];
+  var el = document.getElementById('pp-det-' + mi), hint = document.getElementById('pp-hint-' + mi);
+  _ppOpen[key] = !_ppOpen[key];
+  if (el) el.style.display = _ppOpen[key] ? 'block' : 'none';
+  if (hint) hint.textContent = _ppOpen[key] ? 'tap to close' : 'tap for winners';
+}
+
 function renderPlacepotTab() {
   var el = document.getElementById('tab-placepot');
   if (!el) return;
@@ -2505,7 +2547,7 @@ function renderPlacepotTab() {
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Each meeting shows the top pick result per race. A placepot needs your pick to PLACE in 6 races.</div>';
 
-  meetingList.forEach(function(m) {
+  meetingList.forEach(function(m, mi) {
     var n = m.races.length;
     var ppRaces = n >= 6 ? m.races.slice(0, 6) : m.races;
     var ppPlaced = ppRaces.filter(function(e){ return e.topPickWon || e.topPickPlaced; }).length;
@@ -2525,11 +2567,13 @@ function renderPlacepotTab() {
     }
 
     var border = landed ? 'border:1px solid #00e676' : 'border:1px solid var(--bd)';
-    h += '<div style="background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
+    var mKey = (m.course || '') + '|' + (m.date || '');
+    h += '<div onclick="togglePPMeeting(' + mi + ')" style="cursor:pointer;background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
     h += '<div>';
     h += '<div style="font-weight:700;font-size:.85rem">' + esc(m.course) + '</div>';
-    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">' + m.date + ' \u00b7 ' + totalPlaced + '/' + n + ' placed</div>';
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">' + m.date + ' \u00b7 ' + totalPlaced + '/' + n + ' placed'
+       + ' \u00b7 <span id="pp-hint-' + mi + '">' + (_ppOpen[mKey] ? 'tap to close' : 'tap for winners') + '</span></div>';
     h += '</div>';
     h += '<div style="font-family:var(--mono);font-size:.62rem;color:' + statusCol + ';font-weight:700;text-align:right;max-width:140px">' + statusTxt + '</div>';
     h += '</div>';
@@ -2548,6 +2592,7 @@ function renderPlacepotTab() {
       h += '</div>';
     });
     h += '</div>';
+    h += ppMeetingDetails(m, mi, !!_ppOpen[mKey]);
     h += '</div>';
   });
 
