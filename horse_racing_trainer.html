@@ -420,6 +420,10 @@ header .sub {
 
 <script>
 var rawData = [];
+// Every run's (horse, date, class) from the WHOLE file, before the surface
+// filter, so a horse's "last class" is its actual last run — a Class 3 on the
+// all-weather last week counts for today's turf race, not just its last turf run.
+var ALL_CLASS_RUNS = [];
 var trainedModel = null;
 
 var REQ_COLS = ['date','course','horse','pos','jockey','trainer','dist','going'];
@@ -781,6 +785,9 @@ function loadFile(f) {
       // Filter based on selected surface
       var totalRows = data.length;
       filterCounts = { foreign: 0, surface: 0, date: 0, relabelled: 0 };
+      ALL_CLASS_RUNS = data.map(function(r){ return { h: V3.horseKey(r.horse), d: r.date || '', c: raceClassNum(r) }; })
+        .filter(function(x){ return x.h && x.d; })
+        .sort(function(a, b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
       var filtered = data.filter(isValidRow);
       rawData = filtered;
       showDataInfo(filtered, f.name, totalRows);
@@ -1260,9 +1267,16 @@ async function trainModel() {
   }
 
   log('Building before-the-race features day by day (no look-ahead)...', 'info');
+  // Last class across all surfaces (see ALL_CLASS_RUNS); falls back to this
+  // surface's own runs if the whole-file list isn't there.
+  var LC = {}, acp = 0, allRuns = ALL_CLASS_RUNS || [], useAll = allRuns.length > 0;
+  function advanceLC(beforeDate) {
+    while (acp < allRuns.length && (beforeDate === null || allRuns[acp].d < beforeDate)) { LC[allRuns[acp].h] = allRuns[acp].c; acp++; }
+  }
   var i = 0, dayCount = 0;
   while (i < N) {
     var date = sorted[i].date, j = i;
+    if (useAll) advanceLC(date);
     while (j < N && sorted[j].date === date) j++;
     st.pop  = popN ? popW / popN : 0.1;
     st.popP = popN ? popP / popN : 0.3;
@@ -1285,7 +1299,8 @@ async function trainModel() {
       rs.forEach(function(r, a) {
         for (var q = 0; q < K; q++) X[nRow * K + q] = rows[a][q];
         MK[nRow] = Math.log(1 / odds[a]); SPv[nRow] = odds[a]; POS[nRow] = parsePos(r.pos);
-        var lastC = (HS[V3.horseKey(r.horse)] || {}).lc || 0, nowC = raceClassNum(r);
+        var hk = V3.horseKey(r.horse);
+        var lastC = (useAll ? LC[hk] : (HS[hk] || {}).lc) || 0, nowC = raceClassNum(r);
         CLS[nRow] = (!lastC || !nowC) ? CLS_UNKNOWN : nowC - lastC >= 2 ? CLS_DROP2 : nowC - lastC === 1 ? CLS_DROP1
                   : nowC === lastC ? CLS_SAME : CLS_UP;
         nRow++;
@@ -1358,6 +1373,7 @@ async function trainModel() {
   var effects = V3.NAMES.map(function(n, q){ return { name: n, coef: th[q + 1], mult: Math.exp(th[q + 1] * sd[q]) }; });
 
   // ── Compact stats for export ─────────────────────────────────
+  if (useAll) advanceLC(null);   // every remaining run, so lc is each horse's latest class
   var HS_compact = {};
   Object.keys(HS).forEach(function(h) {
     var s = HS[h], o = { r: s.r, w: s.w, p: s.p };
@@ -1365,7 +1381,8 @@ async function trainModel() {
     if (s.lp && s.lp.length) o.lp = s.lp;
     if (s.lr) o.lr = s.lr;
     if (s.lt) o.lt = s.lt;
-    if (s.lc) o.lc = s.lc;            // last run's class (for class-drop flags in the app)
+    var lcx = useAll && LC[h] !== undefined ? LC[h] : s.lc;
+    if (lcx) o.lc = lcx;              // last run's class, any surface (0/omitted = unknown, e.g. last ran in Ireland)
     if (s.tr) o.tr = s.tr;
     if (s.bfDate) { o.bfDate = s.bfDate; o.bfCourse = s.bfCourse; o.bfSP = s.bfSP; o.bfPos = s.bfPos; o.bfCls = s.bfCls; }
     if (s.sex) o.sex = s.sex;
