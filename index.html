@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v8.6 · 13 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.0 · 15 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -3304,7 +3304,7 @@ function showResults(scored, val, race, paceInfo) {
              : w._pace === 'closer' ? '<span class="mk closer" style="margin-left:6px">◀ CLOSER</span>' : '';
   h += '<div class="rwin">'
     + '<div class="slbl">🏆 Predicted Winner</div>'
-    + '<div class="bn gn">' + w.name + paceMk + '</div>'
+    + '<div class="bn gn">' + w.name + paceMk + classChangeBadge(w, race) + '</div>'
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
     + row('Jockey', (w.jockey.replace(/\s*\(\d+\)/,'') || '—') + (w._jockeyWas ? ' <span style="color:#ffb300">🔄 was ' + esc(w._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : ''))
     + row('Draw (stall)', drawOf(w) || '—')
@@ -3539,7 +3539,7 @@ function showResults(scored, val, race, paceInfo) {
     h += '<div class="rrr ' + pc + '" onclick="toggleHorseNote(\'' + noteId + '\')" style="cursor:pointer">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert + classChangeBadge(r, race)
           + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—')
         + (r._jockeyWas ? ' <span style="color:#ffb300;font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
@@ -4333,6 +4333,31 @@ function raceClassOf(race) {
   if (race && race.cls) return race.cls;
   var m = ((race && race.title) || '').match(/class\s*(\d)/i);
   return m ? parseInt(m[1], 10) : 0;
+}
+
+// Class change vs the horse's last run: { from, to, diff } (diff > 0 = dropped
+// in class, e.g. Class 3 last time, Class 5 today), or null when either class
+// is unknown. Last class (lc) is in models trained from 13 Oct 2026; today's
+// class comes from the racecard PDF, the race title or the proxy.
+function classChange(r, race) {
+  var to = raceClassOf(race);
+  if (!to || !r) return null;
+  var m = race ? getModelForRace(race) : null;
+  var H = m && m.horseStats ? m.horseStats[V3.horseKey(r.name)] : null;
+  var from = H && H.lc;
+  if (!from || from === to) return null;
+  return { from: from, to: to, diff: to - from };
+}
+function classChangeBadge(r, race) {
+  var c = classChange(r, race);
+  if (!c) return '';
+  var drop = c.diff > 0, big = Math.abs(c.diff) >= 2;
+  var col = drop ? (big ? '#00e676' : '#7be0a8') : '#ff9800';
+  var tip = drop
+    ? 'Dropped ' + c.diff + ' class' + (c.diff > 1 ? 'es' : '') + ' since its last run. Droppers win more often, but the market usually prices that in (GB turf 2021-26: 2+ class droppers won 13.7%, their SPs said 13.7%).'
+    : 'Up ' + (-c.diff) + ' class' + (c.diff < -1 ? 'es' : '') + ' since its last run.';
+  return ' <span class="mk" style="background:transparent;border:1px solid ' + col + ';color:' + col + ';font-weight:700" title="' + tip + '">'
+    + (drop ? '⬇' : '⬆') + ' C' + c.from + '→C' + c.to + '</span>';
 }
 
 // Pull usable races from the log for one mode: every runner priced, figures present.
@@ -7733,7 +7758,7 @@ function predictFromLiveCard(idx) {
         races.push({ rnum: 0, time: times[i], course: m.course,
           dist: distM ? distM[1] : '1m',
           surface: liveSurface(m.course, mn),
-          title: mn, cls: 0, runners: runners, topTip: '', watchFor: '' });
+          title: mn, cls: data.raceClass || 0, runners: runners, topTip: '', watchFor: '' });
       } else {
         failed.push(times[i]);
       }
@@ -8271,7 +8296,7 @@ function autoPredictAllMeetings(force) {
             var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
             var race = { rnum:0, time:w.time, course:w.course,
               dist: dm ? dm[1] : '1m', surface: liveSurface(w.course, mn),
-              title: mn, cls:0, runners: runners, topTip:'', watchFor:'' };
+              title: mn, cls: dj.raceClass || 0, runners: runners, topTip:'', watchFor:'' };
             var stored = ensureRaceInMeetings(w.course, race);
             try {
               var sc = scoreRaceHeadless(stored);
@@ -8328,7 +8353,7 @@ function catchUpFromCards() {
         var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
         var race = { rnum:0, time:c.time, course:c.course,
           dist: dm ? dm[1] : '1m', surface: liveSurface(c.course, mn),
-          title: mn, cls:0, runners: runners, topTip:'', watchFor:'' };
+          title: mn, cls: c.raceClass || 0, runners: runners, topTip:'', watchFor:'' };
         // Always put it in S.meetings so it shows in the race list and
         // syncResults can log its result.
         var stored = ensureRaceInMeetings(c.course, race);
@@ -8743,6 +8768,7 @@ function bfPrice(rn) {
 }
 
 function applyLiveOdds(race, data) {
+  if (data && data.raceClass && !race.cls) race.cls = data.raceClass;   // class from Sporting Life via the proxy
   function norm(n){ return (n||'').toUpperCase().replace(/\s*\([A-Z]{2,3}\)\s*$/,'').replace(/[^A-Z0-9 ]/g,'').trim(); }
   var bf = (data.runners||[]).map(function(rn){ return {name: rn.name, back: bfPrice(rn), used: false,
     jockey: rn.jockey || '', claim: rn.claim || 0, jockeyWas: rn.jockeyWas || ''}; });
