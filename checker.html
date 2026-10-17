@@ -176,7 +176,7 @@
   <div>
     <h1>Formintel Results</h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v7.0 · 14 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v8.0 · 17 Oct 2026</div>
   </div>
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
     <div style="font-size:1.6rem">📊</div>
@@ -203,6 +203,7 @@
   <button class="tab-btn" onclick="showTab('dutch')">💷 Dutching</button>
   <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
   <button class="tab-btn" onclick="showTab('conf')">🎯 Confidence</button>
+  <button class="tab-btn" onclick="showTab('jockeys')">🏇 Jockeys</button>
 </div>
 
 <div id="app">
@@ -268,7 +269,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -284,6 +285,7 @@ function showTab(tab) {
   if (tab === 'dutch') renderDutchTab();
   if (tab === 'nap') renderNapTab();
   if (tab === 'conf') renderConfTab();
+  if (tab === 'jockeys') renderJockeyTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
@@ -329,7 +331,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-placepot"></div>' +
     '<div class="tab-content" id="tab-dutch"></div>' +
     '<div class="tab-content" id="tab-nap"></div>' +
-    '<div class="tab-content" id="tab-conf"></div>';
+    '<div class="tab-content" id="tab-conf"></div>' +
+    '<div class="tab-content" id="tab-jockeys"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -2461,6 +2464,82 @@ function renderValueTab() {
 }
 
 
+
+// ══ JOCKEYS TAB ═════════════════════════════════════════════════════════════
+// Runners ridden by the app's elite jockeys (the "Jockey +X%" bonus), and how
+// they got on: won / lost, overall and when priced under 3.0. Uses the jockey
+// points the predictor logs per runner (jp), recorded from app v9.1 (17 Oct 2026).
+var _jkMin = 10;   // "over 9 points"
+function setJockeyMin(v) { _jkMin = v; renderJockeyTab(); }
+
+function renderJockeyTab() {
+  var el = document.getElementById('tab-jockeys');
+  if (!el) return;
+  var rides = [], allShort = { n: 0, w: 0, pnl: 0 }, tracked = 0;
+  (loadedLog || []).forEach(function(e) {
+    var preds = e.predictions || [], winner = (e.actual || [])[0];
+    if (!winner || !preds.some(function(p){ return p.jp !== undefined; })) return;
+    tracked++;
+    preds.forEach(function(p) {
+      var won = p.name === winner;
+      if (p.odds > 1 && p.odds < 3) { allShort.n++; if (won) { allShort.w++; allShort.pnl += p.odds - 1; } else allShort.pnl -= 1; }
+      if ((p.jp || 0) >= _jkMin) rides.push({ e: e, p: p, won: won });
+    });
+  });
+
+  var pct = function(a, b) { return b ? Math.round(a / b * 100) + '%' : '—'; };
+  var roi = function(pnl, n) { if (!n) return ''; var r = pnl / n * 100; return (r >= 0 ? '+' : '') + Math.round(r) + '%'; };
+  function group(list) {
+    var g = { n: list.length, w: 0, pnl: 0 };
+    list.forEach(function(x){ if (x.won) { g.w++; g.pnl += (x.p.odds > 1 ? x.p.odds - 1 : 0); } else g.pnl -= 1; });
+    return g;
+  }
+  function card(title, g, sub) {
+    return '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px">'
+      + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">' + title + '</div>'
+      + (g.n ? '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'
+          + '<div><span style="font-size:1.4rem;font-weight:700;color:#00e676">' + pct(g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">won (' + g.w + ')</span></div>'
+          + '<div><span style="font-size:1.4rem;font-weight:700;color:#ff5252">' + pct(g.n - g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">lost (' + (g.n - g.w) + ')</span></div>'
+          + '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">' + g.n + ' rides · ROI ' + roi(g.pnl, g.n) + ' at the logged price</div></div>'
+        : '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt)">No rides yet.</div>')
+      + (sub ? '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:6px">' + sub + '</div>' : '')
+      + '</div>';
+  }
+
+  var h = '<div style="padding:16px">';
+  h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
+  [[10, '+10 and up'], [8, '+8 and up'], [6, '+6 and up']].forEach(function(o) {
+    var on = _jkMin === o[0];
+    h += '<button onclick="setJockeyMin(' + o[0] + ')" style="padding:6px 10px;border-radius:6px;border:1px solid ' + (on ? '#00e676' : 'var(--bd)') + ';background:' + (on ? 'rgba(0,230,118,.12)' : 'transparent') + ';color:' + (on ? '#00e676' : 'var(--mt)') + ';font-family:var(--mono);font-size:.62rem;cursor:pointer">' + o[1] + '</button>';
+  });
+  h += '</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Runners whose jockey gets a bonus of +' + _jkMin + ' or more in the app (+12 Moore, Buick, Dettori · +11 J Doyle, O Murphy, C Keane, Soumillon · +10 Marquand, S Foley, Heffernan). '
+    + tracked + ' race' + (tracked === 1 ? '' : 's') + ' tracked — jockey points are recorded from app v9.1 (17 Oct 2026).</div>';
+
+  if (!tracked) {
+    h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;text-align:center;font-family:var(--mono);font-size:.7rem;color:var(--mt)">No races with jockey points logged yet.<br>They\'ll appear here as races are logged from app v9.1 onwards.</div></div>';
+    el.innerHTML = h; return;
+  }
+
+  var short = rides.filter(function(x){ return x.p.odds > 1 && x.p.odds < 3; });
+  var longer = rides.filter(function(x){ return x.p.odds >= 3; });
+  h += card('ALL RIDES (+' + _jkMin + ' OR MORE)', group(rides));
+  h += card('PRICED UNDER 3.0', group(short), 'For comparison, every runner priced under 3.0: ' + pct(allShort.w, allShort.n) + ' won (' + allShort.w + '/' + allShort.n + '), ROI ' + roi(allShort.pnl, allShort.n) + '.');
+  h += card('PRICED 3.0 OR MORE', group(longer));
+
+  // Recent rides
+  rides.sort(function(a, b){ return ((b.e.date || '') + (b.e.time || '')).localeCompare((a.e.date || '') + (a.e.time || '')); });
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin:16px 0 8px">RECENT RIDES</div>';
+  rides.slice(0, 60).forEach(function(x) {
+    var c = x.won ? '#00e676' : '#ff5252';
+    h += '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--card);border:1px solid var(--bd);border-radius:6px;margin-bottom:4px">'
+      + '<div style="width:18px;height:18px;border-radius:4px;background:' + c + ';color:#000;font-family:var(--mono);font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (x.won ? 'W' : 'L') + '</div>'
+      + '<div style="min-width:0;flex:1"><div style="font-size:.72rem;font-weight:600">' + esc(x.p.name) + (x.p.odds > 1 ? ' <span style="color:var(--gold);font-family:var(--mono);font-weight:400">@ ' + (+x.p.odds).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') + '</span>' : '') + '</div>'
+      + '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">' + esc(x.p.jk || '') + ' +' + x.p.jp + ' · ' + esc(x.e.date || '') + ' ' + esc(x.e.time || '') + ' ' + esc(courseName(x.e.course)) + '</div></div></div>';
+  });
+  h += '</div>';
+  el.innerHTML = h;
+}
 
 // ══ PLACEPOT ANALYSIS ════════════════════════════════════════════════════════
 // Tap a meeting card to open a list of each race's winner and price, and how

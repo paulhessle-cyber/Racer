@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.0 · 15 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.1 · 17 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -1519,20 +1519,28 @@ var JOCKEY_TIERS = {
   // Irish elite
   'seamie heffernan':1.10,'wayne lordan':1.09,'billy lee':1.08,
   'chris hayes':1.08,'declan mcdowell':1.06,
+  'w j lee':1.08,   // Billy Lee as Irish cards write him
 };
 
+// Full name first, then surname — but the surname must be the elite jockey's
+// SURNAME and the first initial must agree when there is one. The old
+// "indexOf(lastName)" matched anywhere in the name, so every Ryan got Ryan
+// Moore's +12, every Doyle James Doyle's +11, and "B. Hayes" got Chris Hayes's +8.
 function jockeyMultiplier(jockeyName) {
   if (!jockeyName) return 1.0;
-  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
-  // Check full name first, then last name only
+  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/g, '').replace(/[.]/g, ' ').replace(/\s+/g, ' ').trim();
   if (JOCKEY_TIERS[j]) return JOCKEY_TIERS[j];
   var parts = j.split(' ');
-  var lastName = parts[parts.length - 1];
+  if (parts.length < 2) return 1.0;                 // surname alone is too ambiguous
+  var last = parts[parts.length - 1], init = parts[0].charAt(0);
   for (var k in JOCKEY_TIERS) {
-    if (k.indexOf(lastName) > -1) return JOCKEY_TIERS[k];
+    var kp = k.split(' ');
+    if (kp[kp.length - 1] === last && kp[0].charAt(0) === init) return JOCKEY_TIERS[k];
   }
   return 1.0;
 }
+// Jockey points as shown in the app ("Jockey +12%")
+function jockeyPoints(jockeyName) { return Math.round((jockeyMultiplier(jockeyName) - 1) * 100); }
 
 
 // ══════════════════════════════════════════════════════════════
@@ -3647,7 +3655,8 @@ function showResults(scored, val, race, paceInfo) {
   // Store race key and predictions for saving
   S._logRaceKey  = raceKey;
   S._logPredictions = scored.map(function(r,i){
-    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0 };
+    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0,
+             jk: (r.jockey || '').replace(/\s*\(\d+\)/g, '').trim(), jp: jockeyPoints(r.jockey) };
   });
   var _mp = modelPickOf(scored);
   S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
@@ -8063,7 +8072,8 @@ function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); 
 function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
 function plockSave(race, scored, going) {
   try {
-    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0 }; });
+    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
+      jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey) }; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
