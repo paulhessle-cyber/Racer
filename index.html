@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.2 · 18 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.3 · 18 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -392,6 +392,8 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     </div>
     <p class="mu" style="margin-bottom:12px">Live from Betfair. Tap a course to see its race times, then load that meeting's PDF below for full predictions.</p>
     <div id="todaysMeetings"><div style="color:var(--mt);font-size:.78rem;font-family:'IBM Plex Mono',monospace;padding:8px 0">Tap ↻ Refresh to load today's meetings…</div></div>
+    <button class="btn bo" style="width:100%;margin-top:10px;margin-bottom:0;font-size:.72rem" onclick="checkTodaysResults()">🩺 Check today's results</button>
+    <div id="resultsCheck" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--sf2);font-family:var(--mono);font-size:.66rem;line-height:1.55;white-space:pre-wrap;color:var(--tx)"></div>
   </div>
 
   <div class="card">
@@ -8118,7 +8120,13 @@ function plockSave(race, scored, going) {
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       valuePick:vPick,
       course:race.course, time:race.time, savedAt:Date.now() };
-    localStorage.setItem(plockKey(), JSON.stringify(all));
+    // A full store used to fail here silently: no lock, so no result could
+    // ever be logged for the race, and nothing on screen said why.
+    var w = safeSetItem(plockKey(), JSON.stringify(all));
+    if (!w.ok && !S._lockWarned) {
+      S._lockWarned = true;
+      try { showLiveStatus('⚠ Phone storage is full, so today\'s predictions can\'t be saved and results won\'t log. Setup → 🧹 Free up storage.', 'warn'); } catch(e2) {}
+    }
   } catch(e) { /* storage full — manual flow still works */ }
 }
 
@@ -8625,6 +8633,74 @@ function syncResults(verbose) {
       }
     })
     .catch(function(e){ if (verbose) showLiveStatus('⚠ Results sync failed: ' + esc(e.message), 'warn'); });
+}
+
+// One tap on the home screen: shows what this phone holds for today, logs any
+// result it can, sends the log to the server, and says plainly why a race
+// can't be logged. Written to be screenshotted.
+function checkTodaysResults() {
+  var box = document.getElementById('resultsCheck');
+  function show(lines) { if (box) { box.style.display = 'block'; box.textContent = lines.join('\n'); } }
+  var L = [];
+  var ver = (document.body.innerHTML.match(/v\d+\.\d+ · \d+ \w+ \d{4}/) || [''])[0];
+  L.push('Formintel ' + ver + ' · checked ' + new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }));
+  show(L.concat(['Checking…']));
+  var today = todayISO();
+  // Storage: can this phone still save?
+  var rep = { total: 0, groups: { other: 0 }, otherKeys: [] };
+  try { rep = FIPlog.report(); } catch(e) {}
+  var canWrite = true;
+  try { localStorage.setItem('fi_write_test', new Array(4097).join('x')); localStorage.removeItem('fi_write_test'); } catch(e) { canWrite = false; }
+  L.push('Storage: ~' + kb(rep.total) + ' of ~5,000KB used' + (canWrite ? ' — OK' : ' — FULL: predictions can\'t be saved, so results can\'t log. Setup → Free up storage.'));
+  if (rep.groups && rep.groups.other > 50 * 1024) {
+    L.push('  Other apps on this address use ' + kb(rep.groups.other) + ': ' +
+      rep.otherKeys.slice(0, 3).map(function(k){ return k.key + ' ' + kb(k.bytes); }).join(', '));
+  }
+  var owner = ''; try { owner = localStorage.getItem(OWNER_KEY) || ''; } catch(e) {}
+  L.push('Sync ID: ' + (owner || 'none set'));
+  try { restoreLockedRaces(); } catch(e) {}
+  var locks = plockAll();
+  var nLocks = Object.keys(locks).length;
+  function loggedToday() { return getPredLog().filter(function(e){ return e.date === today; }); }
+  var before = loggedToday().length;
+  L.push('Predictions saved on this phone today: ' + nLocks);
+  L.push('Races logged on this phone today: ' + before);
+  var base = getProxyUrl();
+  if (!base) { L.push('⚠ No odds server address set (Setup).'); show(L); return; }
+  show(L.concat(['Asking the server for today\'s results…']));
+  var serverRes = [];
+  fetch(base + '/results?date=' + today)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ serverRes = (d && d.results) || []; })
+    .catch(function(e){ L.push('⚠ Could not reach the server: ' + e.message); })
+    .then(function(){ return syncResults(false); })
+    .then(function(){
+      var logged = loggedToday();
+      var byKey = {};
+      logged.forEach(function(e){ byKey[(e.course || '').toLowerCase().replace(/[^a-z]/g, '') + '|' + e.time] = e; });
+      var lockByKey = {};
+      Object.keys(locks).forEach(function(k){ var x = locks[k]; if (x && x.course) lockByKey[x.course.toLowerCase().replace(/[^a-z]/g, '') + '|' + x.time] = x; });
+      var noPred = [], stuck = [];
+      serverRes.forEach(function(x){
+        var k = (x.course || '').toLowerCase().replace(/[^a-z]/g, '') + '|' + x.time;
+        if (byKey[k]) return;
+        (lockByKey[k] ? stuck : noPred).push(x.course + ' ' + x.time);
+      });
+      L.push('Results on the server today: ' + serverRes.length);
+      L.push('Logged now: ' + logged.length + (logged.length > before ? ' (' + (logged.length - before) + ' just added)' : ''));
+      if (noPred.length) {
+        L.push('No prediction on this phone for ' + noPred.length + ': ' + noPred.slice(0, 8).join(', ') + (noPred.length > 8 ? '…' : ''));
+        L.push('  A race can only be logged if a prediction was made before the off — by this phone, or from the server\'s saved racecard.');
+      }
+      if (stuck.length) L.push('⚠ Predicted but not logged: ' + stuck.slice(0, 8).join(', ') + (stuck.length > 8 ? '…' : ''));
+      show(L.concat(['Sending to the server…']));
+      return pushLogToServer(true).then(function(ok){
+        if (ok) L.push('☁️ Server copy updated — reopen the results app.');
+        else if (logged.length) L.push('⚠ Couldn\'t send to the server (see the message above).');
+        show(L);
+      });
+    })
+    .catch(function(e){ L.push('⚠ Check failed: ' + e.message); show(L); });
 }
 
 // The heartbeat: refresh odds + lock predictions at T-5, sync results after.
