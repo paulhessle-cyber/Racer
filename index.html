@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.3 · 18 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.4 · 18 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -7175,6 +7175,15 @@ function setPushedSig(s) {
   try { localStorage.setItem(PUSH_SIG_KEY, s); } catch(e) {}
 }
 
+// The whole log used to go up in ONE request. It passed 4MB in September and
+// keeps growing, and past the proxy's size limit the request is cut off —
+// Safari just says "Load failed" and nothing reaches the server or the
+// results app. Now it goes up in batches of 300 races (~0.5MB each), and a
+// routine push only sends the last 10 days (the server merges, never deletes).
+// Once a day — and whenever forced — everything is sent, to fill any gap.
+var PUSH_BATCH = 300;
+var FULL_PUSH_KEY = 'fi_last_full_push';
+var _lastPushError = '';
 function pushLogToServer(force) {
   try {
     var base = getProxyUrl();
@@ -7184,27 +7193,45 @@ function pushLogToServer(force) {
     // cheap change-detector: length + last raceKey
     var sig = log.length + ':' + (log[log.length-1].raceKey || '');
     if (!force && sig === pushedSig()) return Promise.resolve(false);
-    return fetch(base + '/log?owner=' + encodeURIComponent(getOwnerId()), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(log)
-    }).then(function(r){
-        if (!r.ok) throw new Error('server returned ' + r.status +
-          (r.status === 404 ? ' — the proxy is running an old server.js (restart it)' : ''));
-        return r.json();
-      })
-      .then(function(res){
-        if (res) { setPushedSig(sig); }
+    var today = todayISO(), lastFull = '';
+    try { lastFull = localStorage.getItem(FULL_PUSH_KEY) || ''; } catch(e) {}
+    var full = force || lastFull !== today;
+    var cutoff = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+    var send = full ? log : log.filter(function(e){ return !e.date || e.date >= cutoff; });
+    var batches = [];
+    for (var i = 0; i < send.length; i += PUSH_BATCH) batches.push(send.slice(i, i + PUSH_BATCH));
+    var url = base + '/log?owner=' + encodeURIComponent(getOwnerId());
+    function sendBatch(k) {
+      if (k >= batches.length) return Promise.resolve(true);
+      var body = JSON.stringify(batches[k]);
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body })
+        .catch(function(err){
+          throw new Error(err.message + ' (batch ' + (k + 1) + ' of ' + batches.length + ', ' + Math.round(body.length / 1024) + 'KB)');
+        })
+        .then(function(r){
+          if (!r.ok) throw new Error('server returned ' + r.status +
+            (r.status === 404 ? ' — the proxy is running an old server.js (restart it)' :
+             r.status === 413 ? ' — upload too large' : r.status === 429 ? ' — too many requests, try again in a minute' : ''));
+          return r.json();
+        })
+        .then(function(){ return sendBatch(k + 1); });
+    }
+    return sendBatch(0)
+      .then(function(){
+        setPushedSig(sig);
+        _lastPushError = '';
+        if (full) { try { localStorage.setItem(FULL_PUSH_KEY, today); } catch(e) {} }
         if (force) showLiveStatus('☁️ Synced ' + log.length + ' races to the server.', 'ok');
-        return !!res;
+        return true;
       })
       .catch(function(err){
         // Visible now: a silently-failing push made it look like nothing saved.
+        _lastPushError = err.message;
         showLiveStatus('⚠ Could not sync results to the server (' + err.message +
           '). Your results are still saved on this device.', 'warn');
         return false;
       });
-  } catch(e) { return Promise.resolve(false); }
+  } catch(e) { _lastPushError = e.message; return Promise.resolve(false); }
 }
 
 function exportPredLog() {
@@ -8696,7 +8723,7 @@ function checkTodaysResults() {
       show(L.concat(['Sending to the server…']));
       return pushLogToServer(true).then(function(ok){
         if (ok) L.push('☁️ Server copy updated — reopen the results app.');
-        else if (logged.length) L.push('⚠ Couldn\'t send to the server (see the message above).');
+        else if (logged.length) L.push('⚠ Couldn\'t send to the server: ' + (_lastPushError || 'no reason given'));
         show(L);
       });
     })
