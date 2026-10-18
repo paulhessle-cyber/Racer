@@ -370,7 +370,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.1 · 17 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.2 · 18 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
   </div>
 </div>
@@ -8512,12 +8512,34 @@ function ensureNapForToday() {
   } catch(e) { return []; }
 }
 
+// Put every race this device locked today back into S.meetings, straight from
+// the locks. autoPredictAllMeetings only restores races Betfair still lists,
+// and Betfair drops a race once it has run — so after racing, reopening the
+// app left the day's races out of S.meetings unless the proxy happened to hold
+// a card snapshot for each one, and syncResults (which only walks S.meetings)
+// never logged them.
+function restoreLockedRaces() {
+  var locks = plockAll(), n = 0;
+  Object.keys(locks).forEach(function(rk){
+    var L = locks[rk];
+    if (!L || !L.course || !L.time || !L.preds || !L.preds.length) return;
+    ensureRaceInMeetings(L.course, raceFromLock(L.course, L.time, L));
+    n++;
+  });
+  return n;
+}
+
 // One pass: catch up on missed races first, then sweep today's open markets.
 function fullSweep(force) {
+  try { restoreLockedRaces(); } catch(e){}
   return catchUpFromCards().then(function(caught){
     return autoPredictAllMeetings(force).then(function(built){
       try { ensureNapForToday(); } catch(e){}
-      if (caught) { try { syncResults(false); } catch(e){} }
+      // Check results every sweep. It used to run here only when a race had
+      // just been scored from a snapshot, so on reopening after racing (races
+      // already locked) nothing was logged until the 1-minute heartbeat — and
+      // a quick look on the phone was over before that.
+      try { _lastResultsFetch = Date.now(); syncResults(false); } catch(e){}
       // ALWAYS try a push at the end of a sweep, not just when this session
       // happened to log something new. Previously the only push triggers were
       // "a race just settled while you watched" and the manual Export button —
