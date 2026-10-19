@@ -5,131 +5,130 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Formintel — Results & Backtesting</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0b100e">
+<script src="theme.js?v=1.0"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=1.0">
 <style>
-  :root {
-    --green:#00e676;--gold:#ffc107;--red:#ff5252;--blue:#448aff;--orange:#ff6d00;
-    --bg:#07090b;--sf:#0d1410;--bd:#1c2a1e;--text:#c8dece;--mt:#4a6a55;--white:#eef6f0;
-    --mono:'IBM Plex Mono',monospace;
-    /* Short-name aliases used throughout the JS-rendered HTML. Without these,
-       75+ references (every won-green, card panel, etc) fell back to defaults —
-       which is why WON naps weren't showing green. */
-    --g:#00e676;--re:#ff5252;--tx:#c8dece;--card:#0d1410;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{min-height:100vh;padding-bottom:60px}
+  #app{max-width:760px;margin:0 auto}
 
   /* Header */
-  .hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
-       border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--bg);z-index:10}
-  .hdr h1{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:1px;color:var(--green)}
-  .hdr-sub{font-family:var(--mono);font-size:.6rem;color:var(--mt);text-transform:uppercase;letter-spacing:2px}
+  .hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;padding-top:max(12px, env(safe-area-inset-top));
+       border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--hdr);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);z-index:10}
+  .hdr h1{font-size:1.25rem;font-weight:800;letter-spacing:-.5px;color:var(--tx)}
+  .hdr h1 b{color:var(--g);font-weight:800}
+  .hdr-sub{font-size:.68rem;color:var(--mt);margin-top:2px}
+  .hdr-btn{font:600 .7rem var(--sans);padding:7px 10px;border-radius:10px;border:1px solid var(--bd);background:var(--sf2);color:var(--tx);cursor:pointer;white-space:nowrap}
 
-  /* Tab bar */
-  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;border-bottom:1px solid var(--bd);background:var(--bd);position:sticky;top:57px;z-index:9}
-  .tab-btn{padding:10px 6px;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;
-           letter-spacing:1px;text-align:center;color:var(--mt);cursor:pointer;border:none;
-           background:transparent;border-bottom:2px solid transparent;transition:all .2s}
-  .tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
+  /* Tab bar: one scrolling row of pills */
+  .tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:6px 8px;border-bottom:1px solid var(--bd);background:var(--hdr);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);position:sticky;top:61px;z-index:9}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab-btn{flex:0 0 auto;padding:8px 12px;font:600 .74rem var(--sans);text-align:center;color:var(--mt);cursor:pointer;border:none;
+           background:transparent;border-radius:10px;white-space:nowrap;transition:background .15s,color .15s}
+  .tab-btn.active{color:var(--g-ink);background:var(--g)}
 
   /* Import */
-  .import-zone{margin:16px;padding:24px 20px;border:2px dashed var(--bd);border-radius:12px;
+  .import-zone{margin:16px;padding:24px 20px;border:2px dashed var(--bd2);border-radius:var(--radius);background:var(--sf2);
                text-align:center;cursor:pointer;transition:all .2s;position:relative}
-  .import-zone:hover{border-color:var(--green);background:rgba(0,230,118,.04)}
+  .import-zone:hover{border-color:var(--green);background:rgba(var(--g-rgb),.04)}
   .import-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .import-icon{font-size:2rem;margin-bottom:8px}
-  .import-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--white);margin-bottom:4px}
-  .import-sub{font-family:var(--mono);font-size:.62rem;color:var(--mt);line-height:1.7}
+  .import-title{font-size:1.1rem;font-weight:800;color:var(--white);margin-bottom:4px}
+  .import-sub{font-size:.74rem;color:var(--mt);line-height:1.6}
   .import-sub b{color:var(--green)}
 
-  .ls-btn{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:12px;border-radius:8px;
-          border:1px solid var(--bd);background:rgba(255,255,255,.02);color:var(--text);
-          font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:1px;cursor:pointer}
+  .ls-btn{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:12px;border-radius:12px;
+          border:1px solid var(--bd2);background:var(--sf2);color:var(--text);
+          font:700 .78rem var(--sans);cursor:pointer}
   .ls-btn:hover{border-color:var(--green);color:var(--green)}
 
   /* Stat cards */
   .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px}
-  .stat-card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;
+  .stat-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);box-shadow:var(--shadow-sm);
              padding:14px 12px;text-align:center;position:relative;overflow:hidden}
   .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0}
   .stat-card.win::before{background:var(--green)}.stat-card.place::before{background:var(--gold)}
   .stat-card.loss::before{background:var(--red)}.stat-card.total::before{background:var(--blue)}
   .stat-card.rank::before{background:var(--mt)}.stat-card.streak::before{background:var(--orange)}
-  .stat-num{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;line-height:1;margin-bottom:4px}
+  .stat-num{font-size:1.9rem;font-weight:800;letter-spacing:-1px;line-height:1.05;margin-bottom:4px}
   .win .stat-num{color:var(--green)}.place .stat-num{color:var(--gold)}.loss .stat-num{color:var(--red)}
   .total .stat-num{color:var(--blue)}.rank .stat-num{color:var(--mt)}.streak .stat-num{color:var(--orange)}
-  .stat-label{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--mt);line-height:1.3}
+  .stat-label{font-size:.62rem;font-weight:600;color:var(--mt);line-height:1.3}
 
   /* Chart */
-  .chart-wrap{margin:0 16px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px}
-  .chart-title{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:14px}
+  .chart-wrap{margin:0 16px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)}
+  .chart-title{font-size:.86rem;font-weight:700;color:var(--tx);margin-bottom:14px}
   .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-  .bar-label{font-family:var(--mono);font-size:.65rem;color:var(--text);width:52px;flex-shrink:0}
-  .bar-track{flex:1;height:20px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden}
+  .bar-label{font-size:.74rem;font-weight:600;color:var(--text);width:52px;flex-shrink:0}
+  .bar-track{flex:1;height:20px;background:rgba(var(--ov-rgb),.04);border-radius:4px;overflow:hidden}
   .bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;
             font-family:var(--mono);font-size:.6rem;font-weight:600;white-space:nowrap;min-width:2px}
-  .bar-fill.win{background:linear-gradient(90deg,#00c853,#00e676);color:#000}
-  .bar-fill.place{background:linear-gradient(90deg,#ff8f00,#ffc107);color:#000}
-  .bar-fill.loss{background:linear-gradient(90deg,#c62828,#ff5252);color:#fff}
+  .bar-fill.win{background:linear-gradient(90deg,var(--g),var(--g));color:#000}
+  .bar-fill.place{background:linear-gradient(90deg,var(--gold),var(--gold));color:#000}
+  .bar-fill.loss{background:linear-gradient(90deg,var(--re),var(--re));color:#fff}
   .bar-pct{font-family:var(--mono);font-size:.65rem;color:var(--text);width:36px;text-align:right;flex-shrink:0}
 
   /* Section header */
-  .section-hdr{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:2px;
-               color:var(--mt);padding:0 16px 10px;display:flex;align-items:center;gap:8px}
+  .section-hdr{font-size:.8rem;font-weight:700;
+               color:var(--tx);padding:0 16px 10px;display:flex;align-items:center;gap:8px}
   .section-hdr::before{content:'';display:block;width:20px;height:1px;background:var(--green)}
 
   /* Filter bar */
   .filter-bar{display:flex;gap:8px;padding:0 16px 14px;overflow-x:auto;scrollbar-width:none}
   .filter-bar::-webkit-scrollbar{display:none}
-  .filter-btn{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:1px;
+  .filter-btn{font:600 .72rem var(--sans);
               padding:6px 14px;border-radius:20px;border:1px solid var(--bd);background:transparent;
               color:var(--mt);cursor:pointer;white-space:nowrap;transition:all .2s}
-  .filter-btn.active{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.4);color:var(--green)}
+  .filter-btn.active{background:rgba(var(--g-rgb),.12);border-color:rgba(var(--g-rgb),.4);color:var(--green)}
 
   /* Race cards */
   .races{padding:0 16px;display:flex;flex-direction:column;gap:10px}
-  .race-card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;overflow:hidden;animation:fadeIn .3s ease both}
+  .race-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;animation:fadeIn .3s ease both}
   @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .race-card.win{border-left:3px solid var(--green)}.race-card.place{border-left:3px solid var(--gold)}.race-card.loss{border-left:3px solid #333}
+  .race-card.win{border-left:3px solid var(--green)}.race-card.place{border-left:3px solid var(--gold)}.race-card.loss{border-left:3px solid var(--bd2)}
   .race-top{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px}
-  .race-name{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--white);letter-spacing:.5px}
+  .race-name{font-size:.95rem;font-weight:800;color:var(--white);letter-spacing:-.2px}
   .race-meta{font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px}
-  .race-badge{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:1px;padding:4px 10px;border-radius:20px;font-weight:600}
-  .badge-win{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3)}
-  .badge-place{background:rgba(255,193,7,.12);color:var(--gold);border:1px solid rgba(255,193,7,.3)}
-  .badge-loss{background:rgba(255,82,82,.08);color:#666;border:1px solid #222}
+  .race-badge{font-size:.64rem;font-weight:700;padding:4px 10px;border-radius:999px;letter-spacing:.3px}
+  .badge-win{background:rgba(var(--g-rgb),.15);color:var(--green);border:1px solid rgba(var(--g-rgb),.3)}
+  .badge-place{background:rgba(var(--gold-rgb),.12);color:var(--gold);border:1px solid rgba(var(--gold-rgb),.3)}
+  .badge-loss{background:rgba(var(--re-rgb),.08);color:var(--mt);border:1px solid var(--bd2)}
   .race-body{padding:0 14px 12px;display:flex;flex-direction:column;gap:5px}
   .race-row{display:flex;align-items:baseline;gap:8px}
   .race-row-label{font-family:var(--mono);font-size:.58rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;width:52px;flex-shrink:0}
   .race-row-val{color:var(--text);font-size:.82rem}
   .rank-1{color:var(--green);font-weight:600}.rank-2{color:var(--gold)}.rank-3{color:#cd7f32}.rank-bad{color:var(--mt)}
   .preds-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
-  .pred-chip{font-family:var(--mono);font-size:.58rem;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--mt)}
-  .pred-chip.is-winner{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.3);color:var(--green)}
-  .pred-chip.is-placed{background:rgba(255,193,7,.1);border-color:rgba(255,193,7,.25);color:var(--gold)}
+  .pred-chip{font-family:var(--mono);font-size:.58rem;padding:2px 7px;border-radius:4px;background:rgba(var(--ov-rgb),.04);border:1px solid var(--bd);color:var(--mt)}
+  .pred-chip.is-winner{background:rgba(var(--g-rgb),.12);border-color:rgba(var(--g-rgb),.3);color:var(--green)}
+  .pred-chip.is-placed{background:rgba(var(--gold-rgb),.1);border-color:rgba(var(--gold-rgb),.25);color:var(--gold)}
 
   /* Backtesting */
   .bt-wrap{padding:0 16px}
-  .bt-card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
-  .bt-title{font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--green);margin-bottom:12px}
+  .bt-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px;margin-bottom:12px}
+  .bt-title{font-size:.88rem;font-weight:700;color:var(--tx);margin-bottom:12px}
 
   .bt-controls{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
   .bt-control-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
   .bt-input-wrap{flex:1;min-width:100px}
   .bt-input-label{font-family:var(--mono);font-size:.55rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
-  .bt-input{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;
+  .bt-input{width:100%;background:var(--inp);border:1px solid var(--bd2);border-radius:10px;
             color:var(--text);font-family:var(--mono);font-size:.8rem;padding:8px 10px;outline:none}
   .bt-input:focus{border-color:var(--green)}
-  .bt-run{width:100%;padding:11px;border-radius:8px;border:none;background:rgba(0,230,118,.15);
-          border:1px solid rgba(0,230,118,.3);color:var(--green);font-family:var(--mono);
-          font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer;font-weight:600}
-  .bt-run:hover{background:rgba(0,230,118,.25)}
+  .bt-run{width:100%;padding:12px;border-radius:12px;border:none;background:rgba(var(--g-rgb),.15);
+          border:1px solid rgba(var(--g-rgb),.3);color:var(--green);font-family:var(--mono);
+          font-size:.74rem;cursor:pointer;font-weight:700}
+  .bt-run:hover{background:rgba(var(--g-rgb),.25)}
 
   /* Strategy comparison table */
   .strat-table{width:100%;border-collapse:collapse;font-size:.72rem}
   .strat-table th{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1px;
                   color:var(--mt);padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd)}
-  .strat-table td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top}
+  .strat-table td{padding:8px 8px;border-bottom:1px solid rgba(var(--ov-rgb),.04);vertical-align:top}
   .strat-table tr:last-child td{border-bottom:none}
   .strat-name{font-family:var(--mono);font-size:.68rem;color:var(--text);font-weight:600}
   .strat-detail{font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px}
@@ -144,14 +143,14 @@
   /* Threshold finder */
   .threshold-rows{display:flex;flex-direction:column;gap:6px;margin-top:4px}
   .threshold-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;
-                 padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.03);
+                 padding:6px 8px;border-radius:6px;background:rgba(var(--ov-rgb),.03);
                  border:1px solid var(--bd);font-family:var(--mono);font-size:.65rem}
-  .threshold-row.best{background:rgba(0,230,118,.07);border-color:rgba(0,230,118,.25)}
+  .threshold-row.best{background:rgba(var(--g-rgb),.07);border-color:rgba(var(--g-rgb),.25)}
   .threshold-row-hdr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;
                      padding:4px 8px;font-family:var(--mono);font-size:.55rem;
                      text-transform:uppercase;letter-spacing:1px;color:var(--mt)}
 
-  .reset-btn{display:block;margin:16px 16px 0;width:calc(100% - 32px);padding:12px;border-radius:8px;
+  .reset-btn{display:block;margin:16px 16px 0;width:calc(100% - 32px);padding:12px;border-radius:12px;
              border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);
              font-size:.65rem;text-transform:uppercase;letter-spacing:2px;cursor:pointer}
   .reset-btn:hover{border-color:var(--gold);color:var(--gold)}
@@ -160,11 +159,11 @@
   .tab-content.active{display:block}
 
   /* Bet tracker modal & legs */
-  .modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--white);
+  .modal-title{font-size:1.3rem;font-weight:800;color:var(--white);
                letter-spacing:.5px;margin-bottom:14px}
   .modal-row{display:flex;gap:8px;margin-bottom:10px}
   .leg-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-  .leg-num{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--mt);
+  .leg-num{font-size:1rem;font-weight:800;color:var(--mt);
            width:20px;flex-shrink:0;text-align:center}
   .leg-name{flex:1;min-width:100px}
   .leg-result{display:flex;gap:4px;flex-shrink:0}
@@ -173,21 +172,15 @@
 <body>
 
 <div class="hdr">
-  <div>
-    <h1>Formintel Results</h1>
+  <div style="min-width:0">
+    <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-top:2px">checker v8.0 · 17 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.0 · 20 Oct 2026</div>
   </div>
-  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-    <div style="font-size:1.6rem">📊</div>
-    <button id="sync-btn" onclick="pushToServer(true)" title="Save to Server"
-            style="display:none;font-size:.7rem;padding:4px 8px;border-radius:6px;
-                   border:1px solid var(--bd);background:transparent;color:var(--mt);
-                   cursor:pointer;font-family:var(--mono)">⬆️ Sync</button>
-    <button id="syncid-btn" onclick="changeSyncId()" title="View or change sync ID"
-            style="display:none;font-size:.6rem;padding:3px 8px;border-radius:6px;
-                   border:1px solid var(--bd);background:transparent;color:var(--mt);
-                   cursor:pointer;font-family:var(--mono)">🔑 Sync ID</button>
+  <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
+    <button id="syncid-btn" class="hdr-btn" onclick="changeSyncId()" title="View or change sync ID" style="display:none">🔑</button>
+    <button class="theme-btn" data-theme-icon onclick="fiTheme.toggle()" aria-label="Light or dark mode">☀️</button>
   </div>
 </div>
 
@@ -204,13 +197,15 @@
   <button class="tab-btn" onclick="showTab('nap')">⭐ Nap</button>
   <button class="tab-btn" onclick="showTab('conf')">🎯 Confidence</button>
   <button class="tab-btn" onclick="showTab('jockeys')">🏇 Jockeys</button>
+  <button class="tab-btn" onclick="showTab('weather')">🌦 Weather</button>
 </div>
 
 <div id="app">
   <!-- Import shown before data loads -->
 </div>
 
-<script src="plog.js?v=6.3"></script>
+<script src="plog.js?v=6.4"></script>
+<script src="courses.js?v=1.0"></script>
 <script>
 var LOG_KEY = 'rq_pred_log_v1';
 var loadedLog = null;
@@ -269,13 +264,14 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
   });
   var el = document.getElementById('tab-'+tab);
   if (el) el.classList.add('active');
+  try { var ab = document.querySelector('.tab-btn.active'); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch(e) {}
   // Always re-render bets tab so it picks up localStorage saves from predictor
   if (tab === 'bets') renderBets();
   if (tab === 'insights') renderInsights();
@@ -286,6 +282,7 @@ function showTab(tab) {
   if (tab === 'nap') renderNapTab();
   if (tab === 'conf') renderConfTab();
   if (tab === 'jockeys') renderJockeyTab();
+  if (tab === 'weather') renderWeatherTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
@@ -296,7 +293,7 @@ function renderAll() {
   var log = loadedLog;
   if (!log||!log.length){ renderImport(); return; }
 
-  document.getElementById('tab-bar').style.display='grid';
+  document.getElementById('tab-bar').style.display='flex';
   ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='block';});
   var sorted = log.slice().sort(function(a,b){
     return (b.date||'').localeCompare(a.date||'') || (b.time||'').localeCompare(a.time||'');
@@ -332,7 +329,8 @@ function renderAll() {
     '<div class="tab-content" id="tab-dutch"></div>' +
     '<div class="tab-content" id="tab-nap"></div>' +
     '<div class="tab-content" id="tab-conf"></div>' +
-    '<div class="tab-content" id="tab-jockeys"></div>';
+    '<div class="tab-content" id="tab-jockeys"></div>' +
+    '<div class="tab-content" id="tab-weather"></div>';
 
   renderRaces();
   runDefaultBacktest(sorted);
@@ -423,7 +421,7 @@ function renderMonthlyTable(rows) {
     tn+=b.n; tw+=b.w; tp+=b.p; tret+=b.ret;
     var plCol = pl >= 0 ? 'var(--g)' : 'var(--re)';
     // subtle highlight on the best and worst months
-    var bg = (roi === bestRoi) ? 'rgba(0,230,118,0.07)' : (roi === worstRoi) ? 'rgba(255,82,82,0.06)' : 'transparent';
+    var bg = (roi === bestRoi) ? 'rgba(var(--g-rgb),0.07)' : (roi === worstRoi) ? 'rgba(var(--re-rgb),0.06)' : 'transparent';
     h += '<tr style="text-align:right;border-top:1px solid var(--bd);background:' + bg + '">'
        + '<td style="text-align:left;padding:7px 4px;color:var(--tx);font-weight:600">' + label(m) + '</td>'
        + '<td style="padding:7px 4px;color:var(--mt)">' + b.n + '</td>'
@@ -512,12 +510,12 @@ function buildPnlCurve(sorted, wonFn, oddsFn) {
   }
 
   var zeroY  = H - ((0 - minP) / range) * H;
-  var mCol   = model.pnl >= 0 ? '#00e676' : '#ff5252';
-  var fCol   = '#448aff'; // always blue for favourite
+  var mCol   = model.pnl >= 0 ? 'var(--g)' : 'var(--re)';
+  var fCol   = 'var(--bl)'; // always blue for favourite
 
   var svg = '<svg class="pnl-svg" viewBox="0 0 100 100" preserveAspectRatio="none">'
     + '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY
-    + '" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>'
+    + '" stroke="rgba(var(--ov-rgb),.15)" stroke-width=".5"/>'
     + '<polyline points="' + toSvgPts(model.points)
     + '" fill="none" stroke="' + mCol + '" stroke-width="1.4"/>';
 
@@ -562,7 +560,7 @@ function renderBacktest(sorted) {
   h += '<div class="bt-input-wrap" style="display:flex;flex-direction:column">';
   h += '<div class="bt-input-label">Value filter</div>';
   h += '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">';
-  h += '<button id="bt-val-off" onclick="setBtVal(false)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">Any</button>';
+  h += '<button id="bt-val-off" onclick="setBtVal(false)" style="flex:1;padding:8px;background:rgba(var(--g-rgb),.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">Any</button>';
   h += '<button id="bt-val-on"  onclick="setBtVal(true)"  style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">Value only</button>';
   h += '</div></div>';
   h += ctrl('Stake (£)', 'bt-stake', '1', 'number', '0.1', '100', '0.5');
@@ -596,9 +594,9 @@ function renderBacktest(sorted) {
 var btValueOnly = false;
 function setBtVal(v) {
   btValueOnly = v;
-  document.getElementById('bt-val-off').style.background = v ? 'transparent' : 'rgba(0,230,118,.15)';
+  document.getElementById('bt-val-off').style.background = v ? 'transparent' : 'rgba(var(--g-rgb),.15)';
   document.getElementById('bt-val-off').style.color = v ? 'var(--mt)' : 'var(--green)';
-  document.getElementById('bt-val-on').style.background  = v ? 'rgba(0,230,118,.15)' : 'transparent';
+  document.getElementById('bt-val-on').style.background  = v ? 'rgba(var(--g-rgb),.15)' : 'transparent';
   document.getElementById('bt-val-on').style.color  = v ? 'var(--green)' : 'var(--mt)';
 }
 
@@ -673,7 +671,7 @@ function runBacktest() {
     }).join(' ');
     var zY = H-((0-minP)/range*H);
     h += '<svg style="width:100%;height:60px" viewBox="0 0 100 60" preserveAspectRatio="none">'
-      + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>'
+      + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(var(--ov-rgb),.15)" stroke-width=".5"/>'
       + '<polyline points="'+svgPts+'" fill="none" stroke="'+col+'" stroke-width="1.5"/>'
       + '</svg>';
   } else {
@@ -741,14 +739,14 @@ function runDefaultBacktest(sorted) {
 }
 
 function mini(label, val) {
-  return '<div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
-    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:var(--white)">' + val + '</div>'
+  return '<div style="background:rgba(var(--ov-rgb),.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
+    + '<div style="font-family:var(--sans);font-weight:800;font-size:1.4rem;color:var(--white)">' + val + '</div>'
     + '<div style="font-family:var(--mono);font-size:.52rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">' + label + '</div>'
     + '</div>';
 }
 function mini2(label, val, col) {
-  return '<div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
-    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:'+col+'">' + val + '</div>'
+  return '<div style="background:rgba(var(--ov-rgb),.03);border:1px solid var(--bd);border-radius:6px;padding:8px;text-align:center">'
+    + '<div style="font-family:var(--sans);font-weight:800;font-size:1.4rem;color:'+col+'">' + val + '</div>'
     + '<div style="font-family:var(--mono);font-size:.52rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">' + label + '</div>'
     + '</div>';
 }
@@ -979,13 +977,13 @@ function buildBetModal(type, legs, existing) {
     h += '<div class="modal-row">';
     h += '<div class="bt-input-wrap"><div class="bt-input-label">Type</div>'
       + '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">'
-      + '<button id="bet-win-btn" onclick="setBetType(&apos;win&apos;)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">WIN</button>'
+      + '<button id="bet-win-btn" onclick="setBetType(&apos;win&apos;)" style="flex:1;padding:8px;background:rgba(var(--g-rgb),.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">WIN</button>'
       + '<button id="bet-ew-btn"  onclick="setBetType(&apos;ew&apos;)"  style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">E/W</button>'
       + '</div></div>';
     h += '<div class="bt-input-wrap" id="bet-place-wrap">'
       + '<div class="bt-input-label">Place Terms</div>'
       + '<div style="display:flex;border:1px solid var(--bd);border-radius:6px;overflow:hidden">'
-      + '<button id="bet-q-btn" onclick="setBetPlace(&apos;quarter&apos;)" style="flex:1;padding:8px;background:rgba(0,230,118,.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">¼</button>'
+      + '<button id="bet-q-btn" onclick="setBetPlace(&apos;quarter&apos;)" style="flex:1;padding:8px;background:rgba(var(--g-rgb),.15);border:none;color:var(--green);font-family:var(--mono);font-size:.65rem;cursor:pointer">¼</button>'
       + '<button id="bet-f-btn" onclick="setBetPlace(&apos;fifth&apos;)"   style="flex:1;padding:8px;background:transparent;border:none;border-left:1px solid var(--bd);color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer">⅕</button>'
       + '</div></div>';
     h += '</div>';
@@ -1017,7 +1015,7 @@ function buildBetModal(type, legs, existing) {
   }
 
   h += '<div style="display:flex;gap:8px;margin-top:16px">';
-  h += '<button onclick="saveBet(&apos;' + type + '&apos;)" style="flex:1;padding:12px;border-radius:8px;border:none;background:rgba(0,230,118,.2);border:1px solid rgba(0,230,118,.4);color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">💾 Save</button>';
+  h += '<button onclick="saveBet(&apos;' + type + '&apos;)" style="flex:1;padding:12px;border-radius:8px;border:none;background:rgba(var(--g-rgb),.2);border:1px solid rgba(var(--g-rgb),.4);color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">💾 Save</button>';
   h += '<button onclick="closeModal()" style="flex:1;padding:12px;border-radius:8px;border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);font-size:.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">Cancel</button>';
   h += '</div>';
   return h;
@@ -1025,8 +1023,8 @@ function buildBetModal(type, legs, existing) {
 
 function resultBtn(idx, val, label, active) {
   var col = val==='won' ? 'var(--green)' : val==='placed' ? 'var(--gold)' : 'var(--mt)';
-  var bg  = active ? (val==='won' ? 'rgba(0,230,118,.2)' : val==='placed' ? 'rgba(255,193,7,.15)' : 'rgba(255,255,255,.07)') : 'transparent';
-  var brd = active ? (val==='won' ? 'rgba(0,230,118,.4)' : val==='placed' ? 'rgba(255,193,7,.3)' : 'rgba(255,255,255,.15)') : 'var(--bd)';
+  var bg  = active ? (val==='won' ? 'rgba(var(--g-rgb),.2)' : val==='placed' ? 'rgba(var(--gold-rgb),.15)' : 'rgba(var(--ov-rgb),.07)') : 'transparent';
+  var brd = active ? (val==='won' ? 'rgba(var(--g-rgb),.4)' : val==='placed' ? 'rgba(var(--gold-rgb),.3)' : 'rgba(var(--ov-rgb),.15)') : 'var(--bd)';
   return '<button onclick="setLegResult(' + idx + ',&apos;' + val + '&apos;)" id="leg-btn-' + idx + '-' + val + '" '
     + 'style="padding:5px 8px;border-radius:5px;border:1px solid ' + brd + ';background:' + bg + ';'
     + 'color:' + col + ';font-family:var(--mono);font-size:.58rem;cursor:pointer;white-space:nowrap">'
@@ -1041,9 +1039,9 @@ function setBetType(t) {
   var wonBtn = document.getElementById('bet-win-btn');
   var ewBtn  = document.getElementById('bet-ew-btn');
   if (!wonBtn) return;
-  wonBtn.style.background = t==='win' ? 'rgba(0,230,118,.15)' : 'transparent';
+  wonBtn.style.background = t==='win' ? 'rgba(var(--g-rgb),.15)' : 'transparent';
   wonBtn.style.color      = t==='win' ? 'var(--green)' : 'var(--mt)';
-  ewBtn.style.background  = t==='ew'  ? 'rgba(0,230,118,.15)' : 'transparent';
+  ewBtn.style.background  = t==='ew'  ? 'rgba(var(--g-rgb),.15)' : 'transparent';
   ewBtn.style.color       = t==='ew'  ? 'var(--green)' : 'var(--mt)';
 }
 
@@ -1052,9 +1050,9 @@ function setBetPlace(p) {
   var qBtn = document.getElementById('bet-q-btn');
   var fBtn = document.getElementById('bet-f-btn');
   if (!qBtn) return;
-  qBtn.style.background = p==='quarter' ? 'rgba(0,230,118,.15)' : 'transparent';
+  qBtn.style.background = p==='quarter' ? 'rgba(var(--g-rgb),.15)' : 'transparent';
   qBtn.style.color      = p==='quarter' ? 'var(--green)' : 'var(--mt)';
-  fBtn.style.background = p==='fifth'   ? 'rgba(0,230,118,.15)' : 'transparent';
+  fBtn.style.background = p==='fifth'   ? 'rgba(var(--g-rgb),.15)' : 'transparent';
   fBtn.style.color      = p==='fifth'   ? 'var(--green)' : 'var(--mt)';
 }
 
@@ -1066,8 +1064,8 @@ function setLegResult(idx, result) {
     if (!btn) return;
     var active = r === result;
     var col = r==='won' ? 'var(--green)' : r==='placed' ? 'var(--gold)' : 'var(--mt)';
-    btn.style.background = active ? (r==='won' ? 'rgba(0,230,118,.2)' : r==='placed' ? 'rgba(255,193,7,.15)' : 'rgba(255,255,255,.07)') : 'transparent';
-    btn.style.borderColor = active ? (r==='won' ? 'rgba(0,230,118,.4)' : r==='placed' ? 'rgba(255,193,7,.3)' : 'rgba(255,255,255,.15)') : 'var(--bd)';
+    btn.style.background = active ? (r==='won' ? 'rgba(var(--g-rgb),.2)' : r==='placed' ? 'rgba(var(--gold-rgb),.15)' : 'rgba(var(--ov-rgb),.07)') : 'transparent';
+    btn.style.borderColor = active ? (r==='won' ? 'rgba(var(--g-rgb),.4)' : r==='placed' ? 'rgba(var(--gold-rgb),.3)' : 'rgba(var(--ov-rgb),.15)') : 'var(--bd)';
     btn.style.color = col;
   });
 }
@@ -1349,12 +1347,12 @@ function renderBets() {
     + '📂 Import bet file · <span style="color:var(--green)">tap to load</span></span>'
     + '</label>';
 h += '<button onclick="autoSettleBets(false)" style="width:100%;padding:11px;margin-bottom:12px;border-radius:8px;'
-    + 'border:1px solid rgba(68,138,255,.35);background:rgba(68,138,255,.1);color:var(--blue);'
+    + 'border:1px solid rgba(var(--bl2-rgb),.35);background:rgba(var(--bl2-rgb),.1);color:var(--blue);'
     + 'font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">'
     + '⚡ Auto-settle from results</button>';
 h += '<div style="display:flex;gap:8px;margin-bottom:16px">';
-  h += '<button onclick="openAddBet(&apos;l15&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(0,230,118,.3);background:rgba(0,230,118,.1);color:var(--green);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">⚡ + Lucky 15</button>';
-  h += '<button onclick="openAddBet(&apos;placepot&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(255,193,7,.3);background:rgba(255,193,7,.08);color:var(--gold);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">🎯 + Placepot</button>';
+  h += '<button onclick="openAddBet(&apos;l15&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(var(--g-rgb),.3);background:rgba(var(--g-rgb),.1);color:var(--green);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">⚡ + Lucky 15</button>';
+  h += '<button onclick="openAddBet(&apos;placepot&apos;)" style="flex:1;padding:11px;border-radius:8px;border:1px solid rgba(var(--gold-rgb),.3);background:rgba(var(--gold-rgb),.08);color:var(--gold);font-family:var(--mono);font-size:.62rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px">🎯 + Placepot</button>';
   h += '</div>';
 
   if (!log.length) {
@@ -1406,7 +1404,7 @@ h += '<div style="display:flex;gap:8px;margin-bottom:16px">';
 
 function betStat(label, val, col) {
   return '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px;text-align:center">'
-    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.6rem;color:' + col + ';line-height:1">' + val + '</div>'
+    + '<div style="font-family:var(--sans);font-weight:800;font-size:1.6rem;color:' + col + ';line-height:1">' + val + '</div>'
     + '<div style="font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-top:3px">' + label + '</div>'
     + '</div>';
 }
@@ -1418,7 +1416,7 @@ function typeBlock(label, bets) {
   var col      = profit>=0 ? 'var(--green)' : 'var(--red)';
   return '<div style="background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px">'
     + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:6px">' + label + ' (' + bets.length + ')</div>'
-    + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:' + col + '">'
+    + '<div style="font-family:var(--sans);font-weight:800;font-size:1.4rem;color:' + col + '">'
     + (profit>=0?'+':'')+'£'+Math.abs(profit).toFixed(2) + '</div>'
     + '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">£'+staked.toFixed(2)+' staked</div>'
     + '</div>';
@@ -1455,12 +1453,12 @@ function buildBetPnlCurve(log) {
 
   var zY    = H - ((0 - minV) / range * H);
   var fPnl  = pts[pts.length-1][0];
-  var fCol  = fPnl >= 0 ? '#00e676' : '#ff5252';
+  var fCol  = fPnl >= 0 ? 'var(--g)' : 'var(--re)';
 
   var svg = '<svg style="width:100%;height:80px" viewBox="0 0 100 80" preserveAspectRatio="none">'
-    + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>';
-  if (l15c > 0) svg += '<polyline points="'+toLine(1)+'" fill="none" stroke="#00e676" stroke-width="1" stroke-dasharray="3,2"/>';
-  if (ppc  > 0) svg += '<polyline points="'+toLine(2)+'" fill="none" stroke="#ffc107" stroke-width="1" stroke-dasharray="3,2"/>';
+    + '<line x1="0" y1="'+zY+'" x2="100" y2="'+zY+'" stroke="rgba(var(--ov-rgb),.15)" stroke-width=".5"/>';
+  if (l15c > 0) svg += '<polyline points="'+toLine(1)+'" fill="none" stroke="var(--g)" stroke-width="1" stroke-dasharray="3,2"/>';
+  if (ppc  > 0) svg += '<polyline points="'+toLine(2)+'" fill="none" stroke="var(--gold)" stroke-width="1" stroke-dasharray="3,2"/>';
   svg += '<polyline points="'+toLine(0)+'" fill="none" stroke="'+fCol+'" stroke-width="1.6"/>';
   svg += '</svg>';
 
@@ -1481,7 +1479,7 @@ function buildBetCard(bet) {
   var placed = bet.legs.filter(function(l){return l.placed&&!l.won;}).length;
   var profit = bet.profit;
   var pCol   = profit > 0 ? 'var(--green)' : profit < 0 ? 'var(--red)' : 'var(--mt)';
-  var bdrCol = profit > 0 ? 'var(--green)' : profit < 0 ? '#333' : 'var(--bd)';
+  var bdrCol = profit > 0 ? 'var(--green)' : profit < 0 ? 'var(--bd2)' : 'var(--bd)';
 
   var h = '<div style="background:var(--sf);border:1px solid var(--bd);border-left:3px solid '
     + bdrCol + ';border-radius:10px;margin-bottom:10px;overflow:hidden">';
@@ -1489,7 +1487,7 @@ function buildBetCard(bet) {
   // Header
   h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px">';
   h += '<div>';
-  h += '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--white)">'
+  h += '<div style="font-family:var(--sans);font-weight:800;font-size:1.1rem;color:var(--white)">'
     + icon + ' ' + typeL + ' &nbsp;'
     + '<span style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">' + bet.date + '</span>'
     + (bet.pending ? ' <span style="font-family:var(--mono);font-size:.58rem;color:var(--gold)">PENDING</span>' : '')
@@ -1502,7 +1500,7 @@ function buildBetCard(bet) {
   h += '</div>';
   h += '<div style="text-align:right">';
   if (!bet.pending) {
-    h += '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.5rem;color:'+pCol+'">'
+    h += '<div style="font-family:var(--sans);font-weight:800;font-size:1.5rem;color:'+pCol+'">'
       + (profit>=0?'+':'') + '£' + Math.abs(profit).toFixed(2) + '</div>';
     h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">£'+bet.actualReturn.toFixed(2)+' returned</div>';
   } else {
@@ -1525,7 +1523,7 @@ function buildBetCard(bet) {
   // Edit/Delete
   h += '<div style="display:flex;gap:6px;padding:0 14px 12px">';
   h += '<button onclick="editBet(&apos;' + bet.id + '&apos;)" style="flex:1;padding:7px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--mt);font-family:var(--mono);font-size:.6rem;cursor:pointer">✏ Edit</button>';
-  h += '<button onclick="deleteBet(&apos;' + bet.id + '&apos;)" style="padding:7px 12px;border-radius:6px;border:1px solid rgba(255,82,82,.2);background:transparent;color:rgba(255,82,82,.6);font-family:var(--mono);font-size:.6rem;cursor:pointer">🗑</button>';
+  h += '<button onclick="deleteBet(&apos;' + bet.id + '&apos;)" style="padding:7px 12px;border-radius:6px;border:1px solid rgba(var(--re-rgb),.2);background:transparent;color:rgba(var(--re-rgb),.6);font-family:var(--mono);font-size:.6rem;cursor:pointer">🗑</button>';
   h += '</div>';
 
   h += '</div>';
@@ -1709,7 +1707,7 @@ function renderInsights() {
       var avgW  = Math.min(Math.round(totalWinRate / 0.6 * 100), 100);
       var rec   = generateRecommendation(dim.label, r, totalWinRate);
 
-      h += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(var(--ov-rgb),.04)">';
       // Row header
       h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
       h += '<span style="font-family:var(--mono);font-size:.7rem;color:var(--text)">'
@@ -1718,18 +1716,18 @@ function renderInsights() {
         + icon + ' ' + wr + '% <span style="font-size:.58rem;color:var(--mt)">vs ' + avg + '% avg</span></span>';
       h += '</div>';
       // Bar
-      h += '<div style="position:relative;height:8px;background:rgba(255,255,255,.04);border-radius:4px;margin-bottom:5px">';
+      h += '<div style="position:relative;height:8px;background:rgba(var(--ov-rgb),.04);border-radius:4px;margin-bottom:5px">';
       h += '<div style="position:absolute;left:0;top:0;height:100%;width:' + barW + '%;'
         + 'background:' + col + ';opacity:.5;border-radius:4px"></div>';
       // Average line
       h += '<div style="position:absolute;left:' + avgW + '%;top:-2px;width:2px;height:12px;'
-        + 'background:rgba(255,255,255,.4);border-radius:1px"></div>';
+        + 'background:rgba(var(--ov-rgb),.4);border-radius:1px"></div>';
       h += '</div>';
       // Recommendation
       h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);line-height:1.5">'
         + rec + '</div>';
       if (diff >= 6 || diff <= -6) {
-        h += '<div style="font-family:var(--mono);font-size:.58rem;color:rgba(255,255,255,.3);'
+        h += '<div style="font-family:var(--mono);font-size:.58rem;color:rgba(var(--ov-rgb),.3);'
           + 'margin-top:3px">→ Affects: ' + esc(dim.advice) + '</div>';
       }
       h += '</div>';
@@ -1762,7 +1760,7 @@ function renderInsights() {
       var barW = pct;
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
       h += '<span style="font-family:var(--mono);font-size:.62rem;color:' + rankCols[i] + ';width:90px;flex-shrink:0">' + rankLabels[i] + '</span>';
-      h += '<div style="flex:1;height:14px;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden">';
+      h += '<div style="flex:1;height:14px;background:rgba(var(--ov-rgb),.04);border-radius:3px;overflow:hidden">';
       h += '<div style="width:' + barW + '%;height:100%;background:' + rankCols[i] + ';opacity:.6;border-radius:3px"></div>';
       h += '</div>';
       h += '<span style="font-family:var(--mono);font-size:.62rem;color:var(--mt);width:44px;text-align:right">' + pct + '% (' + n + ')</span>';
@@ -1772,7 +1770,7 @@ function renderInsights() {
     // Interpretation
     var top2pct = Math.round((rankDist[0]+rankDist[1]) / rankTotal * 100);
     var missedPct = Math.round(rankDist[5] / rankTotal * 100);
-    h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);'
+    h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(var(--ov-rgb),.06);'
       + 'font-family:var(--mono);font-size:.63rem;color:var(--mt);line-height:1.7">';
     if (top2pct >= 50) {
       h += '✓ Winner is in your top 2 picks ' + top2pct + '% of the time — model is ranking well.';
@@ -1787,7 +1785,7 @@ function renderInsights() {
   }
 
   // ── Overall recommendation summary ───────────────────
-  h += '<div style="background:rgba(0,230,118,.05);border:1px solid rgba(0,230,118,.2);'
+  h += '<div style="background:rgba(var(--g-rgb),.05);border:1px solid rgba(var(--g-rgb),.2);'
     + 'border-radius:10px;padding:14px;margin-bottom:12px">';
   h += '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;'
     + 'letter-spacing:2px;color:var(--green);margin-bottom:10px">📋 Retrain Checklist</div>';
@@ -2146,7 +2144,7 @@ function renderBFWatch() {
     var sigPlaced = allBFSignals.filter(function(s){ return !s.won && s.placed; }).length;
     var sigDrops  = allBFSignals.filter(function(s){ return s.bfDrop; }).length;
 
-    h += '<div style="background:var(--card);border:1px solid rgba(255,140,0,.3);border-radius:10px;padding:14px;margin-bottom:16px">';
+    h += '<div style="background:var(--card);border:1px solid rgba(var(--or-rgb),.3);border-radius:10px;padding:14px;margin-bottom:16px">';
     h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--gold);letter-spacing:1px;margin-bottom:10px">👀 BF SIGNALS LOGGED — ' + allBFSignals.length + ' total (' + sigDrops + ' with class drop)</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">';
     h += '<div><div style="font-size:1.4rem;font-weight:700;color:var(--g)">' + sigWins + '</div><div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">won same day</div></div>';
@@ -2196,7 +2194,7 @@ function renderBFWatch() {
     h += '</div>';
 
     // BF + class drop
-    h += '<div style="background:var(--card);border:1px solid rgba(255,140,0,.3);border-radius:10px;padding:14px">';
+    h += '<div style="background:var(--card);border:1px solid rgba(var(--or-rgb),.3);border-radius:10px;padding:14px">';
     h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--gold);letter-spacing:1px;margin-bottom:8px">👀⬇ BF + CLASS DROP</div>';
     if (dropTotal > 0) {
       h += '<div style="font-size:1.6rem;font-weight:700;color:var(--gold)">' + dropWins + '/' + dropTotal + '</div>';
@@ -2220,13 +2218,13 @@ function renderBFWatch() {
     nextTimeResults.forEach(function(r) {
       var resultCol   = r.won ? 'var(--g)' : r.placed ? 'var(--gold)' : 'var(--re)';
       var resultLabel = r.won ? '✓ WON' : r.placed ? '▲ PLACED' : '✗ UNPLACED';
-      var borderCol   = r.dropped ? 'rgba(255,140,0,.4)' : 'var(--bd)';
+      var borderCol   = r.dropped ? 'rgba(var(--or-rgb),.4)' : 'var(--bd)';
 
       h += '<div style="background:var(--card);border:1px solid ' + borderCol + ';border-radius:8px;padding:12px;margin-bottom:8px">';
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
       h += '<div>';
       h += '<span style="font-weight:700;font-size:.82rem">' + esc(r.name) + '</span>';
-      if (r.dropped) h += ' <span style="font-family:var(--mono);font-size:.62rem;background:rgba(255,140,0,.15);color:#ffaa00;border:1px solid rgba(255,140,0,.4);padding:1px 5px;border-radius:4px">👀⬇ BF DROP</span>';
+      if (r.dropped) h += ' <span style="font-family:var(--mono);font-size:.62rem;background:rgba(var(--or-rgb),.15);color:var(--gold);border:1px solid rgba(var(--or-rgb),.4);padding:1px 5px;border-radius:4px">👀⬇ BF DROP</span>';
       h += '</div>';
       h += '<span style="font-family:var(--mono);font-size:.7rem;color:' + resultCol + ';font-weight:700">' + resultLabel + '</span>';
       h += '</div>';
@@ -2234,7 +2232,7 @@ function renderBFWatch() {
       h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px;font-family:var(--mono);font-size:.62rem;color:var(--mt)">';
       h += '<div>BF run: ' + r.bfDate + (r.bfCls ? ' · Cls ' + r.bfCls : '') + '<br>' + esc(r.bfCourse) + '</div>';
       h += '<div>Next: ' + r.nextDate + (r.nextCls ? ' · Cls ' + r.nextCls : '') + '<br>' + esc(r.nextCourse);
-      if (r.dropped) h += ' <span style="color:#ffaa00">⬇ dropped</span>';
+      if (r.dropped) h += ' <span style="color:var(--gold)">⬇ dropped</span>';
       h += '</div>';
       h += '</div>';
 
@@ -2327,7 +2325,7 @@ function renderValueTab() {
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">';
 
   function statCard(label, wins, total, pnl, roi, highlight) {
-    var col = roi >= 0 ? 'var(--g)' : roi > -15 ? '#ffaa00' : 'var(--re)';
+    var col = roi >= 0 ? 'var(--g)' : roi > -15 ? 'var(--gold)' : 'var(--re)';
     var border = highlight ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
     return '<div style="background:var(--card);' + border + ';border-radius:10px;padding:12px;text-align:center">'
       + '<div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">' + label + '</div>'
@@ -2369,7 +2367,7 @@ function renderValueTab() {
     h += mpRaces.length + ' races. Model\u2019s pick: ' + mpW.length + ' won, <strong style="color:' + (mpRoi>=0?'var(--g)':'var(--re)') + '">'
       + (mpRoi>=0?'+':'') + Math.round(mpRoi) + '% ROI</strong>. Top pick in the same races: ' + tpW.length + ' won, '
       + (tpRoi>=0?'+':'') + Math.round(tpRoi) + '% ROI.';
-    if (mpRaces.length < 100) h += '<br><span style="color:#ffaa00">Small sample — wait for 100+ races before reading much into it.</span>';
+    if (mpRaces.length < 100) h += '<br><span style="color:var(--gold)">Small sample — wait for 100+ races before reading much into it.</span>';
   }
   h += '</div>';
 
@@ -2377,11 +2375,11 @@ function renderValueTab() {
   h += '<div style="background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:14px;font-family:var(--mono);font-size:.7rem">';
   h += '<div style="color:var(--mt);font-size:.6rem;letter-spacing:1px;margin-bottom:6px">VERDICT</div>';
   if (vpRaces.length < 30) {
-    h += '<span style="color:#ffaa00">⚠ Sample too small (' + vpRaces.length + ' races) — need 50+ for reliable conclusions. Keep logging.</span>';
+    h += '<span style="color:var(--gold)">⚠ Sample too small (' + vpRaces.length + ' races) — need 50+ for reliable conclusions. Keep logging.</span>';
   } else if (vpRoi > r1Roi && vpRoi > 0) {
     h += '<span style="color:var(--g)">✓ Value picking is outperforming both rank 1 and the favourite. The edge appears real at this sample size — consider using it as your primary pick.</span>';
   } else if (vpRoi > r1Roi && vpRoi <= 0) {
-    h += '<span style="color:#ffaa00">Value picking loses less than rank 1 but is still negative ROI. The theory is working directionally but hasn\u2019t flipped positive yet.</span>';
+    h += '<span style="color:var(--gold)">Value picking loses less than rank 1 but is still negative ROI. The theory is working directionally but hasn\u2019t flipped positive yet.</span>';
   } else if (vpRoi <= r1Roi) {
     h += '<span style="color:var(--re)">✗ Value picking is NOT outperforming rank 1 at this sample. The rank 1 strategy is better here — or both are losing and the market is just better than the model.</span>';
   }
@@ -2445,13 +2443,13 @@ function renderValueTab() {
     var r1Name  = e.predictions && e.predictions[0] ? e.predictions[0].name : '';
     var diff    = vpName !== r1Name;
     var vpPlc   = e.valuePickPlaced;
-    var col     = vpWon ? 'var(--g)' : vpPlc ? '#ffaa00' : 'var(--re)';
+    var col     = vpWon ? 'var(--g)' : vpPlc ? 'var(--gold)' : 'var(--re)';
     var lbl     = vpWon ? '✓ W' : vpPlc ? '▲ P' : '✗';
 
-    h += '<div style="background:var(--card);border:1px solid ' + (diff ? 'rgba(255,215,0,.3)' : 'var(--bd)') + ';border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div style="background:var(--card);border:1px solid ' + (diff ? 'rgba(var(--gold-rgb),.3)' : 'var(--bd)') + ';border-radius:6px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">';
     h += '<div>';
     h += '<div style="font-size:.75rem;font-weight:700">' + esc(vpName) + ' <span style="font-weight:400;color:var(--mt)">@ ' + (vpOdds||'?') + '</span>';
-    if (diff) h += ' <span style="font-family:var(--mono);font-size:.55rem;color:#ffd700">≠ rank1</span>';
+    if (diff) h += ' <span style="font-family:var(--mono);font-size:.55rem;color:var(--gold)">≠ rank1</span>';
     h += '</div>';
     h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px">' + e.date + ' · ' + esc(e.course) + ' · ' + esc(e.dist) + '</div>';
     h += '</div>';
@@ -2498,8 +2496,8 @@ function renderJockeyTab() {
     return '<div style="background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:8px">'
       + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);letter-spacing:1px;margin-bottom:6px">' + title + '</div>'
       + (g.n ? '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'
-          + '<div><span style="font-size:1.4rem;font-weight:700;color:#00e676">' + pct(g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">won (' + g.w + ')</span></div>'
-          + '<div><span style="font-size:1.4rem;font-weight:700;color:#ff5252">' + pct(g.n - g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">lost (' + (g.n - g.w) + ')</span></div>'
+          + '<div><span style="font-size:1.4rem;font-weight:700;color:var(--g)">' + pct(g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">won (' + g.w + ')</span></div>'
+          + '<div><span style="font-size:1.4rem;font-weight:700;color:var(--re)">' + pct(g.n - g.w, g.n) + '</span> <span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">lost (' + (g.n - g.w) + ')</span></div>'
           + '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">' + g.n + ' rides · ROI ' + roi(g.pnl, g.n) + ' at the logged price</div></div>'
         : '<div style="font-family:var(--mono);font-size:.65rem;color:var(--mt)">No rides yet.</div>')
       + (sub ? '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:6px">' + sub + '</div>' : '')
@@ -2510,7 +2508,7 @@ function renderJockeyTab() {
   h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
   [[10, '+10 and up'], [8, '+8 and up'], [6, '+6 and up']].forEach(function(o) {
     var on = _jkMin === o[0];
-    h += '<button onclick="setJockeyMin(' + o[0] + ')" style="padding:6px 10px;border-radius:6px;border:1px solid ' + (on ? '#00e676' : 'var(--bd)') + ';background:' + (on ? 'rgba(0,230,118,.12)' : 'transparent') + ';color:' + (on ? '#00e676' : 'var(--mt)') + ';font-family:var(--mono);font-size:.62rem;cursor:pointer">' + o[1] + '</button>';
+    h += '<button onclick="setJockeyMin(' + o[0] + ')" style="padding:6px 10px;border-radius:6px;border:1px solid ' + (on ? 'var(--g)' : 'var(--bd)') + ';background:' + (on ? 'rgba(var(--g-rgb),.12)' : 'transparent') + ';color:' + (on ? 'var(--g)' : 'var(--mt)') + ';font-family:var(--mono);font-size:.62rem;cursor:pointer">' + o[1] + '</button>';
   });
   h += '</div>';
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Runners whose jockey gets a bonus of +' + _jkMin + ' or more in the app (+12 Moore, Buick, Dettori · +11 J Doyle, O Murphy, C Keane, Soumillon · +10 Marquand, S Foley, Heffernan). '
@@ -2529,14 +2527,194 @@ function renderJockeyTab() {
 
   // Recent rides
   rides.sort(function(a, b){ return ((b.e.date || '') + (b.e.time || '')).localeCompare((a.e.date || '') + (a.e.time || '')); });
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin:16px 0 8px">RECENT RIDES</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin:16px 0 8px">RECENT RIDES</div>';
   rides.slice(0, 60).forEach(function(x) {
-    var c = x.won ? '#00e676' : '#ff5252';
+    var c = x.won ? 'var(--g)' : 'var(--re)';
     h += '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;background:var(--card);border:1px solid var(--bd);border-radius:6px;margin-bottom:4px">'
       + '<div style="width:18px;height:18px;border-radius:4px;background:' + c + ';color:#000;font-family:var(--mono);font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (x.won ? 'W' : 'L') + '</div>'
       + '<div style="min-width:0;flex:1"><div style="font-size:.72rem;font-weight:600">' + esc(x.p.name) + (x.p.odds > 1 ? ' <span style="color:var(--gold);font-family:var(--mono);font-weight:400">@ ' + (+x.p.odds).toFixed(2).replace(/0$/, '').replace(/\.0$/, '') + '</span>' : '') + '</div>'
       + '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt)">' + esc(x.p.jk || '') + ' +' + x.p.jp + ' · ' + esc(x.e.date || '') + ' ' + esc(x.e.time || '') + ' ' + esc(courseName(x.e.course)) + '</div></div></div>';
   });
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+// ══ WEATHER ══════════════════════════════════════════════════════════════════
+// Did the weather make the predictions fail? For every logged race (last 90
+// days) this fetches the weather at the course from Open-Meteo — the rain from
+// 7am to the off (after the morning going declaration), the rain in the 24
+// hours before that, and the wind at the off — then compares how the top pick
+// did against what the app expected (its own % for that pick).
+// Summaries are cached per race, so it's a one-off download per race.
+var WX_HIST_KEY = 'fi_wx_hist_v1';
+var WX_DAYS = 90;
+var _wxBusy = false, _wxMsg = '';
+function wxHistCache() { try { return JSON.parse(localStorage.getItem(WX_HIST_KEY) || '{}') || {}; } catch(e) { return {}; } }
+function wxHistSave(c) { try { localStorage.setItem(WX_HIST_KEY, JSON.stringify(c)); } catch(e) {} }
+function wxRaceId(e) { return (e.course || '') + '|' + (e.date || '') + '|' + (e.time || ''); }
+function wxCutoff() { return new Date(Date.now() - WX_DAYS * 86400000).toISOString().slice(0, 10); }
+
+function wxLoadMissing() {
+  if (_wxBusy || typeof fiWxHistory !== 'function') return;
+  var cache = wxHistCache(), cut = wxCutoff(), byCourse = {};
+  (loadedLog || []).forEach(function(e) {
+    if (!e.date || e.date < cut || !e.time || !(e.actual || [])[0]) return;
+    if (cache[wxRaceId(e)] !== undefined || !fiCourseGeo(e.course)) return;
+    var k = fiCourseKey(e.course);
+    (byCourse[k] = byCourse[k] || { course: e.course, races: [] }).races.push(e);
+  });
+  var jobs = Object.keys(byCourse).map(function(k){ return byCourse[k]; });
+  if (!jobs.length) return;
+  _wxBusy = true;
+  var done = 0, failed = 0;
+  function next() {
+    if (!jobs.length) return Promise.resolve();
+    var job = jobs.shift();
+    var dates = job.races.map(function(e){ return e.date; }).sort();
+    return fiWxHistory(job.course, dates[0], dates[dates.length - 1]).then(function(h) {
+      if (!h) { failed++; return; }
+      job.races.forEach(function(e) {
+        var w = fiWxAt(h, e.date, e.time);
+        // [rain 7am-off, rain prev 24h, wind, gust, code, temp]; null = no data
+        cache[wxRaceId(e)] = w ? [w.rainSince7, w.rainPrev24, w.wind, w.gust, w.code, w.temp] : null;
+      });
+    }, function(){ failed++; }).then(function() {
+      done++;
+      _wxMsg = 'Fetching the weather… ' + done + ' of ' + (done + jobs.length) + ' courses';
+      var st = document.getElementById('wx-status'); if (st) st.textContent = _wxMsg;
+      return next();
+    });
+  }
+  _wxMsg = 'Fetching the weather… 0 of ' + jobs.length + ' courses';
+  Promise.all([next(), next(), next()]).then(function() {
+    wxHistSave(cache);
+    _wxBusy = false;
+    _wxMsg = failed ? 'Weather unavailable for ' + failed + ' course' + (failed === 1 ? '' : 's') + ' — try again later.' : '';
+    if (currentTab === 'weather') renderWeatherTab();
+  });
+}
+
+// The top pick's chance from the logged prices, margin removed by the power
+// method (the predictor reads prices the same way from v10). Falls back to
+// the app's own % when a runner has no price.
+function wxDevig(odds) {
+  var q = odds.map(function(o){ return 1 / o; }), lo = 0.2, hi = 5, k = 1;
+  for (var it = 0; it < 60; it++) { k = (lo + hi) / 2; var s = 0; q.forEach(function(x){ s += Math.pow(x, k); }); if (s > 1) lo = k; else hi = k; }
+  var p = q.map(function(x){ return Math.pow(x, k); }), t = p.reduce(function(a, b){ return a + b; }, 0) || 1;
+  return p.map(function(x){ return x / t; });
+}
+function wxExpected(e) {
+  var P = e.predictions || [];
+  var full = !e.fieldSize || e.fieldSize === P.length;
+  if (full && P.length >= 2 && P.every(function(p){ return p.odds > 1; })) return wxDevig(P.map(function(p){ return p.odds; }))[0];
+  return ((P[0] && P[0].score) || 0) / 100;
+}
+
+function renderWeatherTab() {
+  var el = document.getElementById('tab-weather');
+  if (!el) return;
+  if (typeof fiWxHistory !== 'function') { el.innerHTML = '<div class="pad muted">Weather helpers didn\'t load — reload the page.</div>'; return; }
+  var cache = wxHistCache(), cut = wxCutoff();
+  var races = (loadedLog || []).filter(function(e){ return e.date && e.date >= cut && (e.actual || [])[0] && e.predictions && e.predictions.length; });
+  var withWx = races.filter(function(e){ return cache[wxRaceId(e)]; });
+  var missing = races.filter(function(e){ return cache[wxRaceId(e)] === undefined && fiCourseGeo(e.course); }).length;
+  if (missing && !_wxBusy) wxLoadMissing();
+
+  function blank() { return { n: 0, w: 0, exp: 0, fav: 0, pnl: 0 }; }
+  function add(g, e) {
+    var p = e.predictions[0];
+    g.n++; g.exp += wxExpected(e);
+    if (e.topPickWon) { g.w++; g.pnl += (p.odds > 1 ? p.odds - 1 : 0); } else g.pnl -= 1;
+    if (e.favWon) g.fav++;
+  }
+  var G = {
+    rain:  { dry: blank(), some: blank(), wet: blank() },
+    prev:  { dry: blank(), some: blank(), wet: blank() },
+    wind:  { calm: blank(), breezy: blank(), windy: blank() },
+    going: { firm: blank(), gs: blank(), soft: blank(), aw: blank() }
+  };
+  function goingBand(g) {
+    var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].trim();
+    if (/^(standard|slow|fast)/.test(k)) return 'aw';
+    if (k === 'soft' || k === 'heavy' || k === 'soft to heavy' || k === 'yielding to soft') return 'soft';
+    if (k === 'good to soft' || k === 'yielding' || k === 'good to yielding') return 'gs';
+    return k ? 'firm' : '';
+  }
+  races.forEach(function(e) {
+    var gb = goingBand(e.going); if (gb) add(G.going[gb], e);
+    var w = cache[wxRaceId(e)];
+    if (!w) return;
+    var aw = gb === 'aw';
+    if (!aw) { add(G.rain[fiRainBand(w[0])], e); add(G.prev[fiRainBand(w[1])], e); }
+    var wb = fiWindBand(w[3]); if (wb) add(G.wind[wb], e);
+  });
+
+  var pct = function(a, b){ return b ? Math.round(100 * a / b) + '%' : '—'; };
+  function sumG(list) { var t = blank(); list.forEach(function(g){ t.n += g.n; t.w += g.w; t.exp += g.exp; t.fav += g.fav; t.pnl += g.pnl; }); return t; }
+  function row(label, g) {
+    if (!g.n) return '<tr><td>' + label + '</td><td colspan="5" class="muted">no races</td></tr>';
+    var ae = g.exp ? g.w / g.exp : 0;
+    var cls = g.n < 30 ? 'muted' : ae < 0.85 ? 'bad' : ae > 1.15 ? 'good' : '';
+    return '<tr><td>' + label + '</td><td>' + g.n + '</td><td><strong>' + pct(g.w, g.n) + '</strong></td><td>' + pct(g.exp, g.n)
+      + '</td><td class="' + cls + '">' + (g.exp ? ae.toFixed(2) : '—') + '</td><td>' + pct(g.fav, g.n) + '</td></tr>';
+  }
+  function table(title, sub, rows) {
+    return '<div class="wx-card"><div class="wx-card-ttl">' + title + '</div>' + (sub ? '<div class="wx-card-sub">' + sub + '</div>' : '')
+      + '<table class="wx-tbl"><thead><tr><th></th><th>Races</th><th>Won</th><th>Exp.</th><th>A/E</th><th>Fav</th></tr></thead><tbody>'
+      + rows.join('') + '</tbody></table></div>';
+  }
+
+  var h = '<div class="pad">';
+  h += '<div class="wx-intro">How the top pick did in different weather, over the last ' + WX_DAYS + ' days. <strong>Won</strong> is how often the top pick won; <strong>Exp.</strong> is its chance from its price (margin removed); <strong>Fav</strong> is how often the favourite won. '
+    + '<strong>A/E</strong> is winners ÷ expected: compare each group with the <em>All turf races</em> row — lower means the picks did worse in that weather. Groups under 30 races are greyed out: too few to be sure.</div>';
+  h += '<div id="wx-status" class="wx-status">' + (_wxBusy ? _wxMsg : (_wxMsg || (withWx.length + ' of ' + races.length + ' races have weather'))) + '</div>';
+
+  // Verdict
+  var R = G.rain;
+  if (R.wet.n >= 10 && R.dry.n >= 30) {
+    var aeW = R.wet.exp ? R.wet.w / R.wet.exp : 0, aeD = R.dry.exp ? R.dry.w / R.dry.exp : 0;
+    var lost = Math.round(R.wet.exp - R.wet.w);
+    h += '<div class="wx-verdict">' + (aeW < aeD - 0.15
+        ? '🌧 <strong>Rain does seem to hurt.</strong> When 5mm or more fell between 7am and the off, top picks won ' + pct(R.wet.w, R.wet.n) + ' (' + R.wet.w + ' of ' + R.wet.n + ') against ' + pct(R.dry.w, R.dry.n) + ' in dry races'
+          + (lost > 0 ? ' — about ' + lost + ' fewer winners than the app expected.' : '.')
+        : aeW > aeD + 0.15
+        ? '☀️ <strong>No sign that rain hurts.</strong> Top picks actually did better in wet races (' + pct(R.wet.w, R.wet.n) + ' vs ' + pct(R.dry.w, R.dry.n) + ' dry).'
+        : '⛅ <strong>No clear weather effect yet.</strong> Top picks won ' + pct(R.wet.w, R.wet.n) + ' in wet races and ' + pct(R.dry.w, R.dry.n) + ' in dry ones; against what their prices said (A/E ' + aeW.toFixed(2) + ' wet, ' + aeD.toFixed(2) + ' dry) that\'s about the same.')
+      + (R.wet.n < 50 ? ' Only ' + R.wet.n + ' wet races so far, so treat this as a hint, not proof.' : '') + '</div>';
+  }
+
+  h += table('🌧 Rain from 7am to the off', 'Turf only. Rain after the going was declared, so the ground rides softer than stated.',
+    [row('Dry (under 0.5mm)', R.dry), row('Some rain (0.5–5mm)', R.some), row('Wet (5mm+)', R.wet), row('<em>All turf races</em>', sumG([R.dry, R.some, R.wet]))]);
+  h += table('🌦 Rain in the 24 hours before', 'Turf only. Mostly already in the declared going.',
+    [row('Dry', G.prev.dry), row('Some rain', G.prev.some), row('Wet (5mm+)', G.prev.wet)]);
+  h += table('💨 Wind at the off', 'Gusts in mph.',
+    [row('Calm (under 22)', G.wind.calm), row('Breezy (22–34)', G.wind.breezy), row('Windy (35+)', G.wind.windy)]);
+  h += table('🌱 Official going', 'From the log, no weather needed.',
+    [row('Good or firmer', G.going.firm), row('Good to soft / yielding', G.going.gs), row('Soft or heavy', G.going.soft), row('All-weather', G.going.aw)]);
+
+  // Meetings where the picks failed, with their weather
+  var mt = {};
+  races.forEach(function(e){ var k = e.date + '|' + courseName(e.course); (mt[k] = mt[k] || []).push(e); });
+  var bad = Object.keys(mt).map(function(k){
+    var v = mt[k], w = 0, exp = 0, rain = 0, rainN = 0, gust = 0;
+    v.forEach(function(e){ if (e.topPickWon) w++; exp += wxExpected(e);
+      var x = cache[wxRaceId(e)]; if (x) { rain = Math.max(rain, x[0] || 0); gust = Math.max(gust, x[3] || 0); rainN++; } });
+    var gc = {}; v.forEach(function(e){ if (e.going) gc[e.going] = (gc[e.going] || 0) + 1; });
+    var going = Object.keys(gc).sort(function(a, b){ return gc[b] - gc[a]; })[0] || '';
+    return { k: k, v: v, w: w, exp: exp, rain: rain, gust: gust, wx: rainN > 0, going: going };
+  }).filter(function(m){ return m.v.length >= 5 && m.w <= 1 && m.exp - m.w >= 1.5; })
+    .sort(function(a, b){ return (b.exp - b.w) - (a.exp - a.w); }).slice(0, 15);
+  if (bad.length) {
+    h += '<div class="wx-card"><div class="wx-card-ttl">❌ Meetings where the top picks failed</div><div class="wx-card-sub">5+ races, one winner or none. Rain is the most that fell from 7am to any race\'s off.</div>';
+    bad.forEach(function(m){
+      var p = m.k.split('|');
+      h += '<div class="wx-mt"><div><strong>' + esc(p[1]) + '</strong> <span class="muted">' + esc(p[0]) + ' · ' + esc(m.going) + '</span></div>'
+        + '<div class="wx-mt-r">' + m.w + ' of ' + m.v.length + ' won (expected ' + m.exp.toFixed(1) + ')'
+        + (m.wx ? ' · ' + (m.rain >= 0.5 ? '🌧 ' + fiRound1(m.rain) + 'mm' : '☀️ dry') + ' · 💨 ' + Math.round(m.gust) + 'mph' : '') + '</div></div>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="wx-foot">Weather: Open-Meteo (ERA5 archive and recent forecasts) at each course. Expected is the top pick\'s chance from the prices when the prediction was locked (the app\'s own % where a price is missing).</div>';
   h += '</div>';
   el.innerHTML = h;
 }
@@ -2560,7 +2738,7 @@ function ppMeetingDetails(m, mi, open) {
     var wp = preds.filter(function(p){ return p.name === winner; })[0];
     var pick = preds[0] ? preds[0].name : '';
     var res = e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L';
-    var rc  = res === 'W' ? '#00e676' : res === 'P' ? '#ffc107' : '#ff5252';
+    var rc  = res === 'W' ? 'var(--g)' : res === 'P' ? 'var(--gold)' : 'var(--re)';
     var pickTxt = e.topPickWon ? 'won' : e.topPickPlaced ? 'placed' : 'unplaced';
     h += '<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;' + (ri ? 'border-top:1px dashed var(--bd);' : '') + (ri >= 6 ? 'opacity:.55;' : '') + '">'
       + '<div style="font-family:var(--mono);font-size:.62rem;color:var(--mt);min-width:38px;padding-top:2px">' + esc(e.time || '') + '</div>'
@@ -2623,7 +2801,7 @@ function renderPlacepotTab() {
   });
   meetingList.sort(function(a,b){ return (a.date+a.course) < (b.date+b.course) ? 1 : -1; });
 
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin-bottom:8px">\ud83d\udcc5 DAY-BY-DAY RESULTS</div>';
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Each meeting shows the top pick result per race. A placepot needs your pick to PLACE in 6 races.</div>';
 
   meetingList.forEach(function(m, mi) {
@@ -2638,14 +2816,14 @@ function renderPlacepotTab() {
       statusCol = 'var(--mt)';
       statusTxt = 'Only ' + n + ' race' + (n===1?'':'s') + ' logged \u2014 need 6 for a placepot';
     } else if (landed) {
-      statusCol = '#00e676';
+      statusCol = 'var(--g)';
       statusTxt = '\u2713 PLACEPOT LANDS (all 6 placed)';
     } else {
-      statusCol = '#ff5252';
+      statusCol = 'var(--re)';
       statusTxt = '\u2717 Busted \u2014 ' + ppPlaced + '/6 placed';
     }
 
-    var border = landed ? 'border:1px solid #00e676' : 'border:1px solid var(--bd)';
+    var border = landed ? 'border:1px solid var(--g)' : 'border:1px solid var(--bd)';
     var mKey = (m.course || '') + '|' + (m.date || '');
     h += '<div onclick="togglePPMeeting(' + mi + ')" style="cursor:pointer;background:var(--card);' + border + ';border-radius:8px;padding:12px;margin-bottom:8px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
@@ -2661,7 +2839,7 @@ function renderPlacepotTab() {
     h += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
     m.races.forEach(function(e, ri) {
       var res = e.topPickWon ? 'W' : e.topPickPlaced ? 'P' : 'L';
-      var rc  = res === 'W' ? '#00e676' : res === 'P' ? '#ffc107' : '#ff5252';
+      var rc  = res === 'W' ? 'var(--g)' : res === 'P' ? 'var(--gold)' : 'var(--re)';
       var inPP = ri < 6;
       var pick = (e.predictions && e.predictions[0]) ? e.predictions[0].name : '';
       var opacity = inPP ? '1' : '0.4';
@@ -2676,11 +2854,11 @@ function renderPlacepotTab() {
   });
 
   // ── Aggregate summary by course (collapsed at bottom) ────────────────────
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:#00e676;letter-spacing:1px;margin:20px 0 8px">\ud83d\udcca PLACE RATE BY COURSE (all-time)</div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--g);letter-spacing:1px;margin:20px 0 8px">\ud83d\udcca PLACE RATE BY COURSE (all-time)</div>';
   h += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-bottom:10px">Average across every logged race at each course \u2014 use to spot which tracks the model reads well.</div>';
   courseList.forEach(function(c) {
     var pr = Math.round(c.placeRate*100);
-    var col = c.placeRate>=0.70?'#00e676':c.placeRate>=0.55?'#ffaa00':'#ff5252';
+    var col = c.placeRate>=0.70?'var(--g)':c.placeRate>=0.55?'var(--gold)':'var(--re)';
     var enough = c.races >= 6;
     h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--card);border:1px solid var(--bd);border-radius:6px;margin-bottom:5px;opacity:' + (enough?'1':'0.55') + '">';
     h += '<span style="font-size:.72rem;font-weight:600">' + esc(c.name) + '</span>';
@@ -2903,7 +3081,7 @@ function renderConfTab() {
 
   // the honest read
   var breakEven = 100 / A.avgOdds;
-  h += '<div style="background:var(--card);border:1px solid ' + (A.roi>=0?'rgba(0,230,118,.35)':'rgba(255,193,7,.35)')
+  h += '<div style="background:var(--card);border:1px solid ' + (A.roi>=0?'rgba(var(--g-rgb),.35)':'rgba(var(--gold-rgb),.35)')
      + ';border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:.66rem;color:var(--mt);line-height:1.6">'
      + 'Picks win <b style="color:var(--tx)">' + A.strike.toFixed(0) + '%</b> of the time and hit the frame <b style="color:var(--tx)">'
      + A.frame.toFixed(0) + '%</b> — but at an average price of <b style="color:var(--tx)">' + A.avgOdds.toFixed(2)
@@ -2938,8 +3116,8 @@ function renderConfTab() {
     var won = !!e.topPickWon, plc = !won && !!e.topPickPlaced;
     var col = won ? 'var(--g)' : plc ? 'var(--gold)' : 'var(--re)';
     var badge = won ? '✓ WON' : plc ? 'PLACED' : 'LOST';
-    var bg = won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
-    var bs = won ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.62rem'
+    var bg = won ? 'rgba(var(--g-rgb),0.08)' : 'var(--card)';
+    var bs = won ? 'display:inline-block;background:var(--g);color:var(--g-ink);font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.62rem'
                  : 'font-family:var(--mono);font-size:.66rem;font-weight:700;color:' + col;
     var pl = won ? (10*e.topPickOdds - 10) : -10;
     var nm = (e.predictions && e.predictions[0]) ? e.predictions[0].name : '?';
@@ -3065,9 +3243,9 @@ function renderNapTab() {
     list.forEach(function(n){
       var col = n.won ? 'var(--g)' : n.placed ? 'var(--gold)' : 'var(--re)';
       var badge = n.won ? '✓ WON' : n.placed ? 'PLACED' : 'LOST';
-      var rowBg = n.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+      var rowBg = n.won ? 'rgba(var(--g-rgb),0.08)' : 'var(--card)';
       var badgeStyle = n.won
-        ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
+        ? 'display:inline-block;background:var(--g);color:var(--g-ink);font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
         : 'font-family:var(--mono);font-size:.68rem;font-weight:700;color:' + col;
       h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">';
       h += '<div><div style="font-size:.74rem;color:var(--tx);font-weight:600">' + n.name
@@ -3142,9 +3320,9 @@ function renderCoursePicks() {
   picks.slice(0, 80).forEach(function(p){
     var col = p.won ? 'var(--g)' : p.placed ? 'var(--gold)' : 'var(--re)';
     var badge = p.won ? '✓ WON' : p.placed ? 'PLACED' : 'LOST';
-    var rowBg = p.won ? 'rgba(0,230,118,0.08)' : 'var(--card)';
+    var rowBg = p.won ? 'rgba(var(--g-rgb),0.08)' : 'var(--card)';
     var badgeStyle = p.won
-      ? 'display:inline-block;background:var(--g);color:#04120a;font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
+      ? 'display:inline-block;background:var(--g);color:var(--g-ink);font-weight:800;padding:2px 8px;border-radius:5px;font-family:var(--mono);font-size:.64rem'
       : 'font-family:var(--mono);font-size:.68rem;font-weight:700;color:' + col;
     h += '<div style="background:' + rowBg + ';border:1px solid var(--bd);border-left:3px solid ' + col + ';border-radius:8px;padding:9px 12px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center">';
     h += '<div><div style="font-size:.72rem;color:var(--tx);font-weight:600">' + p.course + ' <span style="color:var(--mt);font-weight:400">· ' + p.name + (p.hasOdds ? ' @' + p.odds.toFixed(2) : '') + '</span></div>';
@@ -3159,3 +3337,11 @@ function renderCoursePicks() {
 }
 
 </script>
+<script>
+(function(){
+  function fixTabs(){ var h=document.querySelector('.hdr'), t=document.getElementById('tab-bar'); if (h && t) t.style.top = h.offsetHeight + 'px'; }
+  window.addEventListener('load', fixTabs); window.addEventListener('resize', fixTabs); setTimeout(fixTabs, 0);
+})();
+</script>
+</body>
+</html>

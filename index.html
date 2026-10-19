@@ -6,175 +6,148 @@
 <title>🏇 Racecourse Predictor</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Formintel">
+<meta name="theme-color" content="#0b100e">
+<script src="theme.js?v=1.0"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=1.0">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js">
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
-:root{--g:#00e676;--gold:#ffc107;--bg:#07100a;--sf:#0e1a11;--sf2:#132017;--bd:#1c3024;--tx:#c8ddd0;--mt:#4a6a55;--bl:#40c4ff;--re:#ff5252;--pace:#ff6d00;--closer:#7c4dff}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tx)}
-.hdr{background:#0b1a0e;border-bottom:1px solid var(--bd);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
-.hdr h1{font-size:1.5rem;color:var(--g);letter-spacing:3px}
-.mpill{font-size:.6rem;padding:3px 8px;border-radius:20px;border:1px solid var(--bd);color:var(--mt)}
-.mpill.ok{border-color:var(--g);color:var(--g);background:rgba(0,230,118,.08)}
-.nav{display:flex;background:var(--sf);border-bottom:1px solid var(--bd);position:sticky;top:49px;z-index:190}
-.tab{flex:1;padding:10px 4px;text-align:center;cursor:pointer;font-size:.68rem;letter-spacing:.5px;color:var(--mt);border-bottom:2px solid transparent;text-transform:uppercase}
-.tab.on{color:var(--g);border-color:var(--g)}
-.scr{display:none;padding:14px 14px 80px}
+body{min-height:100vh}
+.hdr{background:var(--hdr);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--bd);padding:10px 16px;padding-top:max(10px, env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.hdr h1{font-size:1.3rem;font-weight:800;color:var(--tx);letter-spacing:-.5px}
+.hdr h1 b{color:var(--g);font-weight:800}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo-mark{width:38px;height:38px;border-radius:11px;background:rgba(var(--g-rgb),.14);border:1px solid rgba(var(--g-rgb),.35);color:var(--g);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ver{font-family:var(--mono);font-size:.56rem;color:var(--mt);letter-spacing:.3px;margin-top:1px}
+.mpill{font-size:.62rem;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--bd);color:var(--mt);background:var(--sf2);white-space:nowrap}
+.mpill.ok{border-color:rgba(var(--g-rgb),.45);color:var(--g);background:rgba(var(--g-rgb),.1)}
+.nav{display:flex;gap:4px;background:var(--hdr);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--bd);position:sticky;top:55px;z-index:190;padding:6px 8px;overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.tab{flex:1 0 auto;padding:8px 10px;text-align:center;cursor:pointer;font-size:.72rem;font-weight:600;color:var(--mt);border-radius:10px;white-space:nowrap;transition:background .15s,color .15s}
+.tab.on{color:var(--g-ink);background:var(--g)}
+.scr{display:none;padding:14px 14px 90px;max-width:760px;margin:0 auto}
 .scr.on{display:block}
-.card{
-  background:linear-gradient(180deg, #0f1a13 0%, #0b150f 100%);
-  border:1px solid var(--bd);
-  border-radius:14px;
-  padding:16px;
-  margin-bottom:12px;
-  box-shadow:
-    0 1px 0 rgba(120,255,180,.06) inset,
-    0 6px 16px rgba(0,0,0,.4),
-    0 0 0 1px rgba(0,0,0,.3);
-}
-.ct{font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
-.btn{font-size:.78rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:12px 16px;border:none;border-radius:8px;cursor:pointer;display:block;width:100%;text-align:center;margin-bottom:8px}
-.bg{background:var(--g);color:var(--bg)}.bg:disabled{background:var(--bd);color:var(--mt);cursor:not-allowed}
-.bo{
-  position:relative;
-  background:linear-gradient(180deg, rgba(30,60,42,.55) 0%, rgba(16,32,22,.65) 50%, rgba(10,22,16,.7) 100%);
-  -webkit-backdrop-filter:blur(12px) saturate(1.4);
-  backdrop-filter:blur(12px) saturate(1.4);
-  color:#00e676;
-  border:1.5px solid rgba(0,230,118,.85);
-  border-radius:13px;
-  font-weight:700;
-  text-shadow:0 0 10px rgba(0,230,118,.55), 0 1px 1px rgba(0,0,0,.8);
-  box-shadow:
-    0 0 0 1px rgba(0,230,118,.18),
-    0 0 18px rgba(0,230,118,.4),
-    0 6px 14px rgba(0,0,0,.5),
-    inset 0 1.5px 1px rgba(150,255,200,.45),
-    inset 0 -4px 10px rgba(0,0,0,.45);
-  transition:transform .08s ease, box-shadow .15s ease, background .15s ease;
-}
-.bo:hover{
-  background:linear-gradient(180deg, rgba(40,75,52,.6) 0%, rgba(20,40,28,.7) 50%, rgba(12,26,18,.75) 100%);
-  box-shadow:
-    0 0 0 1px rgba(0,230,118,.25),
-    0 0 24px rgba(0,230,118,.55),
-    0 6px 16px rgba(0,0,0,.5),
-    inset 0 1.5px 1px rgba(150,255,200,.5),
-    inset 0 -4px 10px rgba(0,0,0,.45);
-}
-.bo:active{
-  transform:translateY(2px);
-  box-shadow:
-    0 0 0 1px rgba(0,230,118,.2),
-    0 0 10px rgba(0,230,118,.35),
-    0 1px 3px rgba(0,0,0,.5),
-    inset 0 2px 8px rgba(0,0,0,.6);
-}
-.bo:disabled{opacity:.4;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
-.drop{border:2px dashed var(--bd);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;position:relative}
-.drop.ov{border-color:var(--g);background:rgba(0,230,118,.04)}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.ct{font-size:1rem;font-weight:700;color:var(--tx);letter-spacing:-.2px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.btn{font-family:var(--sans);font-size:.8rem;font-weight:700;letter-spacing:.1px;padding:12px 16px;border:none;border-radius:12px;cursor:pointer;display:block;width:100%;text-align:center;margin-bottom:8px;transition:transform .08s ease,filter .15s ease}
+.btn:active{transform:scale(.985)}
+.bg{background:var(--g);color:var(--g-ink)}.bg:disabled{background:var(--bd);color:var(--mt);cursor:not-allowed}
+.bo{background:var(--sf2);color:var(--tx);border:1px solid var(--bd2);box-shadow:var(--shadow-sm)}
+.bo:hover{border-color:rgba(var(--g-rgb),.6)}
+.bo:active{background:rgba(var(--g-rgb),.08)}
+.bo:disabled{opacity:.45;box-shadow:none}
+.drop{border:2px dashed var(--bd2);border-radius:var(--radius);background:var(--sf2);padding:28px 20px;text-align:center;cursor:pointer;position:relative}
+.drop.ov{border-color:var(--g);background:rgba(var(--g-rgb),.04)}
 .drop input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
 .drop .ico{font-size:2rem;display:block;margin-bottom:8px}
 .drop p{font-size:.8rem;color:var(--mt);margin-top:4px}
 .rlist{display:flex;flex-direction:column;gap:8px}
-.ri{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between}
-.ri.sel{border-color:var(--g);background:rgba(0,230,118,.06)}
-.ri .tm{font-size:1.2rem;color:var(--g)}
+.ri{background:var(--sf);border:1px solid var(--bd);border-radius:12px;box-shadow:var(--shadow-sm);padding:12px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between}
+.ri.sel{border-color:var(--g);background:rgba(var(--g-rgb),.06)}
+.ri .tm{font-size:1.15rem;font-weight:800;letter-spacing:-.3px;color:var(--g)}
 .ri .nm{font-size:.75rem;color:var(--mt);margin-top:2px}
-.tbadge{font-size:.58rem;padding:2px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);display:inline-block;margin-top:4px}
+.tbadge{font-size:.58rem;padding:2px 6px;border-radius:3px;background:rgba(var(--g-rgb),.15);color:var(--g);display:inline-block;margin-top:4px}
 .prog{background:var(--sf2);border-radius:8px;padding:14px;text-align:center}
 .spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 8px}
 @keyframes sp{to{transform:rotate(360deg)}}
-.re{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
-.re .sn{position:absolute;top:8px;right:10px;font-size:1.5rem;color:rgba(100,160,120,.35);pointer-events:none}
+.re{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:8px;position:relative}
+.re .sn{position:absolute;top:8px;right:10px;font-size:1.5rem;color:rgba(var(--g-rgb),.3);pointer-events:none}
 .re .hn{font-size:.88rem;font-weight:600;color:var(--tx)}
-.re .orb{font-size:.63rem;padding:2px 6px;border-radius:4px;background:#0a0f0d;color:var(--mt);border:1px solid var(--bd)}
+.re .orb{font-size:.63rem;padding:2px 6px;border-radius:4px;background:var(--inp);color:var(--mt);border:1px solid var(--bd)}
 .re .hh{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
 .re .rm{font-size:.7rem;color:var(--mt);margin-bottom:8px}
 .re.nr{opacity:.45;border-style:dashed;border-color:var(--re)}
 .re.nr .hn{text-decoration:line-through;color:var(--mt)}
 .nr-btn{font-size:.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:3px;cursor:pointer;border:1px solid var(--bd);background:transparent;color:var(--mt);transition:all .15s;margin-left:4px}
-.re.nr .nr-btn{border-color:var(--re);color:var(--re);background:rgba(255,82,82,.08)}
-.nr-badge{font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:3px;background:rgba(255,82,82,.12);color:var(--re);border:1px solid var(--re);display:none;margin-left:4px}
+.re.nr .nr-btn{border-color:var(--re);color:var(--re);background:rgba(var(--re-rgb),.08)}
+.nr-badge{font-size:.62rem;font-weight:600;padding:2px 7px;border-radius:3px;background:rgba(var(--re-rgb),.12);color:var(--re);border:1px solid var(--re);display:none;margin-left:4px}
 .re.nr .nr-badge{display:inline-block}
-.oi{background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px}
+.oi{background:var(--inp);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px}
 .oi label{font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);white-space:nowrap}
 .oi input{flex:1;background:transparent;border:none;color:var(--gold);font-size:1rem;font-weight:600;text-align:right;width:80px}
 .oi input:focus{outline:none}
 .mk{font-size:.6rem;padding:2px 6px;border-radius:3px}
-.mk.tip{background:rgba(0,230,118,.15);color:var(--g)}
-.mk.wch{background:rgba(64,196,255,.1);color:var(--bl)}
-.mk.front{background:rgba(255,109,0,.15);color:var(--pace)}
-.mk.closer{background:rgba(124,77,255,.15);color:var(--closer)}
-.mk.steam{background:rgba(0,176,255,.15);color:#00b0ff}
-.mk.drift{background:rgba(255,109,0,.15);color:#ff6d00}
-.rwin{background:linear-gradient(135deg,rgba(0,230,118,.08),rgba(0,230,118,.02));border:2px solid var(--g);border-radius:12px;padding:18px;margin-bottom:12px}
-.rval{background:linear-gradient(135deg,rgba(255,193,7,.07),rgba(255,193,7,.02));border:2px solid var(--gold);border-radius:12px;padding:18px;margin-bottom:12px;position:relative;padding-top:22px}
+.mk.tip{background:rgba(var(--g-rgb),.15);color:var(--g)}
+.mk.wch{background:rgba(var(--bl-rgb),.1);color:var(--bl)}
+.mk.front{background:rgba(var(--or-rgb),.15);color:var(--pace)}
+.mk.closer{background:rgba(var(--pu-rgb),.15);color:var(--closer)}
+.mk.steam{background:rgba(var(--bl-rgb),.15);color:var(--bl)}
+.mk.drift{background:rgba(var(--or-rgb),.15);color:var(--or)}
+.rwin{background:linear-gradient(135deg,rgba(var(--g-rgb),.12),rgba(var(--g-rgb),.03));border:1.5px solid rgba(var(--g-rgb),.55);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:12px}
+.rval{background:linear-gradient(135deg,rgba(var(--gold-rgb),.12),rgba(var(--gold-rgb),.03));border:1.5px solid rgba(var(--gold-rgb),.55);border-radius:var(--radius);padding:18px;margin-bottom:12px;position:relative;padding-top:22px}
 .vflag{position:absolute;top:-10px;left:16px;background:var(--gold);color:var(--bg);font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
 .slbl{font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:var(--mt);margin-bottom:4px}
-.bn{font-size:1.9rem;letter-spacing:1px;line-height:1;margin-bottom:10px}
+.bn{font-size:1.75rem;font-weight:800;letter-spacing:-.6px;line-height:1.1;margin-bottom:10px}
 .bn.gn{color:var(--g)}.bn.gd{color:var(--gold)}
-.rd{display:flex;justify-content:space-between;padding:5px 0;font-size:.8rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.rd{display:flex;justify-content:space-between;padding:5px 0;font-size:.8rem;border-bottom:1px solid rgba(var(--ov-rgb),.04)}
 .rd:last-of-type{border-bottom:none}
 .rd span:first-child{color:var(--mt)}
-.rd span:last-child{font-family:'IBM Plex Mono',monospace}
+.rd span:last-child{font-family:var(--mono)}
 .cb{background:var(--bd);height:5px;border-radius:3px;margin-top:10px;overflow:hidden}
 .cf{height:100%;border-radius:3px}
-.arc{background:var(--sf);border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:12px}
-.art{font-size:1rem;color:var(--g);letter-spacing:2px;padding:12px 14px;border-bottom:1px solid var(--bd)}
-.rrr{display:flex;align-items:center;padding:10px 14px;gap:10px;border-bottom:1px solid rgba(28,48,36,.6)}
+.arc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:12px}
+.art{font-size:.95rem;font-weight:700;color:var(--tx);padding:12px 14px;border-bottom:1px solid var(--bd)}
+.rrr{display:flex;align-items:center;padding:10px 14px;gap:10px;border-bottom:1px solid rgba(var(--bd-rgb),.6)}
 .rrr:last-child{border-bottom:none}
-.rrr.p1{background:rgba(0,230,118,.06)}.rrr.p2{background:rgba(255,193,7,.04)}.rrr.p3{background:rgba(255,138,101,.03)}
-.rp{font-size:1.4rem;width:24px;text-align:center;flex-shrink:0}
-.p1 .rp{color:var(--g)}.p2 .rp{color:var(--gold)}.p3 .rp{color:#ff8a65}
+.rrr.p1{background:rgba(var(--g-rgb),.06)}.rrr.p2{background:rgba(var(--gold-rgb),.04)}.rrr.p3{background:rgba(var(--or-rgb),.03)}
+.rp{font-size:1.25rem;font-weight:800;width:24px;text-align:center;flex-shrink:0}
+.p1 .rp{color:var(--g)}.p2 .rp{color:var(--gold)}.p3 .rp{color:var(--or)}
 .ri2{flex:1;min-width:0}
 .rn2{font-size:.88rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rs2{font-size:.68rem;color:var(--mt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rr{text-align:right;flex-shrink:0}
 .ro2{font-size:1.2rem;color:var(--mt)}
 .rsc{font-size:.6rem;padding:2px 5px;border-radius:3px;background:var(--sf2);color:var(--mt)}
-.p1 .rsc{background:rgba(0,230,118,.15);color:var(--g)}.p2 .rsc{background:rgba(255,193,7,.12);color:var(--gold)}
-.nva{background:rgba(255,82,82,.06);border:1px solid rgba(255,82,82,.2);border-radius:8px;padding:14px;text-align:center;color:#ff8a80;font-size:.82rem;margin-bottom:12px;line-height:1.5}
+.p1 .rsc{background:rgba(var(--g-rgb),.15);color:var(--g)}.p2 .rsc{background:rgba(var(--gold-rgb),.12);color:var(--gold)}
+.nva{background:rgba(var(--re-rgb),.06);border:1px solid rgba(var(--re-rgb),.2);border-radius:8px;padding:14px;text-align:center;color:var(--re-tx);font-size:.82rem;margin-bottom:12px;line-height:1.5}
 .sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .sb{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px;text-align:center}
-.sv{font-size:1.8rem;color:var(--g)}
+.sv{font-size:1.7rem;font-weight:800;letter-spacing:-.5px;color:var(--g)}
 .sl{font-size:.62rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
-.al{padding:10px 14px;border-radius:8px;font-size:.82rem;margin-bottom:12px;border-left:3px solid;line-height:1.4}
-.als{background:rgba(0,230,118,.08);border-color:var(--g);color:#9ef5c0}
-.alw{background:rgba(255,193,7,.08);border-color:var(--gold);color:#ffe082}
-.ali{background:rgba(64,196,255,.08);border-color:var(--bl);color:#80d8ff}
+.al{padding:10px 14px;border-radius:12px;font-size:.82rem;margin-bottom:12px;border-left:3px solid;line-height:1.4}
+.als{background:rgba(var(--g-rgb),.08);border-color:var(--g);color:var(--g-tx)}
+.alw{background:rgba(var(--gold-rgb),.08);border-color:var(--gold);color:var(--gold-tx)}
+.ali{background:rgba(var(--bl-rgb),.08);border-color:var(--bl);color:var(--bl-tx)}
 .mu{color:var(--mt);font-size:.82rem;line-height:1.5}
 .fwr{margin-bottom:7px}
 .fwl{display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:3px}
 .fwl span:last-child{color:var(--gold)}
 .fwb{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
 .fwf{height:100%;background:var(--g);border-radius:2px}
-select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:6px;font-size:.8rem;-webkit-appearance:none;font-family:'IBM Plex Sans',sans-serif}
+select{background:var(--inp);border:1px solid var(--bd2);color:var(--tx);padding:8px 10px;border-radius:10px;font-size:.82rem;-webkit-appearance:none;font-family:var(--sans)}
+input,textarea{font-family:var(--sans)}
 /* Bet Advisor */
-.ba-card{border-radius:12px;padding:16px;margin-bottom:12px;position:relative}
-.ba-go{background:linear-gradient(135deg,rgba(0,230,118,.10),rgba(0,230,118,.03));border:2px solid var(--g)}
-.ba-ew{background:linear-gradient(135deg,rgba(64,196,255,.08),rgba(64,196,255,.02));border:2px solid var(--bl)}
-.ba-place{background:linear-gradient(135deg,rgba(124,77,255,.08),rgba(124,77,255,.02));border:2px solid var(--closer)}
-.ba-nobet{background:rgba(255,82,82,.05);border:1px solid rgba(255,82,82,.25)}
+.ba-card{border-radius:var(--radius);padding:16px;margin-bottom:12px;position:relative}
+.ba-go{background:linear-gradient(135deg,rgba(var(--g-rgb),.10),rgba(var(--g-rgb),.03));border:2px solid var(--g)}
+.ba-ew{background:linear-gradient(135deg,rgba(var(--bl-rgb),.08),rgba(var(--bl-rgb),.02));border:2px solid var(--bl)}
+.ba-place{background:linear-gradient(135deg,rgba(var(--pu-rgb),.08),rgba(var(--pu-rgb),.02));border:2px solid var(--closer)}
+.ba-nobet{background:rgba(var(--re-rgb),.05);border:1px solid rgba(var(--re-rgb),.25)}
 .ba-flag{position:absolute;top:-10px;left:16px;font-size:.58rem;font-weight:600;letter-spacing:1px;padding:3px 9px;border-radius:3px}
 .ba-go .ba-flag{background:var(--g);color:var(--bg)}
 .ba-ew .ba-flag{background:var(--bl);color:var(--bg)}
 .ba-place .ba-flag{background:var(--closer);color:#fff}
-.ba-nobet .ba-flag{background:#ff5252;color:#fff}
-.ba-rec{font-size:2rem;letter-spacing:1px;line-height:1;margin-bottom:8px}
-.ba-go .ba-rec{color:var(--g)}.ba-ew .ba-rec{color:var(--bl)}.ba-place .ba-rec{color:var(--closer)}.ba-nobet .ba-rec{color:#ff8a80;font-size:1.4rem}
+.ba-nobet .ba-flag{background:var(--re);color:#fff}
+.ba-rec{font-size:1.6rem;font-weight:800;letter-spacing:-.5px;line-height:1.1;margin-bottom:8px}
+.ba-go .ba-rec{color:var(--g)}.ba-ew .ba-rec{color:var(--bl)}.ba-place .ba-rec{color:var(--closer)}.ba-nobet .ba-rec{color:var(--re-tx);font-size:1.4rem}
 .ba-opts{display:flex;flex-direction:column;gap:8px;margin:10px 0}
-.ba-opt{background:#0a0f0d;border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
-.ba-opt.best{border-color:var(--g);background:rgba(0,230,118,.06)}
+.ba-opt{background:var(--inp);border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
+.ba-opt.best{border-color:var(--g);background:rgba(var(--g-rgb),.06)}
 .ba-opt-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px}
 .ba-opt-ev{font-size:1.1rem}
-.ba-opt-ev.pos{color:var(--g)}.ba-opt-ev.neg{color:#ff8a80}
+.ba-opt-ev.pos{color:var(--g)}.ba-opt-ev.neg{color:var(--re-tx)}
 .ba-opt-roi{font-size:.65rem;color:var(--mt);line-height:1.4;margin-top:2px}
-.ba-stake{display:flex;align-items:center;gap:8px;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:10px}
+.ba-stake{display:flex;align-items:center;gap:8px;background:var(--inp);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:10px}
 .ba-stake label{font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);white-space:nowrap}
 .ba-stake input{flex:1;background:transparent;border:none;color:var(--gold);font-size:1rem;font-weight:600;text-align:right;outline:none;width:60px}
 .ba-reason{font-size:.75rem;color:var(--mt);line-height:1.5;margin-top:6px}
+.dutch-card{margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.3)}
+.dutch-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;font-size:.86rem;border-bottom:1px solid rgba(var(--gold-rgb),.15)}
+.dutch-row:last-of-type{border-bottom:none}
+.dutch-stake{font-family:var(--mono);font-weight:600;color:var(--gold)}
 .ba-kelly{font-size:.65rem;color:var(--mt);margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)}
 
 /* ── Lucky 15 ───────────────────────────────────────────── */
@@ -182,7 +155,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .l15-meeting-name{font-size:1.1rem;color:var(--g);letter-spacing:1px}
 .l15-meeting-info{font-size:.65rem;color:var(--mt);margin-top:2px}
 .l15-clear{background:transparent;border:1px solid var(--re);color:var(--re);border-radius:4px;padding:3px 8px;font-size:.6rem;cursor:pointer}
-.l15-card{background:var(--sf);border:2px solid var(--g);border-radius:12px;padding:16px;margin-bottom:10px}
+.l15-card{background:var(--sf);border:1.5px solid rgba(var(--g-rgb),.55);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:10px}
 .l15-card.silver{border-color:var(--gold)}
 .l15-card.bronze{border-color:var(--mt)}
 .l15-rank{font-size:.7rem;letter-spacing:2px;color:var(--g);margin-bottom:8px}
@@ -198,50 +171,50 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .l15-ev-num{font-size:1.8rem;color:var(--g)}
 .l15-card.silver .l15-ev-num{color:var(--gold)}
 .l15-ev-label{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-top:2px}
-.l15-outcomes{background:#0a0f0d;border-radius:6px;padding:10px;margin-top:10px}
-.l15-outcome-row{display:flex;justify-content:space-between;font-size:.72rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.l15-outcomes{background:var(--inp);border-radius:6px;padding:10px;margin-top:10px}
+.l15-outcome-row{display:flex;justify-content:space-between;font-size:.72rem;padding:3px 0;border-bottom:1px solid rgba(var(--ov-rgb),.04)}
 .l15-outcome-row:last-child{border-bottom:none}
 /* ── Monte Carlo ──────────────────────────────────────────── */
 .mc-bar-wrap{background:var(--bd);border-radius:4px;height:8px;overflow:hidden;margin-top:4px}
 .mc-bar{height:100%;border-radius:4px;background:var(--g);transition:width .5s ease}
 .mc-combo{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:6px}
-.mc-combo.best{border-color:var(--g);background:rgba(0,230,118,.04)}
+.mc-combo.best{border-color:var(--g);background:rgba(var(--g-rgb),.04)}
 /* ── AI Analysis ─────────────────────────────────────────── */
-.ai-card{background:linear-gradient(135deg,rgba(124,77,255,.08),rgba(64,196,255,.05));border:2px solid rgba(124,77,255,.4);border-radius:12px;padding:16px;margin-bottom:12px}
-.ai-card .ct{color:#ce93d8;border-color:rgba(124,77,255,.3)}
-.ai-spin{width:22px;height:22px;border:3px solid rgba(124,77,255,.2);border-top-color:#ce93d8;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
+.ai-card{background:linear-gradient(135deg,rgba(var(--pu-rgb),.08),rgba(var(--bl-rgb),.05));border:2px solid rgba(var(--pu-rgb),.4);border-radius:12px;padding:16px;margin-bottom:12px}
+.ai-card .ct{color:var(--pu-tx);border-color:rgba(var(--pu-rgb),.3)}
+.ai-spin{width:22px;height:22px;border:3px solid rgba(var(--pu-rgb),.2);border-top-color:var(--pu-tx);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px}
 .ai-section{margin-bottom:14px}
-.ai-section-title{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:rgba(124,77,255,.8);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(124,77,255,.2)}
+.ai-section-title{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:rgba(var(--pu-rgb),.8);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(var(--pu-rgb),.2)}
 .ai-text{font-size:.82rem;color:var(--tx);line-height:1.65}
-.ai-pick{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(124,77,255,.06);border:1px solid rgba(124,77,255,.2);border-radius:7px;margin-bottom:6px}
-.ai-pick-rank{font-size:1.3rem;color:#ce93d8;width:22px;text-align:center;flex-shrink:0}
+.ai-pick{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(var(--pu-rgb),.06);border:1px solid rgba(var(--pu-rgb),.2);border-radius:7px;margin-bottom:6px}
+.ai-pick-rank{font-size:1.3rem;color:var(--pu-tx);width:22px;text-align:center;flex-shrink:0}
 .ai-pick-name{font-size:.85rem;font-weight:600;color:var(--tx)}
 .ai-pick-reason{font-size:.68rem;color:var(--mt);margin-top:2px}
-.ai-agree{background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.3)}
+.ai-agree{background:rgba(var(--g-rgb),.08);border-color:rgba(var(--g-rgb),.3)}
 .ai-agree .ai-pick-rank{color:var(--g)}
-.ai-differ{background:rgba(255,193,7,.07);border-color:rgba(255,193,7,.3)}
+.ai-differ{background:rgba(var(--gold-rgb),.07);border-color:rgba(var(--gold-rgb),.3)}
 .ai-differ .ai-pick-rank{color:var(--gold)}
-.ai-warn{background:rgba(255,82,82,.07);border-left:3px solid var(--re);border-radius:6px;padding:9px 12px;font-size:.78rem;color:#ff8a80;margin-bottom:8px;line-height:1.5}
+.ai-warn{background:rgba(var(--re-rgb),.07);border-left:3px solid var(--re);border-radius:6px;padding:9px 12px;font-size:.78rem;color:var(--re-tx);margin-bottom:8px;line-height:1.5}
 .ai-note{font-size:.68rem;color:var(--mt);text-align:center;margin-top:8px;line-height:1.4}
-.btn-ai{background:linear-gradient(135deg,rgba(124,77,255,.3),rgba(64,196,255,.2));color:#ce93d8;border:1px solid rgba(124,77,255,.5);font-size:.75rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:12px 16px;border-radius:8px;cursor:pointer;width:100%;margin-top:8px}
+.btn-ai{background:linear-gradient(135deg,rgba(var(--pu-rgb),.3),rgba(var(--bl-rgb),.2));color:var(--pu-tx);border:1px solid rgba(var(--pu-rgb),.5);font-size:.75rem;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:12px 16px;border-radius:8px;cursor:pointer;width:100%;margin-top:8px}
 .btn-ai:disabled{opacity:.4;cursor:not-allowed}
 
 /* Pace banner */
 .pace-banner{border-radius:8px;padding:10px 13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;font-size:.78rem;line-height:1.5}
-.pace-contested{background:rgba(255,109,0,.08);border:1px solid rgba(255,109,0,.3);color:#ffb74d}
-.pace-lone{background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.25);color:#9ef5c0}
-.pace-slow{background:rgba(124,77,255,.08);border:1px solid rgba(124,77,255,.3);color:#ce93d8}
+.pace-contested{background:rgba(var(--or-rgb),.08);border:1px solid rgba(var(--or-rgb),.3);color:var(--or-tx)}
+.pace-lone{background:rgba(var(--g-rgb),.07);border:1px solid rgba(var(--g-rgb),.25);color:var(--g-tx)}
+.pace-slow{background:rgba(var(--pu-rgb),.08);border:1px solid rgba(var(--pu-rgb),.3);color:var(--pu-tx)}
 .pace-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
 /* Placepot */
-.pp-race{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;overflow:hidden;margin-bottom:10px}
-.pp-race-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--sf)}
-.pp-race-tm{font-size:1.1rem;color:var(--g)}
+.pp-race{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:10px}
+.pp-race-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--sf2)}
+.pp-race-tm{font-size:1.05rem;font-weight:800;color:var(--g)}
 .pp-race-info{font-size:.68rem;color:var(--mt)}
-.pp-pick{display:flex;align-items:center;padding:9px 14px;gap:10px;border-bottom:1px solid rgba(28,48,36,.5)}
+.pp-pick{display:flex;align-items:center;padding:9px 14px;gap:10px;border-bottom:1px solid rgba(var(--bd-rgb),.5)}
 .pp-pick:last-child{border-bottom:none}
-.pp-pick.rank1{background:rgba(0,230,118,.07)}.pp-pick.rank2{background:rgba(255,193,7,.04)}.pp-pick.rank3{background:rgba(255,138,101,.03)}
+.pp-pick.rank1{background:rgba(var(--g-rgb),.07)}.pp-pick.rank2{background:rgba(var(--gold-rgb),.04)}.pp-pick.rank3{background:rgba(var(--or-rgb),.03)}
 .pp-rank{font-size:1.3rem;width:22px;text-align:center;flex-shrink:0}
-.rank1 .pp-rank{color:var(--g)}.rank2 .pp-rank{color:var(--gold)}.rank3 .pp-rank{color:#ff8a65}
+.rank1 .pp-rank{color:var(--g)}.rank2 .pp-rank{color:var(--gold)}.rank3 .pp-rank{color:var(--or)}
 .pp-info{flex:1;min-width:0}
 .pp-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pp-meta{font-size:.67rem;color:var(--mt);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -249,9 +222,9 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .pp-score{font-size:.65rem;color:var(--mt);margin-bottom:3px}
 .pp-bar{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}
 .pp-fill{height:100%;border-radius:2px;background:var(--g)}
-.rank2 .pp-fill{background:var(--gold)}.rank3 .pp-fill{background:#ff8a65}
-.pp-banker{display:inline-block;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.3);margin-left:6px;vertical-align:middle}
-.pp-alt{display:inline-block;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.3);margin-left:6px;vertical-align:middle}
+.rank2 .pp-fill{background:var(--gold)}.rank3 .pp-fill{background:var(--or)}
+.pp-banker{display:inline-block;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(var(--g-rgb),.15);color:var(--g);border:1px solid rgba(var(--g-rgb),.3);margin-left:6px;vertical-align:middle}
+.pp-alt{display:inline-block;font-size:.55rem;font-weight:600;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(var(--gold-rgb),.1);color:var(--gold);border:1px solid rgba(var(--gold-rgb),.3);margin-left:6px;vertical-align:middle}
 .pp-line{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)}
 .pp-line:last-child{border-bottom:none}
 .pp-line-num{font-size:1rem;color:var(--gold);width:20px;flex-shrink:0;padding-top:1px}
@@ -259,15 +232,15 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .pp-line-label{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:2px}
 /* Autocomplete */
 .ac-wrap{position:relative;flex:1}
-.ac-input{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
+.ac-input{width:100%;background:var(--inp);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
 .ac-input:focus{border-color:var(--g)}
 .ac-input.ac-match{border-color:var(--g);color:var(--g)}
-.ac-input.ac-nomatch{border-color:#ff5252;color:#ff8a80}
-.ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#0d1a10;border:1px solid var(--g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
+.ac-input.ac-nomatch{border-color:var(--re);color:var(--re-tx)}
+.ac-drop{position:absolute;left:0;right:0;top:calc(100% + 3px);background:var(--sf);border:1px solid var(--g);border-radius:6px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6);display:none}
 .ac-drop.open{display:block}
 .ac-item{padding:9px 12px;font-size:.78rem;color:var(--tx);cursor:pointer;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ac-item:last-child{border-bottom:none}
-.ac-item:hover,.ac-item.hi{background:rgba(0,230,118,.1);color:var(--g)}
+.ac-item:hover,.ac-item.hi{background:rgba(var(--g-rgb),.1);color:var(--g)}
 .ac-item .ac-main{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ac-item .ac-sub{font-size:.65rem;color:var(--mt);white-space:nowrap;flex-shrink:0}
 .ac-none{padding:10px 12px;font-size:.75rem;color:var(--mt);text-align:center}
@@ -276,79 +249,79 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 .ar-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .ar-row.full{grid-template-columns:1fr}
 .ar-lbl{font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px}
-.ar-inp{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
+.ar-inp{width:100%;background:var(--inp);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.82rem;padding:8px 10px;box-sizing:border-box;outline:none;-webkit-appearance:none}
 .ar-inp:focus{border-color:var(--g)}
 .ar-status{font-size:.68rem;padding:2px 7px;border-radius:3px;display:inline-block;margin-top:2px}
-.ar-known{background:rgba(0,230,118,.12);color:var(--g);border:1px solid rgba(0,230,118,.3)}
-.ar-unknown{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.3)}
+.ar-known{background:rgba(var(--g-rgb),.12);color:var(--g);border:1px solid rgba(var(--g-rgb),.3)}
+.ar-unknown{background:rgba(var(--gold-rgb),.1);color:var(--gold);border:1px solid rgba(var(--gold-rgb),.3)}
 .mv-btn{font-size:.62rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:4px 9px;border-radius:3px;cursor:pointer;border:1px solid var(--bd);background:transparent;color:var(--mt);transition:all .15s;white-space:nowrap}
-.mv-btn.steam{border-color:#00b0ff;color:#00b0ff;background:rgba(0,176,255,.10)}
-.mv-btn.drift{border-color:#ff6d00;color:#ff6d00;background:rgba(255,109,0,.10)}
+.mv-btn.steam{border-color:var(--bl);color:var(--bl);background:rgba(var(--bl-rgb),.10)}
+.mv-btn.drift{border-color:var(--or);color:var(--or);background:rgba(var(--or-rgb),.10)}
 /* Help */
-.h-sec{margin-bottom:24px;background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.h-sec-hdr{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid #e8f5ee;margin-bottom:12px}
-.h-sec-num{font-size:1.1rem;color:#fff;background:#1a6b3a;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
-.h-sec-ttl{font-size:1.15rem;color:#1a6b3a;letter-spacing:2px}
-.h-p{font-size:.83rem;color:#222;line-height:1.65;margin-bottom:10px}
+.h-sec{margin-bottom:16px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm)}
+.h-sec-hdr{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--bd);margin-bottom:12px}
+.h-sec-num{font-size:.9rem;font-weight:800;color:var(--g-ink);background:var(--g);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.h-sec-ttl{font-size:1.05rem;font-weight:700;color:var(--tx)}
+.h-p{font-size:.84rem;color:var(--tx);line-height:1.65;margin-bottom:10px}
 .h-steps{list-style:none;counter-reset:hs}
-.h-steps li{counter-increment:hs;display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;font-size:.83rem;color:#222;line-height:1.55}
-.h-steps li::before{content:counter(hs);font-size:.85rem;color:#fff;background:#2d7a4f;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-.h-callout{border-radius:6px;padding:11px 13px;margin:10px 0;display:flex;gap:10px;font-size:.8rem;line-height:1.6;color:#222}
+.h-steps li{counter-increment:hs;display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;font-size:.84rem;color:var(--tx);line-height:1.55}
+.h-steps li::before{content:counter(hs);font-size:.75rem;font-weight:700;color:var(--g-ink);background:var(--g);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.h-callout{border-radius:6px;padding:11px 13px;margin:10px 0;display:flex;gap:10px;font-size:.8rem;line-height:1.6;color:var(--tx)}
 .h-callout .ci{flex-shrink:0;font-size:1rem;margin-top:1px}
-.h-tip{background:#e8f5ee;border-left:3px solid #1a6b3a}
-.h-gold{background:#fdf8e8;border-left:3px solid #b8860b}
-.h-warn{background:#fdf0ee;border-left:3px solid #c0392b}
-.h-info{background:#eef4ff;border-left:3px solid #3b6fd4}
+.h-tip{background:rgba(var(--g-rgb),.1);border-left:3px solid var(--g)}
+.h-gold{background:rgba(var(--gold-rgb),.1);border-left:3px solid var(--gold)}
+.h-warn{background:rgba(var(--re-rgb),.1);border-left:3px solid var(--re)}
+.h-info{background:rgba(var(--bl-rgb),.1);border-left:3px solid var(--bl)}
 .h-going{width:100%;border-collapse:collapse;font-size:.78rem;margin:10px 0;border-radius:6px;overflow:hidden}
-.h-going th{background:#1a6b3a;color:#fff;text-align:left;padding:7px 10px;font-size:.65rem;letter-spacing:1px;text-transform:uppercase}
-.h-going td{padding:8px 10px;border-bottom:1px solid #e0e0e0;color:#222;vertical-align:top;background:#fff}
+.h-going th{background:var(--g);color:var(--g-ink);text-align:left;padding:7px 10px;font-size:.65rem;letter-spacing:1px;text-transform:uppercase}
+.h-going td{padding:8px 10px;border-bottom:1px solid var(--bd);color:var(--tx);vertical-align:top;background:var(--sf)}
 .h-going tr:last-child td{border-bottom:none}
-.h-going tr:nth-child(even) td{background:#f7f7f7}
-.h-going td:first-child{color:#7a5500;font-weight:600;white-space:nowrap}
-.h-faq{background:#f7f7f7;border:1px solid #ddd;border-radius:8px;padding:13px;margin-bottom:8px}
-.h-faq-q{font-size:.82rem;font-weight:600;color:#1a6b3a;margin-bottom:6px}
-.h-faq-a{font-size:.78rem;color:#555;line-height:1.6}
+.h-going tr:nth-child(even) td{background:var(--sf2)}
+.h-going td:first-child{color:var(--gold-tx);font-weight:600;white-space:nowrap}
+.h-faq{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:13px;margin-bottom:8px}
+.h-faq-q{font-size:.82rem;font-weight:700;color:var(--g);margin-bottom:6px}
+.h-faq-a{font-size:.78rem;color:var(--mt);line-height:1.6}
 .h-card-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
-.h-card{background:#f7f7f7;border:1px solid #ddd;border-radius:8px;padding:12px}
-.h-card-ttl{font-size:.75rem;font-weight:600;color:#222;margin-bottom:5px}
-.h-card p{font-size:.72rem;color:#555;margin:0;line-height:1.5}
-.h-nr-eg{background:#f7f7f7;border:1px solid #ddd;border-radius:8px;overflow:hidden;margin:10px 0}
-.h-nr-row{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid #e0e0e0;font-size:.8rem;color:#222}
+.h-card{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:12px}
+.h-card-ttl{font-size:.75rem;font-weight:700;color:var(--tx);margin-bottom:5px}
+.h-card p{font-size:.72rem;color:var(--mt);margin:0;line-height:1.5}
+.h-nr-eg{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin:10px 0}
+.h-nr-row{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border-bottom:1px solid var(--bd);font-size:.8rem;color:var(--tx)}
 .h-nr-row:last-child{border-bottom:none}
-.h-nr-row.h-struck{opacity:.5;text-decoration:line-through;background:#fff5f5}
-.h-nr-tag{font-size:.6rem;font-weight:600;letter-spacing:1px;padding:2px 7px;border-radius:3px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5}
-.h-btn-eg{font-size:.6rem;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid #bbb;background:#fff;color:#666}
+.h-nr-row.h-struck{opacity:.5;text-decoration:line-through;background:rgba(var(--re-rgb),.06)}
+.h-nr-tag{font-size:.6rem;font-weight:600;letter-spacing:1px;padding:2px 7px;border-radius:3px;background:rgba(var(--re-rgb),.12);color:var(--re);border:1px solid rgba(var(--re-rgb),.35)}
+.h-btn-eg{font-size:.6rem;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid var(--bd2);background:var(--sf);color:var(--mt)}
 
 /* ── Result Logger ───────────────────────────────────────── */
-.res-log-card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-top:10px}
-.res-log-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--gold);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bd)}
+.res-log-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);padding:14px 16px;margin-top:10px}
+.res-log-title{font-family:var(--sans);font-weight:800;font-size:1rem;color:var(--gold);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bd)}
 .res-pos-row{display:grid;grid-template-columns:32px 1fr;gap:8px;align-items:center;margin-bottom:8px}
-.res-pos-num{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;text-align:center}
+.res-pos-num{font-family:var(--sans);font-weight:800;font-size:1.25rem;text-align:center}
 .res-pos-num.p1{color:var(--gold)}
 .res-pos-num.p2{color:#9e9e9e}
 .res-pos-num.p3{color:#cd7f32}
-.res-pos-sel{width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:7px;color:var(--tx);font-size:.85rem;padding:10px 10px;outline:none;-webkit-appearance:none}
+.res-pos-sel{width:100%;background:var(--inp);border:1px solid var(--bd);border-radius:7px;color:var(--tx);font-size:.85rem;padding:10px 10px;outline:none;-webkit-appearance:none}
 .res-pos-sel:focus{border-color:var(--gold)}
-.res-save-btn{width:100%;background:var(--gold);color:var(--bg);border:none;border-radius:8px;padding:12px;font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-top:4px}
-.res-saved{font-size:.75rem;color:var(--g);text-align:center;margin-top:6px;font-family:'IBM Plex Mono',monospace}
+.res-save-btn{width:100%;background:var(--gold);color:var(--bg);border:none;border-radius:8px;padding:12px;font-family:var(--sans);font-size:.8rem;font-weight:700;cursor:pointer;margin-top:4px}
+.res-saved{font-size:.75rem;color:var(--g);text-align:center;margin-top:6px;font-family:var(--mono)}
 
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div style="display:flex;align-items:center;gap:6px">
-    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="margin-right:8px;display:inline-block;vertical-align:middle">
+  <div class="brand">
+    <span class="logo-mark" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
   <!-- Horse head silhouette in dark green -->
   <g transform="translate(5,8)">
     <!-- Horse head outline -->
-    <path d="M 12 2 Q 15 0 18 2 L 20 5 Q 20 8 18 10 L 15 12 Q 12 13 10 12 L 8 10 Q 7 8 8 5 Z" fill="#1b5e3d" stroke="none"/>
+    <path d="M 12 2 Q 15 0 18 2 L 20 5 Q 20 8 18 10 L 15 12 Q 12 13 10 12 L 8 10 Q 7 8 8 5 Z" fill="currentColor" stroke="none"/>
     <!-- Mane -->
-    <path d="M 14 2 Q 15 0 16 2 M 15 2 Q 16 0 17 2 M 16 2 Q 17 0 18 2" stroke="#1b5e3d" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M 14 2 Q 15 0 16 2 M 15 2 Q 16 0 17 2 M 16 2 Q 17 0 18 2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
   </g>
   
   <!-- Data circuit pattern (green circles + lines) -->
-  <g stroke="#4CAF50" stroke-width="0.8" fill="none" opacity="0.7">
+  <g stroke="currentColor" stroke-width="0.8" fill="none" opacity="0.7">
     <circle cx="18" cy="10" r="1"/>
     <circle cx="22" cy="8" r="1"/>
     <circle cx="20" cy="14" r="1"/>
@@ -358,20 +331,23 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   </g>
   
   <!-- Upward trend chart (green bars) -->
-  <g fill="#4CAF50" opacity="0.8">
+  <g fill="currentColor" opacity="0.8">
     <rect x="16" y="22" width="2" height="5"/>
     <rect x="19" y="19" width="2" height="8"/>
     <rect x="22" y="16" width="2" height="11"/>
   </g>
   
   <!-- Upward arrow -->
-  <path d="M 26 20 L 28 18 L 26 16" stroke="#1b5e3d" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-    <h1 style="margin:0;font-size:1.4rem">Formintel</h1>
+  <path d="M 26 20 L 28 18 L 26 16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span>
+    <div>
+      <h1>Form<b>intel</b></h1>
+      <div class="ver">v10.0 · 20 Oct 2026</div>
+    </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);padding:3px 8px;border:1px solid var(--bd);border-radius:4px;letter-spacing:1px">v9.4 · 18 Oct 2026</div>
     <div class="mpill" id="mpill">NO MODEL</div>
+    <button class="theme-btn" data-theme-icon onclick="fiTheme.toggle()" aria-label="Light or dark mode">☀️</button>
   </div>
 </div>
 <div class="nav">
@@ -391,7 +367,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <button class="btn bo" style="width:auto;padding:6px 14px;margin-bottom:0;font-size:.7rem" onclick="loadTodaysMeetings()">↻ Refresh</button>
     </div>
     <p class="mu" style="margin-bottom:12px">Live from Betfair. Tap a course to see its race times, then load that meeting's PDF below for full predictions.</p>
-    <div id="todaysMeetings"><div style="color:var(--mt);font-size:.78rem;font-family:'IBM Plex Mono',monospace;padding:8px 0">Tap ↻ Refresh to load today's meetings…</div></div>
+    <div id="todaysMeetings"><div style="color:var(--mt);font-size:.78rem;font-family:var(--mono);padding:8px 0">Tap ↻ Refresh to load today's meetings…</div></div>
     <button class="btn bo" style="width:100%;margin-top:10px;margin-bottom:0;font-size:.72rem" onclick="checkTodaysResults()">🩺 Check today's results</button>
     <div id="resultsCheck" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--sf2);font-family:var(--mono);font-size:.66rem;line-height:1.55;white-space:pre-wrap;color:var(--tx)"></div>
   </div>
@@ -435,7 +411,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div style="font-size:.7rem;color:var(--mt);margin-top:3px" id="rdst"></div>
       </div>
       <div style="flex-shrink:0">
-        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going <span id="surface-badge" style="font-size:.58rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.2);margin-left:4px"></span></div>
+        <div style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Going <span id="surface-badge" style="font-size:.58rem;padding:1px 6px;border-radius:3px;background:rgba(var(--g-rgb),.1);color:var(--g);border:1px solid rgba(var(--g-rgb),.2);margin-left:4px"></span></div>
         <select id="gsel">
           <option>Good to Firm</option><option selected>Good</option><option>Firm</option>
           <option>Good to Soft</option><option>Soft</option><option>Heavy</option>
@@ -460,7 +436,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div style="font-size:.7rem;color:var(--mt);margin-bottom:6px;line-height:1.5">
           Copy the runners section from <strong style="color:var(--tx)">attheraces.com</strong> and paste below. Odds are matched to runners by stall number.
         </div>
-        <textarea id="pasteInput" rows="5" style="width:100%;background:#0a0f0d;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.75rem;padding:8px 10px;resize:vertical;outline:none;line-height:1.5" placeholder="Paste ATR runners text here…"></textarea>
+        <textarea id="pasteInput" rows="5" style="width:100%;background:var(--inp);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:.75rem;padding:8px 10px;resize:vertical;outline:none;line-height:1.5" placeholder="Paste ATR runners text here…"></textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;font-size:.72rem" onclick="applyPastedOdds()">✓ Apply Odds</button>
           <button class="btn bo" style="flex:1;margin-bottom:0;padding:9px 12px;font-size:.72rem" onclick="togglePasteBox()">Cancel</button>
@@ -514,21 +490,21 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
   <div id="pp-nomodel" class="al alw" style="display:none">⚠ Load your trained model in Setup for best results.</div>
   <div id="pp-norace" class="al alw">← Load a PDF racecard first, then come back here.</div>
   <div id="pp-main" style="display:none">
-    <div id="pp-nap" style="display:none;margin-bottom:12px;background:linear-gradient(135deg,rgba(255,193,7,.10),rgba(255,193,7,.03));border:2px solid var(--gold);border-radius:12px;padding:16px;position:relative;overflow:hidden">
+    <div id="pp-nap" style="display:none;margin-bottom:12px;background:linear-gradient(135deg,rgba(var(--gold-rgb),.10),rgba(var(--gold-rgb),.03));border:2px solid var(--gold);border-radius:12px;padding:16px;position:relative;overflow:hidden">
       <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:2px;color:var(--gold);margin-bottom:4px">⭐ NAP OF THE DAY</div>
       <div style="font-size:1.8rem;color:var(--gold);letter-spacing:1px;line-height:1;margin-bottom:8px" id="nap-name">—</div>
       <div style="font-size:.75rem;color:var(--tx);margin-bottom:4px" id="nap-detail">—</div>
       <div style="font-size:.7rem;color:var(--mt)" id="nap-meta">—</div>
-      <div style="font-size:.62rem;color:var(--gold);margin-top:6px;font-family:'IBM Plex Mono',monospace;letter-spacing:.5px" id="nap-reason"></div>
-      <div style="position:absolute;right:12px;top:10px;font-size:4rem;color:rgba(255,193,7,.08);line-height:1;pointer-events:none">NAP</div>
+      <div style="font-size:.62rem;color:var(--gold);margin-top:6px;font-family:var(--mono);letter-spacing:.5px" id="nap-reason"></div>
+      <div style="position:absolute;right:12px;top:10px;font-size:4rem;color:rgba(var(--gold-rgb),.08);line-height:1;pointer-events:none">NAP</div>
     </div>
     <div class="card" style="padding:14px 16px 10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div style="font-size:1.3rem;color:var(--g);letter-spacing:2px">🎯 Placepot Picks</div>
         <div class="mpill ok" id="pp-course">—</div>
       </div>
-      <div id="pp-odds-notice" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(64,196,255,.06);border-left:3px solid var(--bl);border-radius:0 4px 4px 0;display:none">💡 Odds entered in Predict tab are being used to improve accuracy.</div>
-      <div id="pp-odds-notice-none" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(255,193,7,.06);border-left:3px solid var(--gold);border-radius:0 4px 4px 0">💡 Enter decimal odds in the Predict tab for each race to improve placepot accuracy.</div>
+      <div id="pp-odds-notice" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(var(--bl-rgb),.06);border-left:3px solid var(--bl);border-radius:0 4px 4px 0;display:none">💡 Odds entered in Predict tab are being used to improve accuracy.</div>
+      <div id="pp-odds-notice-none" style="font-size:.72rem;color:var(--mt);margin-bottom:8px;padding:6px 10px;background:rgba(var(--gold-rgb),.06);border-left:3px solid var(--gold);border-radius:0 4px 4px 0">💡 Enter decimal odds in the Predict tab for each race to improve placepot accuracy.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <div style="flex:1;min-width:130px">
@@ -556,7 +532,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
         <div style="font-size:1.1rem;color:var(--gold);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bd)">💰 Suggested Placepot Lines</div>
         <p style="font-size:.73rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Top pick from each race. Back these as your banker line, or combine with alternatives for coverage.</p>
         <div id="pp-lines"></div>
-        <div style="margin-top:12px;padding:10px;background:#0a0f0d;border-radius:6px;border:1px solid var(--bd)">
+        <div style="margin-top:12px;padding:10px;background:var(--inp);border-radius:6px;border:1px solid var(--bd)">
           <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:6px">Combination cost guide</div>
           <div id="pp-cost" style="font-size:.78rem;color:var(--tx)"></div>
         </div>
@@ -565,13 +541,13 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     </div>
 
     <!-- Monte Carlo -->
-    <div class="card" style="border-color:rgba(124,77,255,.4)">
+    <div class="card" style="border-color:rgba(var(--pu-rgb),.4)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none;color:#ce93d8">🎲 Monte Carlo Simulation</div>
+        <div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none;color:var(--pu-tx)">🎲 Monte Carlo Simulation</div>
         <div style="font-size:.62rem;color:var(--mt)">10,000 runs</div>
       </div>
       <div style="font-size:.75rem;color:var(--mt);margin-bottom:10px;line-height:1.5">Simulates 10,000 races to find which combinations give the best real probability of landing the placepot.</div>
-      <button class="btn bg" style="background:rgba(124,77,255,.3);color:#ce93d8;border:1px solid rgba(124,77,255,.5);margin-bottom:0;padding:10px 12px" onclick="runMCPlacepot()">🎲 Run Simulation</button>
+      <button class="btn bg" style="background:rgba(var(--pu-rgb),.3);color:var(--pu-tx);border:1px solid rgba(var(--pu-rgb),.5);margin-bottom:0;padding:10px 12px" onclick="runMCPlacepot()">🎲 Run Simulation</button>
       <div id="mc-results" style="margin-top:10px"></div>
     </div>
 
@@ -633,7 +609,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
             <div style="font-size:.58rem;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Bet Type</div>
             <div style="display:flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden">
               <button id="l15-win-btn" onclick="setL15BetType('win')"
-                style="flex:1;padding:9px 6px;background:rgba(0,230,118,.2);border:none;
+                style="flex:1;padding:9px 6px;background:rgba(var(--g-rgb),.2);border:none;
                        color:var(--green);font-family:var(--mono);font-size:.65rem;
                        font-weight:600;cursor:pointer;letter-spacing:1px">WIN</button>
               <button id="l15-ew-btn" onclick="setL15BetType('ew')"
@@ -648,7 +624,7 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
             <div style="font-size:.58rem;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Place Terms</div>
             <div style="display:flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden">
               <button id="l15-q-btn" onclick="setL15PlaceTerms('quarter')"
-                style="flex:1;padding:9px 6px;background:rgba(0,230,118,.2);border:none;
+                style="flex:1;padding:9px 6px;background:rgba(var(--g-rgb),.2);border:none;
                        color:var(--green);font-family:var(--mono);font-size:.65rem;
                        font-weight:600;cursor:pointer;letter-spacing:1px">¼</button>
               <button id="l15-f-btn" onclick="setL15PlaceTerms('fifth')"
@@ -660,12 +636,12 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
         </div>
 
-        <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;background:rgba(0,230,118,.9)" onclick="runL15('smart')">⚡ Find Best Lucky 15</button>
+        <button class="btn bg" style="flex:1;margin-bottom:0;padding:9px 12px;background:rgba(var(--g-rgb),.9)" onclick="runL15('smart')">⚡ Find Best Lucky 15</button>
       </div>
     </div>
 
-    <button class="btn" style="width:100%;margin:8px 0 0;padding:10px 12px;background:rgba(68,138,255,.12);
-      border:1px solid rgba(68,138,255,.35);color:var(--bl);font-weight:600"
+    <button class="btn" style="width:100%;margin:8px 0 0;padding:10px 12px;background:rgba(var(--bl2-rgb),.12);
+      border:1px solid rgba(var(--bl2-rgb),.35);color:var(--bl);font-weight:600"
       onclick="runConfidencePredictor()">🎯 Confidence Predictor</button>
 
     <div id="conf-results"></div>
@@ -676,6 +652,17 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
 
 <!-- SETUP -->
 <div class="scr" id="s-setup">
+  <div class="card">
+    <div class="ct">Appearance</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <p class="mu" style="margin:0">Light or dark. Auto follows your phone.</p>
+      <div class="seg">
+        <button data-theme-opt="" onclick="fiTheme.set('')">Auto</button>
+        <button data-theme-opt="light" onclick="fiTheme.set('light')">Light</button>
+        <button data-theme-opt="dark" onclick="fiTheme.set('dark')">Dark</button>
+      </div>
+    </div>
+  </div>
   <div class="card">
     <div class="ct">Trained Models</div>
     <p class="mu" style="margin-bottom:12px">Models auto-load from GitHub on startup. Upload here to override or update.</p>
@@ -735,8 +722,6 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <button class="btn bo" onclick="useDefault()">✓ Activate Default Weights</button>
     <div id="dms"></div>
   </div>
-</div>
-
   <!-- Calibration Card -->
   <div class="card" id="calib-card">
     <div class="ct">⚡ Prediction Calibration</div>
@@ -747,31 +732,33 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
     <div id="calib-status" style="margin-bottom:12px;font-size:.78rem;color:var(--mt)">
       Tap Calibrate to check if your model needs adjustment.
     </div>
-    <button onclick="runCalibration()" class="btn" style="width:100%;margin-bottom:0;background:rgba(0,230,118,.15);border:1px solid rgba(0,230,118,.3);color:var(--g)">
+    <button onclick="runCalibration()" class="btn" style="width:100%;margin-bottom:0;background:rgba(var(--g-rgb),.15);border:1px solid rgba(var(--g-rgb),.3);color:var(--g)">
       ⚡ Calibrate Now
     </button>
     <div id="calib-chart" style="margin-top:14px"></div>
   </div>
+</div>
+
 
 
 <!-- HELP -->
-<div class="scr" id="s-help" style="background:#f0f2f0;padding-top:14px;">
+<div class="scr" id="s-help" style="padding-top:14px;">
   <div style="padding-bottom:4px">
 
     <!-- Ko-fi support -->
-    <div class="h-sec" style="text-align:center;border:1px solid #1a6b3a;background:#eafaf0">
-      <div style="font-size:.95rem;color:#1a6b3a;font-weight:600;margin-bottom:6px">Support Formintel</div>
+    <div class="h-sec" style="text-align:center;border:1px solid rgba(var(--g-rgb),.45);background:rgba(var(--g-rgb),.08)">
+      <div style="font-size:.95rem;color:var(--g);font-weight:700;margin-bottom:6px">Support Formintel</div>
       <p class="h-p" style="margin-bottom:10px">Formintel is free and will always be free. If it's helped you find a winner or two, a coffee is always appreciated.</p>
-      <a href="https://ko-fi.com/paul919649formintel" target="_blank" rel="noopener" style="display:inline-block;background:#1a6b3a;color:#fff;text-decoration:none;font-weight:600;font-size:.82rem;padding:10px 20px;border-radius:8px">☕ Buy Me a Coffee on Ko-fi</a>
+      <a href="https://ko-fi.com/paul919649formintel" target="_blank" rel="noopener" style="display:inline-block;background:var(--g);color:var(--g-ink);text-decoration:none;font-weight:600;font-size:.82rem;padding:10px 20px;border-radius:8px">☕ Buy Me a Coffee on Ko-fi</a>
     </div>
 
     <!-- Disclaimer -->
-    <div class="h-sec" style="border:1px solid #e0a800;background:#fffbe6">
-      <div class="h-sec-hdr"><div class="h-sec-num" style="background:#e0a800">!</div><div class="h-sec-ttl">Important — please read</div></div>
+    <div class="h-sec" style="border:1px solid rgba(var(--gold-rgb),.5);background:rgba(var(--gold-rgb),.08)">
+      <div class="h-sec-hdr"><div class="h-sec-num" style="background:var(--gold)">!</div><div class="h-sec-ttl">Important — please read</div></div>
       <p class="h-p"><strong>Formintel is an analysis tool, not financial or betting advice.</strong> The predictions are statistical estimates based on historical data and carry no guarantee of accuracy. Horse racing outcomes are inherently uncertain.</p>
       <p class="h-p">Only bet what you can afford to lose. Past performance of the model does not predict future results — the model has historically run at a loss against the market on flat-stake betting. Never chase losses.</p>
       <p class="h-p">If you or someone you know has a gambling problem, free confidential help is available from GamCare (0808 8020 133) or BeGambleAware.org. You must be 18+ to bet.</p>
-      <p class="h-p" style="font-size:.7rem;color:#888">Live odds, where shown, come from the Betfair Exchange via your own proxy and are for information only. Formintel is not affiliated with or endorsed by Betfair or At The Races.</p>
+      <p class="h-p" style="font-size:.7rem;color:var(--mt)">Live odds, where shown, come from the Betfair Exchange via your own proxy and are for information only. Formintel is not affiliated with or endorsed by Betfair or At The Races.</p>
     </div>
 
     <!-- What it does -->
@@ -830,7 +817,8 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <div class="h-sec-hdr"><div class="h-sec-num">5</div><div class="h-sec-ttl">Bet Advisor & Dutching</div></div>
       <p class="h-p">After predicting, the Bet Advisor shows the expected value (EV) for Win, Each Way, and Place bets at your chosen stake — and recommends which is best.</p>
       <div class="h-card-row">
-        <div class="h-card"><div class="h-card-ttl">💰 Dutching</div><p>If 2–3 horses score above 8%, the app shows exact stakes to split your money so any one of them winning returns the same profit.</p></div>
+        <div class="h-card"><div class="h-card-ttl">🌦 Weather</div><p>Every race shows the forecast for the off: sky, rain, wind and gusts (Open-Meteo). If 5mm+ is due between 7am and the off, it warns that the ground will ride softer than declared.</p></div>
+        <div class="h-card"><div class="h-card-ttl">💰 Dutching</div><p>When the top two have a 55%+ chance between them, the app shows how to split £10 so either winning returns the same profit. Below that it says no dutch: on logged races, dutching weaker pairs (and third picks) lost money.</p></div>
         <div class="h-card"><div class="h-card-ttl">1/4 vs 1/5</div><p>Toggle place terms to match your bookmaker. All EV figures update instantly.</p></div>
       </div>
       <div class="h-callout h-info"><span class="ci">ℹ️</span><div><strong>EV explained:</strong> Expected value is what you would make on average over many identical bets. Negative EV = losing bet long term even if it wins today.</div></div>
@@ -876,14 +864,14 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <table class="h-going">
         <thead><tr><th>Going</th><th>Conditions</th></tr></thead>
         <tbody>
-          <tr><td colspan="2" style="background:#1a6b3a;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
+          <tr><td colspan="2" style="background:var(--g);color:var(--g-ink);font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🌿 Turf</td></tr>
           <tr><td>Firm</td><td>Very fast, hard ground. Rare on British turf.</td></tr>
           <tr><td>Good To Firm</td><td>Fast with a little give. Common in summer.</td></tr>
           <tr><td>Good</td><td>Standard balanced ground. Most horses handle it.</td></tr>
           <tr><td>Good To Soft</td><td>Some give underfoot. Favours stayers.</td></tr>
           <tr><td>Soft</td><td>Wet and testing. Stamina horses thrive.</td></tr>
           <tr><td>Heavy</td><td>Very wet, energy-sapping.</td></tr>
-          <tr><td colspan="2" style="background:#3b6fd4;color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
+          <tr><td colspan="2" style="background:var(--bl);color:#fff;font-size:.65rem;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;">🏟 All-Weather</td></tr>
           <tr><td>Standard</td><td>Normal AW conditions.</td></tr>
           <tr><td>Standard To Fast</td><td>Quicker surface.</td></tr>
           <tr><td>Standard To Slow</td><td>Slightly slower surface.</td></tr>
@@ -915,11 +903,12 @@ select{background:var(--sf2);border:1px solid var(--bd);color:var(--tx);padding:
       <div class="h-faq"><div class="h-faq-q">❓ Is my data private?</div><div class="h-faq-a">Yes — everything runs locally on your phone. No server, no account, no data sent anywhere. localStorage only.</div></div>
     </div>
 
-    <div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:#888">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
+    <div style="text-align:center;padding:16px 0 8px;font-size:.72rem;color:var(--mt)">When the fun stops, stop. &nbsp;·&nbsp; GambleAware.org</div>
   </div>
 </div>
 
-<script src="plog.js?v=6.3"></script>
+<script src="plog.js?v=6.4"></script>
+<script src="courses.js?v=1.0"></script>
 <script>
 
 
@@ -1397,8 +1386,44 @@ function orScore(orVal, allOrs) {
 // Implied probability share for a runner\'s odds within the field.
 // This captures REAL market separation — favourite at 4.0 gets ~25% share,
 // a 33/1 shot gets ~3% share. Pure rank would give them equally spaced slots.
+// ── Reading prices: the power method ───────────────────────────────────────
+// Prices add up to more than 100% (the margin). The old way shared the margin
+// out evenly (1/odds ÷ total), but in a thin early market — a median book of
+// 116% on the 804 races logged 30 Sep–19 Oct, 136% in big fields — most of
+// it sits on the outsiders, so favourites came out too low: runners the app
+// put at 30-50% won 5-9 points more often. The power method finds k with
+// Σ(1/odds)^k = 1, which takes more of the margin off the outsiders. Tested on
+// races it hadn't seen, it beat the old way every time.
+var _devigCache = {}, _devigCount = 0;
+function powerDevig(oddsArr) {
+  var key = oddsArr.join(',');
+  if (_devigCache[key]) return _devigCache[key];
+  var q = oddsArr.map(function(o){ return o > 1 ? 1 / o : 0; });
+  var lo = 0.2, hi = 5, k = 1, it, i, s;
+  for (it = 0; it < 60; it++) {
+    k = (lo + hi) / 2; s = 0;
+    for (i = 0; i < q.length; i++) if (q[i] > 0) s += Math.pow(q[i], k);
+    if (s > 1) lo = k; else hi = k;
+  }
+  var p = q.map(function(x){ return x > 0 ? Math.pow(x, k) : 0; });
+  var t = p.reduce(function(a, b){ return a + b; }, 0) || 1;
+  p = p.map(function(x){ return x / t; });
+  if (++_devigCount > 500) { _devigCache = {}; _devigCount = 0; }
+  _devigCache[key] = p;
+  return p;
+}
+function allPriced(oddsArr) {
+  if (!oddsArr || !oddsArr.length) return false;
+  for (var i = 0; i < oddsArr.length; i++) if (!(oddsArr[i] > 1)) return false;
+  return true;
+}
+
 function impliedShare(odds, allOdds) {
   if (!odds || odds <= 0) return 0.05;
+  if (allPriced(allOdds)) {
+    var ix = allOdds.indexOf(odds);
+    if (ix > -1) return powerDevig(allOdds)[ix];
+  }
   var imp = 1 / odds;
   var total = allOdds.reduce(function(s, o){ return s + (o > 0 ? 1/o : 0.05); }, 0) || 1;
   return imp / total;
@@ -1430,11 +1455,16 @@ function buildFieldCtx(runners) {
     return js ? js.w / Math.max(js.r, 1) : 0.12;
   });
 
-  // Pre-compute normalised market implied probabilities
-  // (overround removed by normalising to sum to 1)
-  var rawImp = odds.map(function(o){ return o > 0 ? 1/o : 0.02; });
-  var impTotal = rawImp.reduce(function(a,b){ return a+b; }, 0) || 1;
-  var mktProbs = rawImp.map(function(p){ return p / impTotal; });
+  // Pre-compute market probabilities with the margin removed — the power
+  // method when every runner is priced, else the old even share with a
+  // placeholder for the unpriced
+  var mktProbs;
+  if (allPriced(odds)) mktProbs = powerDevig(odds);
+  else {
+    var rawImp = odds.map(function(o){ return o > 0 ? 1/o : 0.02; });
+    var impTotal = rawImp.reduce(function(a,b){ return a+b; }, 0) || 1;
+    mktProbs = rawImp.map(function(p){ return p / impTotal; });
+  }
 
   return { ors: ors, odds: odds, jwrs: jwrs, mktProbs: mktProbs };
 }
@@ -2667,6 +2697,140 @@ function dutchStakes(horses, totalStake) {
   });
 }
 
+// ── Race-day weather (Open-Meteo, via courses.js) ──────────────────────────
+// Shown on each race: the sky, rain in the hour of the off, wind and gusts,
+// and the rain from 7am to the off — after the morning going declaration, so
+// a wet day means the ground will ride softer than the going says.
+function isSoftGoing(g) {
+  var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].trim();
+  return k === 'soft' || k === 'heavy' || k === 'soft to heavy' || k === 'yielding to soft';
+}
+function isAWGoing(g) { return /^(standard|slow|fast)/i.test(String(g || '').trim()); }
+// Top-pick record on soft/heavy going vs other turf going, from this device's
+// log — on the 804 races logged 30 Sep–19 Oct: 5 of 37 on soft (14%) vs 36%.
+var _goingRec = null, _goingRecAt = 0;
+function softGoingRecord() {
+  if (_goingRec && Date.now() - _goingRecAt < 10 * 60000) return _goingRec;
+  var r = { sN: 0, sW: 0, oN: 0, oW: 0 };
+  try {
+    getPredLog().forEach(function(e){
+      if (!e || !e.actual || !e.going || isAWGoing(e.going)) return;
+      if (isSoftGoing(e.going)) { r.sN++; if (e.topPickWon) r.sW++; }
+      else { r.oN++; if (e.topPickWon) r.oW++; }
+    });
+  } catch(e) {}
+  _goingRec = r; _goingRecAt = Date.now();
+  return r;
+}
+function weatherStripHTML(w, race, going) {
+  var turf = !(race && race.surface === 'aw') && !isAWGoing(going);
+  var bits = [];
+  if (w.rainHour >= 0.1) bits.push(w.rainHour + 'mm rain in the hour');
+  else if (w.rainProb != null && w.future) bits.push(w.rainProb + '% chance of rain');
+  else bits.push('dry');
+  if (w.wind != null) bits.push('wind ' + w.wind + 'mph' + (w.dir ? ' ' + w.dir : '') + (w.gust != null ? ', gusts ' + w.gust : ''));
+  var h = '<div class="wx-main"><span class="wx-ico">' + w.icon + '</span><div class="wx-txt">'
+    + '<div class="wx-ttl">' + esc(w.label) + (w.temp != null ? ' · ' + w.temp + '°C' : '') + '</div>'
+    + '<div class="wx-sub">' + (w.future ? 'Forecast for the off' : 'At the off') + (race && race.time ? ' (' + esc(race.time) + ')' : '') + ': ' + bits.join(' · ') + '</div>'
+    + '</div></div>';
+  var notes = [];
+  if (turf && w.rainSince7 >= 10) notes.push('🌧 ' + w.rainSince7 + 'mm of rain from 7am to the off' + (w.future ? ' (forecast)' : '') + ' — a lot. The ground will very likely ride softer than the declared ' + esc(going || 'going') + ', perhaps by a step or more.');
+  else if (turf && w.rainSince7 >= 5) notes.push('🌧 ' + w.rainSince7 + 'mm of rain from 7am to the off' + (w.future ? ' (forecast)' : '') + ' — the ground will probably ride softer than the declared ' + esc(going || 'going') + '.');
+  if (w.gust != null && w.gust >= 35) notes.push('💨 Very windy — gusts of ' + w.gust + 'mph. Hard work for front-runners into the wind.');
+  else if (w.gust != null && w.gust >= 28) notes.push('💨 Gusty — ' + w.gust + 'mph gusts.');
+  if (turf && (isSoftGoing(going) || w.rainSince7 >= 10)) {
+    var rec = softGoingRecord();
+    if (rec.sN >= 15 && rec.oN >= 50) {
+      notes.push('⚠ On soft or heavy ground your top picks have won ' + rec.sW + ' of ' + rec.sN + ' (' + Math.round(100 * rec.sW / rec.sN)
+        + '%), against ' + Math.round(100 * rec.oW / rec.oN) + '% on other turf going. Favourites are less reliable when it\'s wet.');
+    }
+  }
+  if (notes.length) h += '<div class="wx-notes">' + notes.map(function(n){ return '<div>' + n + '</div>'; }).join('') + '</div>';
+  return h;
+}
+function fillRaceWeather(race) {
+  var el = document.getElementById('wxStrip');
+  if (!el || !race || typeof fiCourseGeo !== 'function' || !fiCourseGeo(race.course)) { if (el) el.style.display = 'none'; return; }
+  el.innerHTML = '<div class="wx-sub">Loading the weather…</div>';
+  var going = (document.getElementById('gsel') || {}).value || race.going || '';
+  fiWxForecast(race.course).then(function(h){
+    var cur = document.getElementById('wxStrip');
+    if (!cur) return;
+    var w = h ? fiWxAt(h, race.date || todayISO(), race.time) : null;
+    if (!w) { cur.style.display = 'none'; return; }
+    cur.innerHTML = weatherStripHTML(w, race, going);
+  });
+}
+// Weather for a race from the cache only (the scoring is synchronous). Adds
+// rainDay — the whole day's rain at the course, as the trainer uses.
+function raceWeatherCached(race) {
+  try {
+    if (typeof fiCourseKey !== 'function' || !race || !race.course) return null;
+    var rec = _fiWxMem[fiCourseKey(race.course)];
+    if (!rec) {
+      var st = JSON.parse(localStorage.getItem('rp_wx_' + fiWxDay() + '_' + fiCourseKey(race.course)) || 'null');
+      if (st && st.h) { _fiWxMem[fiCourseKey(race.course)] = st; rec = st; }
+    }
+    if (!rec || !rec.h) return null;
+    var d = race.date || todayISO(), w = fiWxAt(rec.h, d, race.time || '12:00');
+    if (!w) return null;
+    var day = 0, i0 = rec.h.time.indexOf(d + 'T01:00');
+    if (i0 > -1) for (var i = i0; i < i0 + 24 && i < rec.h.time.length; i++) day += +rec.h.p[i] || 0;
+    w.rainDay = Math.round(day * 10) / 10;
+    return w;
+  } catch(e) { return null; }
+}
+// Compact chip for lists: "🌧 1.2mm · 18mph"
+function weatherChipText(w) {
+  if (!w) return '';
+  var s = w.icon;
+  if (w.rainHour >= 0.1) s += ' ' + w.rainHour + 'mm';
+  else if (w.temp != null) s += ' ' + w.temp + '°';
+  if (w.wind != null) s += ' · ' + (w.gust != null && w.gust >= 28 ? '💨' + w.gust : w.wind) + 'mph';
+  return s;
+}
+function fillWeatherChip(elId, course, time, dateISO) {
+  if (typeof fiCourseGeo !== 'function' || !fiCourseGeo(course)) return;
+  fiWxForecast(course).then(function(h){
+    var el = document.getElementById(elId);
+    if (!el || !h) return;
+    var w = fiWxAt(h, dateISO || todayISO(), time);
+    if (!w) return;
+    el.textContent = weatherChipText(w);
+    el.title = w.label + (w.rainSince7 >= 0.5 ? ' · ' + w.rainSince7 + 'mm since 7am' : '');
+    el.style.display = 'inline-block';
+  });
+}
+
+// ── Bet picks — rules reset 19 Oct 2026 on 688 fully priced logged races ──
+// Value: the old rule took the biggest model-vs-market gap in the top 3 in
+// every race and lost 21%. Now a top-3 runner is value only when its chance ×
+// price is at least 1.05 (a 5% edge): on the same races that broke even, and
+// it only fires when the form model genuinely rates a horse above its price.
+var VALUE_MIN_EV = 1.05;
+function byScoreDesc(a, b) { return (b.score || 0) - (a.score || 0); }
+function valuePickOf(scored) {
+  var best = null, bestEv = VALUE_MIN_EV;
+  (scored || []).filter(function(r){ return !r._nr; }).sort(byScoreDesc).slice(0, 3).forEach(function(r){
+    if (!(r.odds > 1) || !(r.score > 0)) return;
+    var ev = r.score * r.odds;
+    if (ev >= bestEv) { bestEv = ev; best = r; }
+  });
+  return best ? { runner: best, edge: Math.round((bestEv - 1) * 100) } : null;
+}
+// Dutch: the old plan dutched the top 3 in 8+ runner fields (top 2 in 5-7)
+// and lost 11%; the 2nd and 3rd favourites' early prices were too short.
+// Dutching the top two only when they have 55%+ between them made +2%.
+var DUTCH_MIN_P = 0.55;
+function dutchPlanOf(scored) {
+  var field = (scored || []).filter(function(r){ return !r._nr; }).length;
+  var act = (scored || []).filter(function(r){ return !r._nr && r.odds > 1; }).sort(byScoreDesc);
+  if (act.length < 2) return { sels: [], combined: 0, field: field };
+  var comb = (act[0].score || 0) + (act[1].score || 0);
+  var book = 1 / act[0].odds + 1 / act[1].odds;     // >= 1 can't make a profit
+  return { sels: (comb >= DUTCH_MIN_P && book < 1) ? act.slice(0, 2) : [], combined: comb, field: field };
+}
+
 function dutchHTML(candidates, totalStake, nSel, fieldSize) {
   if (!candidates || candidates.length < 1) return '';
   // Single selection = straight win bet, not a dutch
@@ -2677,22 +2841,21 @@ function dutchHTML(candidates, totalStake, nSel, fieldSize) {
       + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Win Bet — £' + totalStake + ' on top pick' + (fieldSize ? ' (' + fieldSize + ' runners, win only)' : '') + '</div>'
       + '<div class="dutch-row"><span>' + c.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + c.odds.toFixed(2) + '</span></span>'
       + '<span class="dutch-stake">£' + totalStake.toFixed(2) + '</span></div>'
-      + '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,193,7,.2)">'
+      + '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--gold-rgb),.2)">'
       + 'Returns £' + ret.toFixed(2) + ' if it wins — profit £' + (ret - totalStake).toFixed(2)
       + '</div></div>';
   }
   var results = dutchStakes(candidates, totalStake);
   if (!results.length) return '';
-  var placesTxt = nSel === 3 ? '8+ runners · 1-2-3' : nSel === 2 ? '5-7 runners · 1-2' : '';
   var h = '<div class="dutch-card">'
-    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Dutching — £' + totalStake + ' across top ' + results.length + (fieldSize ? ' (' + fieldSize + ' runners' + (placesTxt ? ', ' + placesTxt.split('· ')[1] : '') + ')' : '') + '</div>';
+    + '<div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:8px">💰 Dutching — £' + totalStake + ' across the top ' + results.length + (fieldSize ? ' (' + fieldSize + ' runners)' : '') + '</div>';
   results.forEach(function(r) {
     h += '<div class="dutch-row">'
       + '<span>' + r.name.split(' ')[0] + ' <span style="color:var(--mt)">@ ' + r.odds.toFixed(2) + '</span></span>'
       + '<span class="dutch-stake">£' + r.stake.toFixed(2) + '</span>'
       + '</div>';
   });
-  h += '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,193,7,.2)">'
+  h += '<div style="font-size:.72rem;color:var(--gold);margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--gold-rgb),.2)">'
     + 'Any winner returns ~£' + (results[0].profit + totalStake).toFixed(2) + ' — profit ~£' + results[0].profit.toFixed(2)
     + '<br><span style="color:var(--mt);font-size:.66rem">Lose £' + totalStake + ' if none of the ' + results.length + ' win</span>'
     + '</div></div>';
@@ -2759,7 +2922,7 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
   var optGrid = optData.map(function(o) {
     var isBest = !noBet && o.type === best.type;
     var evCls  = o.ev >= 0 ? 'pos' : 'neg';
-    var evSign = o.ev >= 0 ? '+' : '';
+    var evSign = o.ev >= 0 ? '+' : '−';
     return '<div class="ba-opt' + (isBest ? ' best' : '') + '">'
       + '<div class="ba-opt-lbl">' + o.type + '</div>'
       + '<div class="ba-opt-ev ' + evCls + '">' + evSign + '£' + Math.abs(o.ev).toFixed(2) + ' EV</div>'
@@ -2777,7 +2940,7 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
   // Place terms toggle
   var toggleHtml = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
     + '<span style="font-size:.63rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt)">Place terms</span>'
-    + '<div style="display:flex;border:1px solid var(--bd);border-radius:5px;overflow:hidden;font-family:\'IBM Plex Mono\',monospace;font-size:.7rem;font-weight:600">'
+    + '<div style="display:flex;border:1px solid var(--bd);border-radius:5px;overflow:hidden;font-family:var(--mono);font-size:.7rem;font-weight:600">'
     + '<button onclick="setPlaceFrac(4)" style="padding:5px 12px;border:none;cursor:pointer;'
     +   (placeFrac===4 ? 'background:var(--g);color:var(--bg)' : 'background:transparent;color:var(--mt)') + '">1/4</button>'
     + '<button onclick="setPlaceFrac(5)" style="padding:5px 12px;border:none;border-left:1px solid var(--bd);cursor:pointer;'
@@ -2814,10 +2977,10 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
     var wName       = w.name.split(' ')[0];
     var vName       = valBet.name.split(' ')[0];
 
-    var winCol   = winExpProfit  >= 0 ? 'var(--g)'    : '#ff8a80';
-    var placeCol = placeExpProfit >= 0 ? 'var(--gold)' : '#ff8a80';
-    var winBg    = winBetter   ? 'rgba(0,230,118,.07)' : 'transparent';
-    var placeBg  = !winBetter  ? 'rgba(255,193,7,.07)' : 'transparent';
+    var winCol   = winExpProfit  >= 0 ? 'var(--g)'    : 'var(--re-tx)';
+    var placeCol = placeExpProfit >= 0 ? 'var(--gold)' : 'var(--re-tx)';
+    var winBg    = winBetter   ? 'rgba(var(--g-rgb),.07)' : 'transparent';
+    var placeBg  = !winBetter  ? 'rgba(var(--gold-rgb),.07)' : 'transparent';
     var winBord  = winBetter   ? '2px solid var(--g)'  : '1px solid var(--bd)';
     var placeBord= !winBetter  ? '2px solid var(--gold)':'1px solid var(--bd)';
 
@@ -2828,25 +2991,25 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
       // Win column
       + '<div style="background:'+winBg+';border:'+winBord+';border-radius:8px;padding:10px">'
       + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Win · '+wName+'</div>'
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+winCol+'">'+(winExpProfit>=0?'+':'')+'£'+winExpProfit.toFixed(2)+' exp</div>'
+      + '<div style="font-family:var(--sans);font-weight:800;font-size:1rem;color:'+winCol+'">'+(winExpProfit>=0?'+':'')+'£'+winExpProfit.toFixed(2)+' exp</div>'
       + '<div style="height:1px;background:var(--bd);margin:6px 0"></div>'
       + '<div style="font-size:.68rem;color:var(--mt)">If wins</div>'
-      + '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.82rem;color:var(--g)">+£'+winProfit.toFixed(2)+'</div>'
+      + '<div style="font-family:var(--mono);font-size:.82rem;color:var(--g)">+£'+winProfit.toFixed(2)+'</div>'
       + '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">returns £'+winReturn.toFixed(2)+'</div>'
       + '<div style="font-size:.62rem;color:var(--mt);margin-top:4px">'+Math.round(w.score*100)+'% chance</div>'
-      + (winBetter ? '<div style="font-size:.6rem;color:var(--g);font-weight:600;margin-top:5px;font-family:\'IBM Plex Mono\',monospace">▲ BETTER EV</div>' : '')
+      + (winBetter ? '<div style="font-size:.6rem;color:var(--g);font-weight:600;margin-top:5px;font-family:var(--mono)">▲ BETTER EV</div>' : '')
       + '</div>'
 
       // Place column
       + '<div style="background:'+placeBg+';border:'+placeBord+';border-radius:8px;padding:10px">'
       + '<div style="font-size:.58rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">Place · '+vName+'</div>'
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:'+placeCol+'">'+(placeExpProfit>=0?'+':'')+'£'+placeExpProfit.toFixed(2)+' exp</div>'
+      + '<div style="font-family:var(--sans);font-weight:800;font-size:1rem;color:'+placeCol+'">'+(placeExpProfit>=0?'+':'')+'£'+placeExpProfit.toFixed(2)+' exp</div>'
       + '<div style="height:1px;background:var(--bd);margin:6px 0"></div>'
       + '<div style="font-size:.68rem;color:var(--mt)">If places</div>'
-      + '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.82rem;color:var(--gold)">+£'+placeProfit.toFixed(2)+'</div>'
+      + '<div style="font-family:var(--mono);font-size:.82rem;color:var(--gold)">+£'+placeProfit.toFixed(2)+'</div>'
       + '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">returns £'+placeReturn.toFixed(2)+'</div>'
       + '<div style="font-size:.62rem;color:var(--mt);margin-top:4px">'+Math.round(pp_val.placeProb*100)+'% chance · '+fracLabel+' · '+placeOdds_val.toFixed(2)+'</div>'
-      + (!winBetter ? '<div style="font-size:.6rem;color:var(--gold);font-weight:600;margin-top:5px;font-family:\'IBM Plex Mono\',monospace">▲ BETTER EV</div>' : '')
+      + (!winBetter ? '<div style="font-size:.6rem;color:var(--gold);font-weight:600;margin-top:5px;font-family:var(--mono)">▲ BETTER EV</div>' : '')
       + '</div>'
 
       + '</div>'
@@ -2856,26 +3019,20 @@ function betAdvisorHTML(scored, fieldSize, stake, placeFrac) {
       + '</div>';
   }
 
-  // Dutching: use S._lastScored (scored is out of scope here)
+  // Dutching: use S._lastScored (scored is out of scope here). The top two,
+  // only when they have 55%+ between them — see dutchPlanOf. £10 outlay.
   var dutchSource = (typeof scored !== 'undefined') ? scored : (S._lastScored || []);
-  // Field-size bands determine how many selections to dutch:
-  //   1-4 runners  -> 1 selection  (win only, no place terms)
-  //   5-7 runners  -> 2 selections (1-2 places)
-  //   8+ runners   -> 3 selections (1-2-3 places)
-  // Selections are the TOP-RANKED horses by the model (already sorted by score),
-  // and we always dutch the WIN market to a £10 total outlay.
-  var runnersWithOdds = dutchSource.filter(function(r){ return !r._nr && r.odds > 1.0; });
-  var fieldSize = dutchSource.filter(function(r){ return !r._nr; }).length;
-  var nSel = fieldSize >= 8 ? 3 : (fieldSize >= 5 ? 2 : 1);
-  var dutchCandidates = runnersWithOdds.slice(0, nSel);  // top N by model rank
+  var plan = dutchPlanOf(dutchSource);
+  var fieldSize = plan.field;
+  var dutchCandidates = plan.sels;
   var DUTCH_OUTLAY = 10;  // fixed £10 total stake per race
-  // Need valid odds on every selection to dutch; a single selection is just a win bet
-  var dutchHtml = (dutchCandidates.length >= 1 && dutchCandidates.every(function(r){ return r.odds > 1.0; }))
-    ? dutchHTML(
-        dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }),
-        DUTCH_OUTLAY,
-        nSel, fieldSize
-      ) : '';
+  var dutchHtml = dutchCandidates.length
+    ? dutchHTML(dutchCandidates.map(function(r){ return {name: r.name, odds: r.odds}; }), DUTCH_OUTLAY, 2, fieldSize)
+    : (plan.combined > 0
+        ? '<div class="dutch-card"><div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:4px">💰 Dutching</div>'
+          + '<div style="font-size:.74rem;color:var(--mt);line-height:1.45">No dutch here — the top two have ' + Math.round(plan.combined * 100)
+          + '% between them. Dutching only pays when they have 55% or more.</div></div>'
+        : '');
   // Stash the dutch selections for result logging
   S._dutchSelections = dutchCandidates.map(function(r){
     return { name: r.name, odds: r.odds };
@@ -3309,6 +3466,9 @@ function showResults(scored, val, race, paceInfo) {
   // Pace banner
   h += paceBannerHTML(paceInfo);
 
+  // Weather at the course (filled in once fetched)
+  h += '<div id="wxStrip" class="wx-strip"></div>';
+
   // Winner card
   var paceMk = w._pace === 'front' ? '<span class="mk front" style="margin-left:6px">▶ FRONT</span>'
              : w._pace === 'closer' ? '<span class="mk closer" style="margin-left:6px">◀ CLOSER</span>' : '';
@@ -3316,14 +3476,14 @@ function showResults(scored, val, race, paceInfo) {
     + '<div class="slbl">🏆 Predicted Winner</div>'
     + '<div class="bn gn">' + w.name + paceMk + classChangeBadge(w, race) + '</div>'
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
-    + row('Jockey', (w.jockey.replace(/\s*\(\d+\)/,'') || '—') + (w._jockeyWas ? ' <span style="color:#ffb300">🔄 was ' + esc(w._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : ''))
+    + row('Jockey', (w.jockey.replace(/\s*\(\d+\)/,'') || '—') + (w._jockeyWas ? ' <span style="color:var(--gold)">🔄 was ' + esc(w._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : ''))
     + row('Draw (stall)', drawOf(w) || '—')
     + row('Cloth no.', clothOf(w) || '—')
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
     + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
     + row('Pace scenario', paceInfo.scenario === 'lone_front' ? '✅ Lone leader' : paceInfo.scenario === 'contested' ? '⚠ Contested' : paceInfo.scenario === 'slow' ? '🟣 Slow' : '—')
-    + row('Confidence', '<span style="color:#1a6b3a">' + conf + '%</span>')
+    + row('Confidence', '<span style="color:var(--g)">' + conf + '%</span>')
     + '<div class="cb"><div class="cf" style="width:' + conf + '%;background:var(--g)"></div></div>'
     + '</div>';
 
@@ -3333,8 +3493,8 @@ function showResults(scored, val, race, paceInfo) {
   if (mp) rememberModelPick(race, mp, w.name);
   var mpOld = mp ? null : rememberedModelPick(race);
   if (mp) {
-    h += '<div style="margin:8px 0;padding:8px 10px;border:1px solid rgba(255,193,7,.35);border-radius:8px;'
-      + 'background:rgba(255,193,7,.08);font-size:.72rem;line-height:1.45">'
+    h += '<div style="margin:8px 0;padding:8px 10px;border:1px solid rgba(var(--gold-rgb),.35);border-radius:8px;'
+      + 'background:rgba(var(--gold-rgb),.08);font-size:.72rem;line-height:1.45">'
       + '🧠 <strong>Model\'s pick: ' + esc(mp.name) + '</strong>'
       + (mp.odds > 0 ? ' @ ' + mp.odds.toFixed(1) : '')
       + '<div style="color:var(--mt);font-size:.64rem">Before the market adjustment, the model rates this horse highest. '
@@ -3342,8 +3502,8 @@ function showResults(scored, val, race, paceInfo) {
       + '</div>';
   } else if (mpOld) {
     var curOld = scored.filter(function(r){ return r.name === mpOld.name; })[0];
-    h += '<div style="margin:8px 0;padding:8px 10px;border:1px dashed rgba(255,193,7,.35);border-radius:8px;'
-      + 'background:rgba(255,193,7,.04);font-size:.72rem;line-height:1.45">'
+    h += '<div style="margin:8px 0;padding:8px 10px;border:1px dashed rgba(var(--gold-rgb),.35);border-radius:8px;'
+      + 'background:rgba(var(--gold-rgb),.04);font-size:.72rem;line-height:1.45">'
       + '🧠 <strong>Model\'s pick earlier: ' + esc(mpOld.name) + '</strong>'
       + (mpOld.odds > 0 ? ' @ ' + (+mpOld.odds).toFixed(1) : '')
       + ' <span style="color:var(--mt)">(' + (mpOld.seen === mpOld.last ? 'at ' + mpOld.seen : mpOld.seen + '–' + mpOld.last) + ')</span>'
@@ -3364,7 +3524,7 @@ function showResults(scored, val, race, paceInfo) {
     h += '<div class="rval">'
       + '<div class="vflag">💰 VALUE PLACE BET</div>'
       + '<div class="bn gd">' + val.name + valPaceMk + '</div>'
-      + row('Decimal odds', '<span style="color:var(--gold);font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem">' + val.odds.toFixed(1) + '</span>')
+      + row('Decimal odds', '<span style="color:var(--gold);font-family:var(--sans);font-weight:800;font-size:1.4rem">' + val.odds.toFixed(1) + '</span>')
       + row('Predicted finish', pl)
       + row('Jockey', val.jockey.replace(/\s*\(\d+\)/,'') || '—')
       + (val.or > 0 ? row('Official Rating', val.or) : '')
@@ -3381,25 +3541,21 @@ function showResults(scored, val, race, paceInfo) {
   S._lastScored = scored; S._lastRace = race; S._lastPace = paceInfo;
 
   h += '<div style="margin:0 0 12px">'
-    + '<button onclick="exportRaceForAI(\'copy\')" style="width:100%;padding:11px;border-radius:8px;'
-    + 'border:1px solid rgba(68,138,255,.35);background:rgba(68,138,255,.1);color:var(--bl);'
-    + 'font-family:var(--mono);font-size:.64rem;font-weight:600;cursor:pointer;letter-spacing:.5px">'
+    + '<button onclick="exportRaceForAI(\'copy\')" style="width:100%;padding:11px;border-radius:12px;'
+    + 'border:1px solid rgba(var(--bl2-rgb),.35);background:rgba(var(--bl2-rgb),.1);color:var(--bl);'
+    + 'font:700 .78rem var(--sans);cursor:pointer">'
     + '🤖 Copy race brief for AI</button>'
     + '<div id="aiBriefBox" style="display:none;margin-top:8px"></div>'
     + '</div>';
 
   h += '<div class="arc"><div class="art">Full Predicted Order</div>';
-  // Value pick: top-3 runner with biggest model-vs-market edge (backtested +ROI both samples)
-  var _vpIdx = -1, _vpEdge = -9;
-  scored.slice(0,3).forEach(function(r, i) {
-    if (!r.odds || r.odds <= 1) return;
-    var edge = r.score - (1 / r.odds);
-    if (edge > _vpEdge) { _vpEdge = edge; _vpIdx = i; }
-  });
+  // Value pick: a top-3 runner whose chance × price shows a 5%+ edge
+  var _vp = valuePickOf(scored);
+  var _vpIdx = _vp ? scored.indexOf(_vp.runner) : -1;
   scored.forEach(function(r, i) {
     var pc = i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
-    var vpLbl = (i === _vpIdx && _vpEdge > 0)
-      ? ' <span class="mk" style="background:rgba(255,215,0,.14);color:#ffd700;border:1px solid rgba(255,215,0,.4);font-weight:700" title="Biggest model-vs-market edge in the top 3 (+' + Math.round(_vpEdge*100) + '%). Strategy showed positive ROI in backtests — track it in the dashboard.">💰 VALUE</span>'
+    var vpLbl = (i === _vpIdx)
+      ? ' <span class="mk mk-value" title="Our ' + Math.round(r.score*100) + '% chance at ' + r.odds + ' gives a ' + _vp.edge + '% edge over the price.">💰 VALUE</span>'
       : '';
     var paceLbl = r._pace === 'front' ? ' <span class="mk front">▶</span>' : r._pace === 'closer' ? ' <span class="mk closer">◀</span>' : '';
     var mvLbl = r._mv === 'steam' ? ' <span class="mk steam">▲ STEAM</span>' : r._mv === 'drift' ? ' <span class="mk drift">▽ DRIFT</span>' : '';
@@ -3443,9 +3599,9 @@ function showResults(scored, val, race, paceInfo) {
           var classDropped = bfRaceCls > 0 && thisCls > 0 && thisCls > bfRaceCls;
 
           if (classDropped) {
-            bfAlert = ' <span class="mk" style="background:rgba(255,140,0,.2);color:#ffaa00;border:1px solid rgba(255,140,0,.6);font-weight:700" title="Beaten ' + bfLabel + ' in Class ' + bfRaceCls + ' at ' + esc(hStat2.bfCourse) + ' — NOW Class ' + thisCls + ' (dropped ' + (thisCls-bfRaceCls) + ' classes)">👀⬇ BF DROP</span>';
+            bfAlert = ' <span class="mk" style="background:rgba(var(--or-rgb),.2);color:var(--gold);border:1px solid rgba(var(--or-rgb),.6);font-weight:700" title="Beaten ' + bfLabel + ' in Class ' + bfRaceCls + ' at ' + esc(hStat2.bfCourse) + ' — NOW Class ' + thisCls + ' (dropped ' + (thisCls-bfRaceCls) + ' classes)">👀⬇ BF DROP</span>';
           } else {
-            bfAlert = ' <span class="mk" style="background:rgba(255,82,82,.12);color:var(--re);border:1px solid rgba(255,82,82,.3)" title="Beaten ' + bfLabel + ' at ' + esc(hStat2.bfCourse) + ' ' + daysSinceBf + ' days ago (finished ' + hStat2.bfPos + ')">👀 BF</span>';
+            bfAlert = ' <span class="mk" style="background:rgba(var(--re-rgb),.12);color:var(--re);border:1px solid rgba(var(--re-rgb),.3)" title="Beaten ' + bfLabel + ' at ' + esc(hStat2.bfCourse) + ' ' + daysSinceBf + ' days ago (finished ' + hStat2.bfPos + ')">👀 BF</span>';
           }
           r._bfAlert  = true;
           r._bfCourse = hStat2.bfCourse || '';
@@ -3466,7 +3622,7 @@ function showResults(scored, val, race, paceInfo) {
     var geldingAlert = '';
     // Source 1: PDF form guide contains "GELDING NOTIFICATION"
     if (r._recentlyGelded) {
-      geldingAlert = ' <span class="mk" style="background:rgba(100,180,255,.18);color:#64b4ff;border:1px solid rgba(100,180,255,.5);font-weight:700" title="Gelding notification in recent form — first run as gelding">✂ GELDED</span>';
+      geldingAlert = ' <span class="mk" style="background:rgba(var(--bl2-rgb),.18);color:var(--bl);border:1px solid rgba(var(--bl2-rgb),.5);font-weight:700" title="Gelding notification in recent form — first run as gelding">✂ GELDED</span>';
     }
     // Source 2: Model horseStats shows C→G transition
     if (!geldingAlert && S.model && S.model.horseStats) {
@@ -3476,7 +3632,7 @@ function showResults(scored, val, race, paceInfo) {
         var geldMs   = new Date(hStatG.geldedDate).getTime();
         var geldDays = Math.round((Date.now() - geldMs) / 86400000);
         if (geldDays >= 0 && geldDays <= 180) {
-          geldingAlert = ' <span class="mk" style="background:rgba(100,180,255,.12);color:#64b4ff;border:1px solid rgba(100,180,255,.3)" title="Recently gelded ' + geldDays + ' days ago — gelding often leads to improvement">✂ GELDED</span>';
+          geldingAlert = ' <span class="mk" style="background:rgba(var(--bl2-rgb),.12);color:var(--bl);border:1px solid rgba(var(--bl2-rgb),.3)" title="Recently gelded ' + geldDays + ' days ago — gelding often leads to improvement">✂ GELDED</span>';
         }
       }
     }
@@ -3514,7 +3670,7 @@ function showResults(scored, val, race, paceInfo) {
       } else {
         var trav = checkLongTravel(trainerName, race.course);
         if (trav) {
-          travelAlert = ' <span class="mk" style="background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.3)" title="' + trainerName + ' usually runs at ' + trav.homeCourse + '">✈ ' + trav.miles + 'mi</span>';
+          travelAlert = ' <span class="mk" style="background:rgba(var(--gold-rgb),.15);color:var(--gold);border:1px solid rgba(var(--gold-rgb),.3)" title="' + trainerName + ' usually runs at ' + trav.homeCourse + '">✈ ' + trav.miles + 'mi</span>';
         } else {
           // Get trainer's top homes for diagnostic
           var topHomes = Object.keys(S.model.trainerCourses[trainerName])
@@ -3552,7 +3708,7 @@ function showResults(scored, val, race, paceInfo) {
         + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert + classChangeBadge(r, race)
           + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—')
-        + (r._jockeyWas ? ' <span style="color:#ffb300;font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
+        + (r._jockeyWas ? ' <span style="color:var(--gold);font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
         + ' · Draw ' + drawOf(r) + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
@@ -3584,7 +3740,7 @@ function showResults(scored, val, race, paceInfo) {
       var isOverlay = modelPct > mktPct;
       var isUnder   = modelPct < mktPct - 3;
       var barCol    = isOverlay ? 'var(--g)'   : isUnder ? 'var(--re)' : 'var(--mt)';
-      var mktCol    = '#1c3024';
+      var mktCol    = 'var(--bd)';
       var label     = isOverlay ? '▲ VALUE' : isUnder ? '▼ AVOID' : '';
       var labelCol  = isOverlay ? 'var(--g)' : 'var(--re)';
       var maxPct    = Math.max(modelPct, mktPct, 5);
@@ -3599,13 +3755,13 @@ function showResults(scored, val, race, paceInfo) {
         + '</div>'
         + '<div style="position:relative;height:16px;background:var(--sf2);border-radius:3px;overflow:visible">'
           + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.round(modelPct/maxPct*100)+'%;background:'+barCol+';border-radius:3px;opacity:0.8"></div>'
-          + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.round(mktPct/maxPct*100)+'%;border:1px solid rgba(255,255,255,0.15);border-radius:3px;background:transparent"></div>'
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:'+Math.round(mktPct/maxPct*100)+'%;border:1px solid rgba(var(--ov-rgb),0.15);border-radius:3px;background:transparent"></div>'
         + '</div>'
       + '</div>';
     });
     h += '<div style="display:flex;gap:14px;margin-top:6px;font-size:.6rem;color:var(--mt)">'
       + '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:3px;background:var(--g);border-radius:2px"></span>Model probability</span>'
-      + '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:3px;background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:2px"></span>Market implied</span>'
+      + '<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:3px;background:transparent;border:1px solid rgba(var(--ov-rgb),0.2);border-radius:2px"></span>Market implied</span>'
       + '<span>▲ VALUE = model rates higher than market</span>'
       + '</div>';
   }
@@ -3625,8 +3781,8 @@ function showResults(scored, val, race, paceInfo) {
     + (runners.length >= 5 ? '<div class="res-pos-row"><div class="res-pos-num p2">2nd</div><select class="res-pos-sel" id="res2">'+options+'</select></div>' : '')
     + (runners.length >= 8 ? '<div class="res-pos-row"><div class="res-pos-num p3">3rd</div><select class="res-pos-sel" id="res3">'+options+'</select></div>' : '')
     + '<button class="res-save-btn" onclick="saveRaceResult(\'' + raceKey + '\')">✓ Save Result</button>'
-    + '<button class="res-save-btn" onclick="exportPredLog()" style="margin-top:6px;background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.3);color:var(--green)">⬇ Export Results JSON</button>'
-    + '<div class="res-api-status" id="resApiStatus" style="font-size:.68rem;font-family:\'IBM Plex Mono\',monospace;margin-top:8px;line-height:1.4"></div>'
+    + '<button class="res-save-btn" onclick="exportPredLog()" style="margin-top:6px;background:rgba(var(--g-rgb),.12);border:1px solid rgba(var(--g-rgb),.3);color:var(--green)">⬇ Export Results JSON</button>'
+    + '<div class="res-api-status" id="resApiStatus" style="font-size:.68rem;font-family:var(--mono);margin-top:8px;line-height:1.4"></div>'
     + '<div class="res-saved" id="resSaved"></div>'
     + '</div>';
 
@@ -3639,6 +3795,7 @@ function showResults(scored, val, race, paceInfo) {
   var el = document.getElementById('pres');
   el.innerHTML = h;
   el.scrollIntoView({ behavior: 'smooth' });
+  try { fillRaceWeather(race); } catch(e) {}
 
   // Pre-fill dropdowns if already logged
   if (existing && existing.actual) {
@@ -3662,16 +3819,9 @@ function showResults(scored, val, race, paceInfo) {
   });
   var _mp = modelPickOf(scored);
   S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
-  // Value pick: within top 3, the runner with the biggest model-vs-market edge
-  // Backtested on 199 logged races: +17% / +28% ROI in two independent samples
   S._logValuePick = (function(){
-    var best = null, bestEdge = -9;
-    scored.slice(0,3).forEach(function(r){
-      if (!r.odds || r.odds <= 1) return;
-      var edge = r.score - (1 / r.odds);
-      if (edge > bestEdge) { bestEdge = edge; best = r; }
-    });
-    return best ? { name: best.name, odds: best.odds, edge: Math.round(bestEdge*100) } : null;
+    var vp = valuePickOf(scored);
+    return vp ? { name: vp.runner.name, odds: vp.runner.odds, edge: vp.edge } : null;
   })();
   // Propagate BF flags from the scored copies back onto the original runners,
   // so the result-log snapshot below actually captures them (scored is a copy of
@@ -3842,6 +3992,8 @@ function restoreTodaysCards() {
 // empty (see bfPrice), so the Nap stays provisional until 10:30 UK time, or
 // 90 minutes before the meeting's first race if that comes sooner.
 var NAP_READY_HHMM = '10:30';
+// The Nap is the meeting's most likely winner, but not an odds-on shot.
+var NAP_MIN_ODDS = 1.8;
 function ukNowMinutes() {
   try {
     var s = new Date().toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -3942,12 +4094,12 @@ function updateSetupHint(races) {
   var modelMismatch = S.model && S.model.surface !== surface;
   var statusHtml;
   if (modelMatch) {
-    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.3);font-size:.78rem;color:#9ef5c0">✓ Loaded model matches this card — you\'re good to go.</div>';
+    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(var(--g-rgb),.08);border:1px solid rgba(var(--g-rgb),.3);font-size:.78rem;color:var(--g-tx)">✓ Loaded model matches this card — you\'re good to go.</div>';
   } else if (modelMismatch) {
     var needed = surface === 'aw' ? 'All-Weather' : surface === 'jumps' ? 'Jumps' : 'Flat Turf';
-    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.3);font-size:.78rem;color:#ffe082">⚠ Loaded model is <strong>' + S.model.surface.toUpperCase() + '</strong> but this card needs a <strong>' + needed + '</strong> model. Retrain on ' + needed + ' data for best results.</div>';
+    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.3);font-size:.78rem;color:var(--gold-tx)">⚠ Loaded model is <strong>' + S.model.surface.toUpperCase() + '</strong> but this card needs a <strong>' + needed + '</strong> model. Retrain on ' + needed + ' data for best results.</div>';
   } else {
-    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(64,196,255,.08);border:1px solid rgba(64,196,255,.3);font-size:.78rem;color:#80d8ff">💡 No model loaded. For this card, train on <strong>' + surfaceLabel + '</strong> data in the Trainer app.</div>';
+    statusHtml = '<div style="margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(var(--bl-rgb),.08);border:1px solid rgba(var(--bl-rgb),.3);font-size:.78rem;color:var(--bl-tx)">💡 No model loaded. For this card, train on <strong>' + surfaceLabel + '</strong> data in the Trainer app.</div>';
   }
 
   box.innerHTML = '<div style="padding:12px 14px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">'
@@ -3967,7 +4119,7 @@ function updateSetupHint(races) {
   if (!geldTip) {
     geldTip = document.createElement('div');
     geldTip.id = 'geldTip';
-    geldTip.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(100,180,255,.07);border:1px solid rgba(100,180,255,.2);font-family:var(--mono);font-size:.62rem;color:#64b4ff';
+    geldTip.style.cssText = 'margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(var(--bl2-rgb),.07);border:1px solid rgba(var(--bl2-rgb),.2);font-family:var(--mono);font-size:.62rem;color:var(--bl)';
     box.parentNode.insertBefore(geldTip, box.nextSibling);
   }
   if (hasGelded) {
@@ -4023,10 +4175,10 @@ function renderRaceList(races) {
   var list = document.getElementById('rl'); list.innerHTML = '';
   // Evening workflow: one tap fetches + logs every finished race's result
   var bulkBtn = document.createElement('div');
-  bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.25);color:var(--g);border-radius:8px;cursor:pointer" onclick="syncResults(true)">🔄 Sync results now</button>';
+  bulkBtn.innerHTML = '<button style="width:100%;margin:0 0 10px;padding:11px;font:700 .78rem var(--sans);background:rgba(var(--g-rgb),.1);border:1px solid rgba(var(--g-rgb),.3);color:var(--g);border-radius:12px;cursor:pointer" onclick="syncResults(true)">🔄 Sync results now</button>';
   list.appendChild(bulkBtn);
   var aiBtn = document.createElement('div');
-  aiBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:10px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(68,138,255,.1);border:1px solid rgba(68,138,255,.35);color:var(--bl);border-radius:8px;cursor:pointer" onclick="exportMeetingForAI()">🤖 Copy whole meeting for AI</button>'
+  aiBtn.innerHTML = '<button style="width:100%;margin:0 0 12px;padding:11px;font:700 .78rem var(--sans);background:rgba(var(--bl2-rgb),.1);border:1px solid rgba(var(--bl2-rgb),.35);color:var(--bl);border-radius:12px;cursor:pointer" onclick="exportMeetingForAI()">🤖 Copy whole meeting for AI</button>'
     + '<div id="aiMeetingBox" style="display:none;margin:0 0 12px"></div>';
   list.appendChild(aiBtn);
   renderMeetingsList();
@@ -4035,12 +4187,12 @@ function renderRaceList(races) {
     d.className = 'ri'; d.id = 'ri_'+i;
     var tip = r.topTip ? '<div class="tbadge">Tip: '+r.topTip.substring(0,22)+'</div>' : '';
     var surfTag = (r.surface === 'aw')
-      ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.2);margin-left:5px;vertical-align:middle">AW</span>'
-      : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(0,230,118,.08);color:var(--g);border:1px solid rgba(0,230,118,.15);margin-left:5px;vertical-align:middle">Turf</span>';
+      ? '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(var(--bl-rgb),.12);color:var(--bl);border:1px solid rgba(var(--bl-rgb),.2);margin-left:5px;vertical-align:middle">AW</span>'
+      : '<span style="font-size:.52rem;padding:1px 5px;border-radius:3px;background:rgba(var(--g-rgb),.08);color:var(--g);border:1px solid rgba(var(--g-rgb),.15);margin-left:5px;vertical-align:middle">Turf</span>';
     var _lg = getPredictionLog(raceKeyFor(r));
     var _bdg = '';
     if (_lg) {
-      var _c = _lg.topPickWon ? '0,230,118' : _lg.topPickPlaced ? '255,193,7' : '255,82,82';
+      var _c = _lg.topPickWon ? 'var(--g-rgb)' : _lg.topPickPlaced ? 'var(--gold-rgb)' : 'var(--re-rgb)';
       var _t = _lg.topPickWon ? '✓ WON' : _lg.topPickPlaced ? 'PLACED' : 'LOST';
       _bdg = '<span style="font-size:.52rem;padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;background:rgba('+_c+',.12);color:rgb('+_c+');border:1px solid rgba('+_c+',.3)">'+_t+'</span>';
     }
@@ -4049,13 +4201,15 @@ function renderRaceList(races) {
     d.innerHTML = '<div><div class="tm" style="color:'+(_past?'var(--mt)':'var(--g)')+'">'+r.time+_bdg+'</div>'
       +'<div class="nm"'+(_past?' style="color:var(--mt)"':'')+'>'+(r.title||'Race '+r.rnum).substring(0,46)+'</div>'+tip+'</div>'
       +'<div style="text-align:right"><div style="font-size:.82rem;color:var(--tx)">'+r.dist+surfTag+'</div>'
-      +'<div style="font-family:\'IBM Plex Mono\',monospace;font-size:.68rem;color:var(--mt)">'+r.runners.length+' runners</div></div>';
+      +'<div style="font-family:var(--mono);font-size:.68rem;color:var(--mt)">'+r.runners.length+' runners</div>'
+      +'<span class="wx-chip" id="wxc_'+i+'" style="display:none"></span></div>';
     d.onclick = (function(idx){ return function(){ selRace(idx); }; })(i);
     list.appendChild(d);
+    try { fillWeatherChip('wxc_' + i, r.course, r.time, r.date); } catch(e) {}
   });
   // Always-available export — the same JSON checker.html imports
   var expBtn = document.createElement('div');
-  expBtn.innerHTML = '<button style="width:100%;margin:14px 0 0;padding:11px;font-size:.7rem;font-family:\'IBM Plex Mono\',monospace;font-weight:600;background:rgba(255,255,255,.04);border:1px solid var(--bd);color:var(--tx);border-radius:8px;cursor:pointer" onclick="exportPredLog()">⬇ Export Results JSON — all logged races (for the Results Dashboard)</button>';
+  expBtn.innerHTML = '<button style="width:100%;margin:14px 0 0;padding:11px;font:600 .76rem var(--sans);background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:12px;cursor:pointer" onclick="exportPredLog()">⬇ Export Results JSON — all logged races (for the Results Dashboard)</button>';
   list.appendChild(expBtn);
 }
 
@@ -4087,14 +4241,14 @@ function selRace(i) {
   if (badge) {
     if (raceSurf === 'aw') {
       badge.textContent = 'All-Weather';
-      badge.style.background = 'rgba(64,196,255,.1)';
+      badge.style.background = 'rgba(var(--bl-rgb),.1)';
       badge.style.color = 'var(--bl)';
-      badge.style.borderColor = 'rgba(64,196,255,.2)';
+      badge.style.borderColor = 'rgba(var(--bl-rgb),.2)';
     } else {
       badge.textContent = 'Turf';
-      badge.style.background = 'rgba(0,230,118,.1)';
+      badge.style.background = 'rgba(var(--g-rgb),.1)';
       badge.style.color = 'var(--g)';
-      badge.style.borderColor = 'rgba(0,230,118,.2)';
+      badge.style.borderColor = 'rgba(var(--g-rgb),.2)';
     }
   }
   go('predict');
@@ -4108,11 +4262,18 @@ function selRace(i) {
 // apart the model's coefficients no longer mean anything.
 // ══════════════════════════════════════════════════════════════════
 var V3 = {
-  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA'],
+  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA',
+          'wt','age','mktWet','mktBig','mktRain'],
   NAMES: ['Horse win rate','Horse place rate','Jockey win rate','Trainer win rate','Draw (course + stall)',
           'Going record','Distance record','Course record','Freshness','Official Rating vs field','No Official Rating',
           'Last RPR vs field','No previous RPR','Last Topspeed vs field','No previous Topspeed',
-          'Recent form (last 3 runs)','No form'],
+          'Recent form (last 3 runs)','No form',
+          'Weight carried vs field','Age vs field',
+          'Price on soft/heavy ground','Price in big fields','Price on a wet day'],
+  // Features that change how far to trust the price: they multiply the market
+  // term, so a negative weight flattens the market (outsiders win more often).
+  MKX:   [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,
+          false,false,true,true,true],
   HP: 8,    // horse prior: runs' worth of population average
   JP: 30,   // jockey / trainer prior
   DP: 30,   // course-stall prior
@@ -4131,6 +4292,13 @@ var V3 = {
     var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].split(',')[0].trim();
     return V3.GOING[k] !== undefined ? V3.GOING[k] : 4;
   },
+  // Weight: "9-4" -> 130 lbs; a plain number is taken as lbs
+  lbsOf: function(w) {
+    var s = String(w || '').trim(), m = s.match(/^(\d{1,2})-(\d{1,2})$/);
+    if (m) return (+m[1]) * 14 + (+m[2]);
+    var n = parseFloat(s);
+    return (n > 60 && n < 220) ? n : 0;
+  },
   // Finishing position -> recent-form points
   posPts: function(p) { return p === 1 ? 1 : p === 2 ? 0.6 : p === 3 ? 0.4 : p === 4 ? 0.2 : 0; },
   // Racecard form string ("3-2141", "P/21", "0F12") -> positions, most recent first
@@ -4143,10 +4311,31 @@ var V3 = {
     }
     return out;
   },
+  // Market chances with the margin removed by the power method: k such that
+  // Σ(1/odds)^k = 1. A thin market's margin sits mostly on the outsiders.
+  mktProbs: function(odds) {
+    var q = odds.map(function(o){ return o > 1 ? 1 / o : 0; }), lo = 0.2, hi = 5, k = 1, i, s, it;
+    for (it = 0; it < 60; it++) {
+      k = (lo + hi) / 2; s = 0;
+      for (i = 0; i < q.length; i++) if (q[i] > 0) s += Math.pow(q[i], k);
+      if (s > 1) lo = k; else hi = k;
+    }
+    var p = q.map(function(x){ return x > 0 ? Math.pow(x, k) : 0; }), t = 0;
+    for (i = 0; i < p.length; i++) t += p[i];
+    return p.map(function(x){ return x / (t || 1); });
+  },
+  // The market term per runner: log of the power-method chance for models
+  // trained from v3.1 (devig 'power'), log(1/odds) for v3.0 models
+  mktLogs: function(odds, model) {
+    if (model && model.devig === 'power') return V3.mktProbs(odds).map(function(p){ return Math.log(Math.max(p, 1e-6)); });
+    return odds.map(function(o){ return Math.log(1 / o); });
+  },
 
-  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp }  (lp = positions, most recent first)
+  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp, lbs, age, ran, rain }
+  //    lp = positions, most recent first; ran = runners in the race; rain = the
+  //    day's rain at the course in mm (0 if unknown)
   // st: { HS, JS, TS, CD, pop, popP }  (pop = population win rate, popP = place rate)
-  // Returns the feature vector before field-relative centring (or/rpr/ts are raw here).
+  // Returns the feature vector before field-relative centring (or/rpr/ts/wt/age are raw here).
   raw: function(x, st) {
     var pop = st.pop || 0.1;
     var H = st.HS[x.h] || null, J = st.JS[x.j] || null, T = st.TS[x.t] || null;
@@ -4167,14 +4356,21 @@ var V3 = {
     var lp = x.lp || [], wts = [0.5, 0.3, 0.2], fs = 0, fw = 0;
     for (var i = 0; i < lp.length && i < 3; i++) { fs += wts[i] * V3.posPts(lp[i]); fw += wts[i]; }
     var form = fw > 0 ? fs / fw : 0, formNA = fw > 0 ? 0 : 1;
+    var gs = x.gs || 4;
+    var wet  = Math.min(1, Math.max(0, (4 - gs) / 3));                 // good 0 · soft 0.67 · heavy 1
+    var big  = Math.min(1, Math.max(0, ((x.ran || 0) - 8) / 8));       // 8 runners 0 · 16+ 1
+    var rain = Math.min(1, Math.max(0, (x.rain || 0) / 10));           // 10mm+ in the day = 1
     return [hwr, hpr, jwr, twr, draw, gm, dm, cm, fr,
             x.or > 0 ? x.or : 0, x.or > 0 ? 0 : 1,
             x.lr > 0 ? x.lr : 0, x.lr > 0 ? 0 : 1,
             x.lt > 0 ? x.lt : 0, x.lt > 0 ? 0 : 1,
-            form, formNA];
+            form, formNA,
+            x.lbs > 0 ? x.lbs : 0, x.age > 0 ? x.age : 0,
+            wet, big, rain];
   },
 
-  // Centre OR / last RPR / last TS on the field average of known values, in 10s of lbs.
+  // Centre OR / last RPR / last TS on the field average of known values, in 10s
+  // of lbs; weight carried (10s of lbs) and age (years) likewise, 0 = unknown.
   centre: function(rows) {
     [[9, 10], [11, 12], [13, 14]].forEach(function(pair) {
       var v = pair[0], na = pair[1], s = 0, n = 0;
@@ -4182,14 +4378,25 @@ var V3 = {
       var mean = n ? s / n : 0;
       rows.forEach(function(f){ f[v] = f[na] ? 0 : (f[v] - mean) / 10; });
     });
+    [[17, 10], [18, 1]].forEach(function(pair) {
+      var v = pair[0], sc = pair[1], s = 0, n = 0;
+      rows.forEach(function(f){ if (f[v] > 0) { s += f[v]; n++; } });
+      var mean = n ? s / n : 0;
+      rows.forEach(function(f){ f[v] = (f[v] > 0 && n > 1) ? (f[v] - mean) / sc : 0; });
+    });
     return rows;
   },
 
-  // Win probabilities: p ∝ exp(mkt·log(1/odds) + Σ coef·feature)
+  // Win probabilities: p ∝ exp(mkt·M + Σ coef·feature), where M is the market
+  // term and the MKX features enter as feature × M
   probs: function(rows, odds, model) {
+    var L = V3.mktLogs(odds, model);
     var z = rows.map(function(f, i) {
-      var s = model.mkt * Math.log(1 / odds[i]);
-      for (var k = 0; k < f.length; k++) s += (model.coef[k] || 0) * f[k];
+      var s = model.mkt * L[i];
+      for (var k = 0; k < f.length; k++) {
+        var c = model.coef[k] || 0;
+        if (c) s += c * (V3.MKX[k] ? f[k] * L[i] : f[k]);
+      }
       return s;
     });
     var mx = Math.max.apply(null, z);
@@ -4219,15 +4426,23 @@ var V3 = {
 // ══════════════════════════════════════════════════════════════════
 
 // Two calibration modes:
-//  'v2' — legacy models: anchor = market (1/odds), model = the composite score
+//  'v2' — legacy models: anchor = the market with its margin removed by the
+//         power method, model = the composite score. Refitted 19 Oct 2026 on
+//         688 fully priced races (30 Sep–19 Oct): a=1.05 (the market, slightly
+//         sharpened) and b=0.1 (a small say for the form model). Fitting a
+//         bigger form weight on early races made later races worse, every time.
+//         The old settings (a=0.891, b=0.275, proportional market) flattened
+//         the favourites and scored worse than the plain market.
 //  'v3' — trained v3 models: anchor = the v3 probability (already includes the
 //         market), model = the composite score (pace, jockey multipliers etc.).
 //         Starts as a=1, b=0 (trust v3 as trained); Calibrate Now learns from
 //         this device's results whether the composite adds anything on top.
 var V3_MIN_GAIN = 0.002;   // log-score per race a v3 model must beat the market by
-var CALIB_KEYS = { v2: 'rq_calib_v2', v3: 'rq_calib_v3' };
+// New key for v2: settings fitted on the old proportional market don't apply
+// to the power-method market.
+var CALIB_KEYS = { v2: 'rq_calib_v2p', v3: 'rq_calib_v3' };
 var CALIB_DEFAULTS = {
-  v2: { a:0.891, b:0.275, n:1502, from:'2026-08-01', to:'2026-10-03', source:'built-in' },
+  v2: { a:1.05, b:0.1, n:688, from:'2026-09-30', to:'2026-10-19', source:'built-in' },
   v3: { a:1, b:0, n:0, from:'', to:'', source:'built-in' }
 };
 var CALIB_MIN_RACES = 300;
@@ -4250,9 +4465,10 @@ function calibrateProbs(modelProbs, active, ctx, anchor) {
   if (!active || !active.length) return modelProbs;
   for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return modelProbs;
   var c = loadCalib(anchor ? 'v3' : 'v2');
+  var mkt = anchor ? null : powerDevig(active.map(function(r){ return r.odds; }));
   var z = active.map(function(r, i) {
-    // 1/odds, matching how A and B were fitted (scale cancels in the normalisation)
-    var base = anchor ? anchor[i] : 1 / r.odds;
+    // Power-method market probability, matching how A and B were fitted
+    var base = anchor ? anchor[i] : mkt[i];
     return c.a * Math.log(Math.max(base, 1e-4)) + c.b * Math.log(Math.max(modelProbs[i] || 0, 0.005));
   });
   var mx = Math.max.apply(null, z);
@@ -4275,15 +4491,27 @@ function v3ModelProbs(active, race, m) {
   var st = { HS: m.horseStats || {}, JS: m.jockeyStats || {}, TS: m.trainerStats || {},
              CD: m.courseDrawStats || {}, pop: m.popWinRate || 0.1, popP: m.popPlaceRate || 0.3 };
   var c = V3.courseKey(race.course), dist = parseDist(race.dist);
+  // Going: the per-course going if known, else the dropdown. Training used
+  // the official going at the time of each race, which already allows for
+  // the day's rain; the morning going doesn't, so knock it down half a step
+  // per 8mm forecast between 7am and the off (turf, at most 1.5 steps).
+  var goingTxt = getGoingForRace(race, (document.getElementById('gsel') || {}).value || '') || race.going || '';
+  var wx = raceWeatherCached(race), gs0 = V3.goingScore(goingTxt);
+  var turf = race.surface !== 'aw' && !isAWGoing(goingTxt);
+  var gsEff = (turf && wx && wx.rainSince7 > 0) ? Math.max(1, gs0 - Math.min(1.5, wx.rainSince7 / 16)) : gs0;
+  gsEff = Math.round(gsEff * 2) / 2;                 // the going table works in half steps
+  var dayRain = wx ? wx.rainDay : 0;
   var rows = active.map(function(r) {
     var h = V3.horseKey(r.name), H = st.HS[h];
     var lp = V3.formToPositions(r.form);
     if (!lp.length && H && H.lp) lp = H.lp;          // feed gave no form: use the model's history
     return V3.raw({ h: h, j: V3.personKey(r.jockey), t: V3.personKey(r.trainer), c: c,
                     stall: parseInt(r.draw || r.stall) || 0, dist: dist,
-                    gs: V3.goingScore(r.going || race.going),
+                    gs: r.going ? V3.goingScore(r.going) : gsEff,
                     days: r.daysSince > 0 ? r.daysSince : 0, or: parseInt(r.or) || 0,
-                    lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: lp }, st);
+                    lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: lp,
+                    lbs: (r.wst || r.wlbs) ? (r.wst || 0) * 14 + (r.wlbs || 0) : V3.lbsOf(r.lbs || r.wgt),
+                    age: parseInt(r.age) || 0, ran: active.length, rain: dayRain }, st);
   });
   V3.centre(rows);
   return V3.probs(rows, active.map(function(r){ return r.odds; }), m.v3);
@@ -4363,7 +4591,7 @@ function classChangeBadge(r, race) {
   var c = classChange(r, race);
   if (!c) return '';
   var drop = c.diff > 0, big = Math.abs(c.diff) >= 2;
-  var col = drop ? (big ? '#00e676' : '#7be0a8') : '#ff9800';
+  var col = drop ? (big ? 'var(--g)' : 'var(--g-tx)') : 'var(--or)';
   var tip = drop
     ? 'Dropped ' + c.diff + ' class' + (c.diff > 1 ? 'es' : '') + ' since its last run. Droppers win more often, but the market usually prices that in (GB turf 2021-26: 2+ class droppers won 13.7%, their SPs said 13.7%).'
     : 'Up ' + (-c.diff) + ' class' + (c.diff < -1 ? 'es' : '') + ' since its last run.';
@@ -4383,17 +4611,21 @@ function calibRacesFromLog(log, mode) {
     if (P.length < 3 || !win) return;
     var isV3 = e.mv === 3 || predsModelVersion(P) === 3;
     if ((mode === 'v3') !== isV3) return;
+    var full = !e.fieldSize || e.fieldSize === P.length;
+    // v2 anchors on the power-method market, which needs the whole field:
+    // older entries kept only the top 8 runners, so they're left out.
+    if (mode === 'v2' && !full) return;
+    for (var j = 0; j < P.length; j++) if (!(P[j].odds > 1)) return;
+    var dv = mode === 'v2' ? powerDevig(P.map(function(x){ return x.odds; })) : null;
     var rows = [];
     for (var i = 0; i < P.length; i++) {
       var p = P[i];
-      if (!(p.odds > 1)) return;
       var m = (p.raw !== undefined) ? p.raw : p.score;
       if (!(m >= 0)) return;
-      var anc = mode === 'v3' ? (p.v3 > 0 ? p.v3 / 100 : null) : 1 / p.odds;
+      var anc = mode === 'v3' ? (p.v3 > 0 ? p.v3 / 100 : null) : dv[i];
       if (!anc) return;
-      rows.push({ m: Math.log(anc), s: Math.log(Math.max(m, 0.5) / 100), w: p.name === win, odds: p.odds });
+      rows.push({ m: Math.log(Math.max(anc, 1e-6)), s: Math.log(Math.max(m, 0.5) / 100), w: p.name === win, odds: p.odds });
     }
-    var full = !e.fieldSize || e.fieldSize === P.length;
     out.push({ date: e.date || '', rows: rows, full: full, hasWinner: rows.some(function(r){ return r.w; }) });
   });
   return out;
@@ -4451,9 +4683,15 @@ function rebuildCalibMode(mode) {
 function rebuildCalib() { return rebuildCalibMode(activeCalibMode()); }
 
 // v3 if any loaded model is a trained v3 model, else v2
+// v3 only if a loaded v3 model passes the safety check (beats the market on
+// its own test by V3_MIN_GAIN) — a v3 file that fails it isn't used for
+// scoring, so its races are calibrated the v2 way.
+function v3Usable(m) {
+  return !!(m && m.v3 && m.v3.coef && !(m.v3.test && !(m.v3.test.modelLL > m.v3.test.marketLL + V3_MIN_GAIN)));
+}
 function activeCalibMode() {
   var ms = [S.modelTurf, S.modelAW, S.modelJumps, S.model];
-  return ms.some(function(m){ return m && m.v3; }) ? 'v3' : 'v2';
+  return ms.some(v3Usable) ? 'v3' : 'v2';
 }
 
 // Reliability table: calibrated top-pick probability vs how often it won.
@@ -5198,10 +5436,10 @@ function updateOddsDisplay(runner) {
     var pct = ((runner.odds - runner._openingOdds) / runner._openingOdds * 100);
     var dir = pct < 0 ? 'steam' : 'drift';
     var arrow = pct < 0 ? '▼' : '▲';
-    var col = pct < 0 ? '#00b0ff' : '#ff6d00';
+    var col = pct < 0 ? 'var(--bl)' : 'var(--or)';
     var lbl = document.createElement('div');
     lbl.className = 'odds-mv-label';
-    lbl.style.cssText = 'font-size:.6rem;font-family:\'IBM Plex Mono\',monospace;color:'+col+';white-space:nowrap;padding-bottom:2px';
+    lbl.style.cssText = 'font-size:.6rem;font-family:var(--mono);color:'+col+';white-space:nowrap;padding-bottom:2px';
     lbl.textContent = arrow + ' ' + runner._openingOdds.toFixed(1) + '→' + runner.odds.toFixed(1) + ' (' + (pct > 0 ? '+' : '') + Math.round(pct) + '%)';
     wrap.appendChild(lbl);
   }
@@ -5250,8 +5488,8 @@ function showPasteStatus(msg, type) {
   var el = document.getElementById('pasteStatus');
   if (!el) return;
   var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
-  var bg  = type === 'ok' ? 'rgba(0,230,118,.08)' : 'rgba(255,193,7,.08)';
-  el.innerHTML = '<div style="padding:6px 10px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.72rem;font-family:\'IBM Plex Mono\',monospace;line-height:1.4">'+msg+'</div>';
+  var bg  = type === 'ok' ? 'rgba(var(--g-rgb),.08)' : 'rgba(var(--gold-rgb),.08)';
+  el.innerHTML = '<div style="padding:6px 10px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.72rem;font-family:var(--mono);line-height:1.4">'+msg+'</div>';
 }
 
 // ── Add Runner ─────────────────────────────────────────────
@@ -5447,7 +5685,6 @@ function runPlacepot() {
   if(nn) nn.style.display=totalOdds>0?'none':'block';
 
   var ppRaces=races.slice(0,6), allPicks=[], napCandidate=null, napScore=-1;
-  var bodCandidate=null, bodBest=-1, bfHorses=[];
 
   ppRaces.forEach(function(race,ri) {
     var active=race.runners.filter(function(r){return !r._nr;});
@@ -5473,51 +5710,29 @@ function runPlacepot() {
     // so the Nap is always consistent with the main screen ranking.
     // Only update if the Nap isn't already locked for this session.
     if (!S._napLocked) {
-      // Only races where every runner has a real price can supply the Nap —
-      // an unpriced runner usually means the market hasn't formed yet
+      // Nap = the most likely winner at the meeting: the race top pick with
+      // the highest chance, priced NAP_MIN_ODDS or bigger, in a fully priced
+      // race of 4+ runners. On the 804 races logged 30 Sep–19 Oct the old
+      // "best of the day" composite with beaten-favourite overrides lost 17.5%;
+      // this rule made +13% on the same races.
       var allPricedG = active.every(function(x){ return x.odds > 1; });
       var napSrc = (race._mainScored && race._mainScored.length >= 2) ? race._mainScored : scored;
-      var oddsInG = active.filter(function(x){ return x.odds > 0; }).map(function(x){ return x.odds; });
-      var minOddsG = oddsInG.length ? Math.min.apply(null, oddsInG) : 0;
-      if (napSrc.length >= 2) {
-        var gap = Math.round((napSrc[0].score - napSrc[1].score) * 100);
-        var agreeG = minOddsG <= 0 || (napSrc[0].odds > 0 && napSrc[0].odds <= minOddsG * 1.15);
-        if (allPricedG && gap > napScore && agreeG) {
-          napScore = gap;
-          napCandidate = {runner: napSrc[0], race: race, raceIdx: ri, gap: gap,
-            conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100)};
-        }
+      if (allPricedG && active.length >= 4 && napSrc.length >= 2 &&
+          napSrc[0].odds >= NAP_MIN_ODDS && napSrc[0].score > napScore) {
+        napScore = napSrc[0].score;
+        napCandidate = {runner: napSrc[0], race: race, raceIdx: ri,
+          gap: Math.round((napSrc[0].score - napSrc[1].score) * 100),
+          conf1: Math.round(napSrc[0].score * 100), conf2: Math.round(napSrc[1].score * 100),
+          reason: 'Most likely winner at the meeting (' + Math.round(napSrc[0].score * 100) + '%)'};
       }
-
-      // Best of the Day composite — score every active runner, track the meeting's leader.
-      // NAP ELIGIBILITY (from 885-race log): picks that agree with the market win 36%,
-      // divergent picks only 13%. So a Nap candidate must be (a) its race's #1 ranked
-      // runner and (b) the favourite or within 15% of the favourite's price.
-      var rank1Name = napSrc.length ? napSrc[0].name : null;
-      var oddsIn = active.filter(function(x){ return x.odds > 0; }).map(function(x){ return x.odds; });
-      var minOdds = oddsIn.length ? Math.min.apply(null, oddsIn) : 0;
-      active.forEach(function(rr){
-        computeBF(rr, race);   // ensure BF flags exist even if Predict wasn't tapped
-        var bod = bestOfDayScore(rr, race, ctx);
-        var eligible = allPricedG && rr.name === rank1Name &&
-                       (minOdds <= 0 || (rr.odds > 0 && rr.odds <= minOdds * 1.15));
-        if (eligible && bod > bodBest) {
-          bodBest = bod;
-          bodCandidate = {runner: rr, race: race, raceIdx: ri, bod: bod};
-        }
-        // Collect BF horses for the override — same eligibility gate applies,
-        // so a BF Nap is still coherent with the race's own prediction.
-        if (rr._bfAlert && eligible) {
-          bfHorses.push({runner: rr, race: race, raceIdx: ri, bod: bod, drop: !!rr._bfDrop});
-        }
-      });
+      active.forEach(function(rr){ computeBF(rr, race); });   // BF flags for BF Watch
     }
 
     var top3=scored.slice(0,3), maxSc=top3[0]?top3[0].score:1;
     allPicks.push({race,picks:top3});
 
     var oddsCount=active.filter(function(r){return r.odds>0;}).length;
-    var oddsTag=oddsCount>0?'<span style="font-size:.6rem;color:var(--g);font-family:\'IBM Plex Mono\',monospace;margin-left:6px">✓ '+oddsCount+' odds</span>':'<span style="font-size:.6rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-left:6px">no odds</span>';
+    var oddsTag=oddsCount>0?'<span style="font-size:.6rem;color:var(--g);font-family:var(--mono);margin-left:6px">✓ '+oddsCount+' odds</span>':'<span style="font-size:.6rem;color:var(--mt);font-family:var(--mono);margin-left:6px">no odds</span>';
     var paceLbl=paceInfo.scenario==='lone_front'?'🟢 Lone leader':paceInfo.scenario==='contested'?'🟠 Contested pace':paceInfo.scenario==='slow'?'🟣 No leader':'';
     var hdr='<div class="pp-race-hdr"><div>'
       +'<div class="pp-race-tm">'+race.time+' — R'+(ri+1)+oddsTag+'</div>'
@@ -5530,7 +5745,7 @@ function runPlacepot() {
       var badge=i===0?'<span class="pp-banker">BANKER</span>':'<span class="pp-alt">ALT</span>';
       var paceBadge=r._pace==='front'?'<span class="mk front" style="margin-left:4px;font-size:.52rem">▶ FRONT</span>':r._pace==='closer'?'<span class="mk closer" style="margin-left:4px;font-size:.52rem">◀ CLOSER</span>':'';
       var jn=r.jockey?r.jockey.replace(/\s*\(\d+\)/,''):'—';
-      var oddsDisp=r.odds>0?'<span style="color:var(--gold);font-family:\'IBM Plex Mono\',monospace;font-size:.7rem;margin-left:4px">'+r.odds.toFixed(1)+'</span>':'';
+      var oddsDisp=r.odds>0?'<span style="color:var(--gold);font-family:var(--mono);font-size:.7rem;margin-left:4px">'+r.odds.toFixed(1)+'</span>':'';
       rows+='<div class="pp-pick '+rankCl+'"><div class="pp-rank">'+(i+1)+'</div>'
         +'<div class="pp-info"><div class="pp-name">'+r.name+badge+paceBadge+oddsDisp+'</div>'
         +'<div class="pp-meta">Draw '+drawOf(r)+(r.or>0?' · OR '+r.or:'')+' · '+jn+'</div></div>'
@@ -5539,43 +5754,6 @@ function runPlacepot() {
     });
     resEl.innerHTML+='<div class="pp-race">'+hdr+rows+'</div>';
   });
-
-  // ── Reconcile: Best of the Day composite vs BF override ──────────
-  // Runs only while the Nap is unlocked (first calculation of the session).
-  var napReason = '';
-  if (!S._napLocked && bodCandidate) {
-    var chosen = bodCandidate;
-    napReason = 'Best of the Day (composite ' + bodCandidate.bod + ')';
-
-    // BF override. Class-drop BF always wins. Plain BF wins if within 5 pts.
-    var dropBF = bfHorses.filter(function(b){ return b.drop; })
-                         .sort(function(a,b){ return b.bod - a.bod; })[0];
-    if (dropBF) {
-      chosen = dropBF;
-      napReason = 'Class-drop beaten-favourite override (composite ' + dropBF.bod + ')';
-    } else {
-      var plainBF = bfHorses.filter(function(b){ return !b.drop; })
-                           .sort(function(a,b){ return b.bod - a.bod; })[0];
-      if (plainBF && (bodBest - plainBF.bod) <= 5) {
-        chosen = plainBF;
-        napReason = 'Beaten-favourite promoted — within 5 pts of the leader (composite ' + plainBF.bod + ')';
-      }
-    }
-
-    // Build the Nap from the chosen composite runner. Pull conf1/conf2 gap from
-    // that race's main/PP scores so the display stays consistent.
-    var cr = chosen.race, crun = chosen.runner;
-    var cScored = (cr._mainScored && cr._mainScored.length >= 2) ? cr._mainScored : null;
-    var conf1 = 0, conf2 = 0, cgap = 0;
-    if (cScored) {
-      conf1 = Math.round(cScored[0].score * 100);
-      conf2 = Math.round(cScored[1].score * 100);
-      cgap  = conf1 - conf2;
-    }
-    napCandidate = {runner: crun, race: cr, raceIdx: chosen.raceIdx,
-      gap: cgap, conf1: conf1, conf2: conf2,
-      bod: chosen.bod, reason: napReason, isBF: !!crun._bfAlert, isDrop: !!crun._bfDrop};
-  }
 
   // NAP — lock after first calculation so it doesn't shift during the day.
   // Persisted to localStorage so it survives Safari iOS page reloads.
@@ -5598,10 +5776,10 @@ function runPlacepot() {
     if (napCandidate.isBF) {
       var b = document.createElement('span');
       b.id = 'nap-bf-badge';
-      b.style.cssText = 'font-size:.6rem;margin-left:8px;padding:2px 7px;border-radius:4px;vertical-align:middle;font-family:\'IBM Plex Mono\',monospace;font-weight:700;'
+      b.style.cssText = 'font-size:.6rem;margin-left:8px;padding:2px 7px;border-radius:4px;vertical-align:middle;font-family:var(--mono);font-weight:700;'
         + (napCandidate.isDrop
-            ? 'background:rgba(255,140,0,.2);color:#ffaa00;border:1px solid rgba(255,140,0,.6)'
-            : 'background:rgba(255,82,82,.15);color:#ff5252;border:1px solid rgba(255,82,82,.5)');
+            ? 'background:rgba(var(--or-rgb),.2);color:var(--gold);border:1px solid rgba(var(--or-rgb),.6)'
+            : 'background:rgba(var(--re-rgb),.15);color:var(--re);border:1px solid rgba(var(--re-rgb),.5)');
       b.textContent = napCandidate.isDrop ? '👀⬇ BF DROP' : '👀 BF';
       napNameEl.appendChild(b);
     }
@@ -5822,7 +6000,7 @@ function renderAnalysis(a) {
   if (a.oddsQuality === 'none') {
     h += '<div class="ai-warn">No odds entered — analysis based on form and pace only. Enter decimal odds in the Predict tab for better results.</div>';
   } else if (a.oddsQuality === 'partial') {
-    h += '<div class="ai-warn" style="background:rgba(255,193,7,.07);border-color:var(--gold);color:#ffe082">Odds partially entered — races without odds are less reliable.</div>';
+    h += '<div class="ai-warn" style="background:rgba(var(--gold-rgb),.07);border-color:var(--gold);color:var(--gold-tx)">Odds partially entered — races without odds are less reliable.</div>';
   }
 
   // Overall
@@ -5847,12 +6025,12 @@ function renderAnalysis(a) {
   a.raceAnalyses.forEach(function(ra) {
     var tags = '';
     if (ra.isBanker) {
-      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.3);margin-left:5px">BANKER</span>';
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(var(--g-rgb),.15);color:var(--g);border:1px solid rgba(var(--g-rgb),.3);margin-left:5px">BANKER</span>';
     }
     if (ra.verdict === 'Caution') {
-      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(255,193,7,.12);color:var(--gold);border:1px solid rgba(255,193,7,.3);margin-left:5px">CAUTION</span>';
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(var(--gold-rgb),.12);color:var(--gold);border:1px solid rgba(var(--gold-rgb),.3);margin-left:5px">CAUTION</span>';
     } else if (ra.verdict === 'Value Flag') {
-      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(64,196,255,.12);color:var(--bl);border:1px solid rgba(64,196,255,.3);margin-left:5px">VALUE</span>';
+      tags += '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:rgba(var(--bl-rgb),.12);color:var(--bl);border:1px solid rgba(var(--bl-rgb),.3);margin-left:5px">VALUE</span>';
     }
 
     h += '<div class="ai-pick ai-' + ra.cls + '" style="margin-bottom:6px;flex-wrap:wrap">'
@@ -6047,7 +6225,7 @@ function runConfidencePredictor() {
     h += '<div style="flex:1;min-width:0">';
     h += '<div style="font-size:.86rem;font-weight:700;color:var(--tx)">' + p.name
        + (p.odds > 1 ? ' <span style="color:var(--mt);font-weight:400;font-size:.72rem">@' + p.odds.toFixed(1) + '</span>' : '')
-       + (strong ? ' <span class="mk" style="background:rgba(0,230,118,.15);color:var(--g);border:1px solid rgba(0,230,118,.4)">STRONG</span>' : '')
+       + (strong ? ' <span class="mk" style="background:rgba(var(--g-rgb),.15);color:var(--g);border:1px solid rgba(var(--g-rgb),.4)">STRONG</span>' : '')
        + '</div>';
     h += '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">' + p.time + ' ' + esc(p.course)
        + (p.dist ? ' · ' + p.dist : '') + ' · ' + p.runners + ' runners'
@@ -6098,7 +6276,7 @@ function renderMeetingsList() {
     var noOdds       = oddsCount === 0;
     var oddsColor    = noOdds ? 'var(--re)' : 'var(--g)';
     var oddsLabel    = noOdds ? '⚠ No odds — enter in Predict tab first' : oddsCount + ' odds entered ✓';
-    var borderStyle  = noOdds ? 'border-color:rgba(255,82,82,.35)' : '';
+    var borderStyle  = noOdds ? 'border-color:rgba(var(--re-rgb),.35)' : '';
     return '<div class="l15-meeting" style="' + borderStyle + '">'
       + '<div onclick="switchToMeeting(\'' + m.course + '\')" style="cursor:pointer">'
         + '<div class="l15-meeting-name">' + m.course + ' <span style="font-size:.55rem;color:var(--mt)">tap to view ›</span></div>'
@@ -6530,11 +6708,11 @@ function setL15BetType(type) {
   var wrap   = document.getElementById('l15-place-terms-wrap');
   if (!winBtn) return;
   if (type === 'win') {
-    winBtn.style.background = 'rgba(0,230,118,.2)'; winBtn.style.color = 'var(--green)'; winBtn.style.fontWeight = '600';
+    winBtn.style.background = 'rgba(var(--g-rgb),.2)'; winBtn.style.color = 'var(--green)'; winBtn.style.fontWeight = '600';
     ewBtn.style.background  = 'transparent';         ewBtn.style.color  = 'var(--mt)';   ewBtn.style.fontWeight  = '';
     if (wrap) wrap.style.opacity = '0.3';
   } else {
-    ewBtn.style.background  = 'rgba(0,230,118,.2)'; ewBtn.style.color  = 'var(--green)'; ewBtn.style.fontWeight = '600';
+    ewBtn.style.background  = 'rgba(var(--g-rgb),.2)'; ewBtn.style.color  = 'var(--green)'; ewBtn.style.fontWeight = '600';
     winBtn.style.background = 'transparent';         winBtn.style.color = 'var(--mt)';    winBtn.style.fontWeight = '';
     if (wrap) wrap.style.opacity = '1';
   }
@@ -6547,10 +6725,10 @@ function setL15PlaceTerms(terms) {
   var fBtn = document.getElementById('l15-f-btn');
   if (!qBtn) return;
   if (terms === 'quarter') {
-    qBtn.style.background = 'rgba(0,230,118,.2)'; qBtn.style.color = 'var(--green)'; qBtn.style.fontWeight = '600';
+    qBtn.style.background = 'rgba(var(--g-rgb),.2)'; qBtn.style.color = 'var(--green)'; qBtn.style.fontWeight = '600';
     fBtn.style.background = 'transparent';         fBtn.style.color = 'var(--mt)';   fBtn.style.fontWeight = '';
   } else {
-    fBtn.style.background = 'rgba(0,230,118,.2)'; fBtn.style.color = 'var(--green)'; fBtn.style.fontWeight = '600';
+    fBtn.style.background = 'rgba(var(--g-rgb),.2)'; fBtn.style.color = 'var(--green)'; fBtn.style.fontWeight = '600';
     qBtn.style.background = 'transparent';         qBtn.style.color = 'var(--mt)';   qBtn.style.fontWeight = '';
   }
   renderL15Stake();
@@ -6576,7 +6754,7 @@ function renderL15Stake() {
 // alone reaches ~5.7MB at 3,000 races, and on top of that the app writes a
 // set of per-day keys (cards, odds, locks, naps) for EVERY meeting on EVERY
 // day and never deleted any of them. So saves eventually fail outright.
-var DAY_KEY_PREFIXES = ['rp_card_','rp_odds_','rp_plock_','rp_nap_','rp_napday_','rp_af_','rp_mpick_'];
+var DAY_KEY_PREFIXES = ['rp_card_','rp_odds_','rp_plock_','rp_nap_','rp_napday_','rp_af_','rp_mpick_','rp_wx_'];
 
 // Remove per-day keys older than keepDays. Today's locks are needed for
 // result logging, so keep a few days' margin.
@@ -6810,7 +6988,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       pExactly1 += p;
     });
     var p2plus = Math.max(0, 1 - p0 - pExactly1);
-    var qualCol = p2plus >= 0.30 ? 'var(--g)' : p2plus >= 0.20 ? '#ffaa00' : 'var(--re)';
+    var qualCol = p2plus >= 0.30 ? 'var(--g)' : p2plus >= 0.20 ? 'var(--gold)' : 'var(--re)';
     var qualLbl = p2plus >= 0.30 ? 'GOOD STRUCTURE' : p2plus >= 0.20 ? 'MARGINAL' : 'POOR — expect losses';
 
     h += '<div class="l15-card ' + cardCls[ri] + '">'
@@ -6862,7 +7040,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
       var minProfit = r.min - l15Total;
       var maxProfit = r.max - l15Total;
       var anyGood = r.max > 0;
-      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem">'
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;padding:5px 0;border-bottom:1px solid rgba(var(--ov-rgb),.04);font-size:.78rem">'
         + '<span style="color:var(--text)">' + scenarios[r.count] + '</span>'
         + '<span style="text-align:right;color:' + (minProfit>0?'var(--g)':minProfit<0?'var(--re)':'var(--mt)') + '">'
           + (r.min > 0 ? '£' + r.min.toFixed(0) : '-') + '</span>'
@@ -6879,7 +7057,7 @@ function renderL15Results(best, totalHorses, allHorses, strategy) {
     h += '</div>'
       + '<button data-saveidx="' + ri + '" '
       + 'style="width:100%;margin-top:10px;padding:11px;border-radius:8px;'
-      + 'border:1px solid rgba(0,230,118,.35);background:rgba(0,230,118,.08);'
+      + 'border:1px solid rgba(var(--g-rgb),.35);background:rgba(var(--g-rgb),.08);'
       + 'color:var(--green);font-family:var(--mono);font-size:.65rem;font-weight:600;'
       + 'cursor:pointer;text-transform:uppercase;letter-spacing:1px">'
       + '💾 Save as Bet</button>'
@@ -6993,7 +7171,7 @@ function runMCPlacepot() {
       top3.forEach(function(item, i) {
         var pct = Math.round(item.pct * 100);
         var barW = Math.round(item.pct / maxPct * 100);
-        var col  = i===0?'var(--g)':i===1?'var(--gold)':'#ff8a65';
+        var col  = i===0?'var(--g)':i===1?'var(--gold)':'var(--or)';
         h += '<div style="margin-bottom:5px">'
           + '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:2px">'
             + '<span style="color:var(--tx)">' + item.runner.name.split(' ')[0] + '</span>'
@@ -7012,9 +7190,9 @@ function runMCPlacepot() {
 
     // Overall line probability (banker selections all placing)
     var bankerLineProb = simResults.reduce(function(p, r){ return p * (r.placePcts[0] || 0.1); }, 1);
-    h = '<div style="background:rgba(124,77,255,.07);border:1px solid rgba(124,77,255,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
-      + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:#ce93d8;margin-bottom:4px">Banker line probability</div>'
-      + '<div style="font-size:2rem;color:#ce93d8">' + Math.round(bankerLineProb*100) + '%</div>'
+    h = '<div style="background:rgba(var(--pu-rgb),.07);border:1px solid rgba(var(--pu-rgb),.3);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+      + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--pu-tx);margin-bottom:4px">Banker line probability</div>'
+      + '<div style="font-size:2rem;color:var(--pu-tx)">' + Math.round(bankerLineProb*100) + '%</div>'
       + '<div style="font-size:.68rem;color:var(--mt)">Estimated chance of all 6 top picks placing simultaneously</div>'
       + '</div>' + h;
 
@@ -7078,15 +7256,15 @@ function runCalibration() {
           + '<span style="color:var(--mt)">' + b.label + ' <span style="opacity:.6">(' + b.n + ')</span></span>'
           + '<span style="color:' + col + '">' + actual + '% won · ' + model + '% predicted</span>'
           + '</div>'
-          + '<div style="position:relative;height:10px;background:rgba(255,255,255,.05);border-radius:3px">'
-          + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;background:rgba(0,230,118,.5);border-radius:3px"></div>'
-          + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:14px;background:rgba(255,255,255,.55);border-radius:1px"></div>'
+          + '<div style="position:relative;height:10px;background:rgba(var(--ov-rgb),.05);border-radius:3px">'
+          + '<div style="position:absolute;left:0;top:0;height:100%;width:' + aW + '%;background:rgba(var(--g-rgb),.5);border-radius:3px"></div>'
+          + '<div style="position:absolute;left:' + mW + '%;top:-2px;width:2px;height:14px;background:rgba(var(--ov-rgb),.55);border-radius:1px"></div>'
           + '</div></div>';
     });
     if (!ch) ch = '<div class="mu" style="font-size:.65rem">No full-field priced races in the log yet.</div>';
     ch += '<div style="display:flex;gap:14px;margin-top:10px;font-size:.58rem;color:var(--mt);flex-wrap:wrap">'
-        + '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(0,230,118,.5);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Top pick actually won</span>'
-        + '<span><span style="display:inline-block;width:2px;height:10px;background:rgba(255,255,255,.55);vertical-align:middle;margin-right:4px"></span>App predicted</span>'
+        + '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(var(--g-rgb),.5);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Top pick actually won</span>'
+        + '<span><span style="display:inline-block;width:2px;height:10px;background:rgba(var(--ov-rgb),.55);vertical-align:middle;margin-right:4px"></span>App predicted</span>'
         + '<span style="opacity:.5">faded = under 20 races</span></div>';
     chartEl.innerHTML = ch;
   }
@@ -7567,7 +7745,7 @@ function testOddsProxy() {
       if (j.ok) {
         statusEl.innerHTML = '<span style="color:var(--g)">✓ Connected. Live odds available — look for the ⬇ button on each race.</span>';
       } else {
-        statusEl.innerHTML = '<span style="color:#ffaa00">Reached server but got an unexpected response.</span>';
+        statusEl.innerHTML = '<span style="color:var(--gold)">Reached server but got an unexpected response.</span>';
       }
     })
     .catch(function(err){
@@ -7581,8 +7759,8 @@ function showLiveStatus(msg, type) {
   var el = document.getElementById('liveOddsStatus');
   if (!el) { alert(msg); return; }  // fallback so a message is never lost
   var col = type === 'ok' ? 'var(--g)' : 'var(--gold)';
-  var bg  = type === 'ok' ? 'rgba(0,230,118,.08)' : 'rgba(255,193,7,.1)';
-  el.innerHTML = '<div style="padding:8px 12px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.74rem;font-family:\'IBM Plex Mono\',monospace;line-height:1.45">'+msg+'</div>';
+  var bg  = type === 'ok' ? 'rgba(var(--g-rgb),.08)' : 'rgba(var(--gold-rgb),.1)';
+  el.innerHTML = '<div style="padding:8px 12px;border-radius:6px;background:'+bg+';border-left:3px solid '+col+';color:'+col+';font-size:.74rem;font-family:var(--mono);line-height:1.45">'+msg+'</div>';
   // Auto-clear success messages after 6s
   if (type === 'ok' && /loaded/.test(msg)) {
     setTimeout(function(){ if (el) el.innerHTML = ''; }, 8000);
@@ -7596,16 +7774,16 @@ function loadTodaysMeetings() {
   var box = document.getElementById('todaysMeetings');
   if (!box) return;
   if (!base) {
-    box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Set your odds proxy URL in Setup first.</div>';
+    box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:var(--mono);padding:8px 0">Set your odds proxy URL in Setup first.</div>';
     return;
   }
-  box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Loading today\'s meetings…</div>';
+  box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:var(--mono);padding:8px 0">Loading today\'s meetings…</div>';
 
   fetch(base + '/meetings')
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (!data.meetings || !data.meetings.length) {
-        box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">No meetings found for today.</div>';
+        box.innerHTML = '<div style="color:var(--mt);font-size:.78rem;font-family:var(--mono);padding:8px 0">No meetings found for today.</div>';
         return;
       }
       var now = new Date();
@@ -7624,8 +7802,9 @@ function loadTodaysMeetings() {
         // Course header — tappable
         h += '<div onclick="toggleMeeting(\'' + mid + '\')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;background:var(--sf2)">';
         h += '<div>';
-        h += '<div style="font-weight:700;font-size:.92rem' + (allDone ? ';color:var(--mt)' : '') + '">' + esc(m.course) + '</div>';
-        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:2px">' + times.length + ' races · ' + (allDone ? 'all finished' : upcoming + ' upcoming') + '</div>';
+        h += '<div style="font-weight:700;font-size:.92rem' + (allDone ? ';color:var(--mt)' : '') + '">' + esc(m.course)
+          + ' <span class="wx-chip" id="wxm_' + i + '" style="display:none"></span></div>';
+        h += '<div style="font-size:.62rem;color:var(--mt);font-family:var(--mono);margin-top:2px">' + times.length + ' races · ' + (allDone ? 'all finished' : upcoming + ' upcoming') + '</div>';
         h += '</div>';
         h += '<span style="color:var(--mt);font-size:.8rem">▾</span>';
         h += '</div>';
@@ -7635,19 +7814,25 @@ function loadTodaysMeetings() {
         times.forEach(function(t){
           var past = t <= nowHHMM;
           var col = past ? 'var(--mt)' : 'var(--g)';
-          var bg = past ? 'rgba(255,255,255,.03)' : 'rgba(0,230,118,.08)';
-          h += '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:.74rem;padding:5px 10px;border-radius:5px;background:' + bg + ';color:' + col + ';border:1px solid ' + (past ? 'var(--bd)' : 'rgba(0,230,118,.3)') + '">' + t + (past ? '' : '') + '</span>';
+          var bg = past ? 'rgba(var(--ov-rgb),.03)' : 'rgba(var(--g-rgb),.08)';
+          h += '<span style="font-family:var(--mono);font-size:.74rem;padding:5px 10px;border-radius:5px;background:' + bg + ';color:' + col + ';border:1px solid ' + (past ? 'var(--bd)' : 'rgba(var(--g-rgb),.3)') + '">' + t + (past ? '' : '') + '</span>';
         });
         h += '</div>';
         h += '<button class="btn bg" style="width:100%;margin-top:12px;margin-bottom:0;padding:10px;font-size:.72rem" onclick="predictFromLiveCard(' + i + ')">⚡ Predict from live card — no PDF needed</button>';
-        h += '<div style="font-size:.62rem;color:var(--mt);font-family:\'IBM Plex Mono\',monospace;margin-top:10px;line-height:1.5">One tap: builds the full card from Betfair (runners, jockeys, OR, draw, weights, form + live odds), predicts every race and locks the Nap. Or load an ATR PDF below as usual.</div>';
+        h += '<div style="font-size:.62rem;color:var(--mt);font-family:var(--mono);margin-top:10px;line-height:1.5">One tap: builds the full card from Betfair (runners, jockeys, OR, draw, weights, form + live odds), predicts every race and locks the Nap. Or load an ATR PDF below as usual.</div>';
         h += '</div>';
         h += '</div>';
       });
       box.innerHTML = h;
+      // Weather for each meeting's next race (or its last, once racing's over)
+      data.meetings.forEach(function(m, i){
+        var ts = m.times || [];
+        var next = ts.filter(function(t){ return t > nowHHMM; })[0] || ts[ts.length - 1];
+        if (next) { try { fillWeatherChip('wxm_' + i, m.course, next); } catch(e) {} }
+      });
     })
     .catch(function(err){
-      box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:\'IBM Plex Mono\',monospace;padding:8px 0">Could not load meetings: ' + err.message + '</div>';
+      box.innerHTML = '<div style="color:var(--gold);font-size:.78rem;font-family:var(--mono);padding:8px 0">Could not load meetings: ' + err.message + '</div>';
     });
 }
 
@@ -8118,26 +8303,11 @@ function plockSave(race, scored, going) {
     });
     var bf = (race.runners||[]).filter(function(r){ return !r._nr && r._bfAlert; })
               .map(function(r){ return { name:r.name, odds:r.odds||0, bfDrop:!!r._bfDrop }; });
-    // Value pick: within the top 3, the runner with the biggest model-vs-market
-    // edge. Same formula as the on-screen path (score is a 0-1 fraction here).
-    // Stored on the lock so auto-logged results can populate the Value tab.
-    var vPick = (function(){
-      var best = null, bestEdge = -9;
-      scored.slice(0,3).forEach(function(r){
-        if (r._nr || !r.odds || r.odds <= 1) return;
-        var edge = (r.score||0) - (1 / r.odds);
-        if (edge > bestEdge) { bestEdge = edge; best = r; }
-      });
-      return best ? { name:best.name, odds:best.odds, edge:Math.round(bestEdge*100) } : null;
-    })();
-    // Dutch selections at lock time — same band logic as the Predict tab
-    // display (1-4 runners: 1 sel, 5-7: 2, 8+: 3; top-ranked with valid odds).
-    // Captured here so auto-logged results can score the dutch bet; without
-    // this, headless logging writes dutch:null and the dashboard goes blank.
-    var dWith = scored.filter(function(r){ return !r._nr && r.odds > 1; });
-    var dField = (race.runners||[]).filter(function(r){ return !r._nr; }).length;
-    var dN = dField >= 8 ? 3 : (dField >= 5 ? 2 : 1);
-    var dSels = dWith.slice(0, dN).map(function(r){ return { name:r.name, odds:r.odds||0 }; });
+    // Value pick and dutch selections — same rules as the Predict tab, stored
+    // on the lock so auto-logged results can fill the Value and Dutch tabs.
+    var vp = valuePickOf(scored);
+    var vPick = vp ? { name:vp.runner.name, odds:vp.runner.odds, edge:vp.edge } : null;
+    var dSels = dutchPlanOf(scored).sels.map(function(r){ return { name:r.name, odds:r.odds||0 }; });
     var all = plockAll();
     var mpk = modelPickOf(scored);
     if (mpk) rememberModelPick(race, mpk, scored[0] ? scored[0].name : '');
@@ -8322,10 +8492,13 @@ function autoPredictAllMeetings(force) {
       function prefetchGoing(idx) {
         if (idx >= courses.length) return Promise.resolve();
         var c = courses[idx];
+        // The weather too, so the trained model's rain inputs are ready (cached 30 min)
+        var wxP = (typeof fiWxForecast === 'function') ? fiWxForecast(c).catch(function(){}) : Promise.resolve();
         return fetch(base + '/going?course=' + encodeURIComponent(c))
           .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(g){ if (g && g.going) goingByCourse[c] = g.going; })
           .catch(function(){})
+          .then(function(){ return wxP; })
           .then(function(){ return new Promise(function(res){ setTimeout(res, 250); }); })
           .then(function(){ return prefetchGoing(idx + 1); });
       }
@@ -8402,8 +8575,23 @@ function catchUpFromCards() {
         // Always put it in S.meetings so it shows in the race list and
         // syncResults can log its result.
         var stored = ensureRaceInMeetings(c.course, race);
-        // Only score if we don't already have a pick or a logged result.
-        if (locks[rk] || getPredictionLog(rk)) return;
+        if (getPredictionLog(rk)) return;
+        if (locks[rk]) {
+          // Locked earlier on thinner prices. If the server caught this card
+          // closer to the off (it snaps each race in its last 25 minutes),
+          // re-score with those prices — what the T-5 lock does when the app
+          // is open. Early-morning prices ran a 116% median book; near the
+          // off it's close to 100%, so the favourite is read far better.
+          var L0 = locks[rk], offMs = raceOffMs(race);
+          var fresher = c.snappedAt && L0.savedAt && c.snappedAt > L0.savedAt + 10 * 60000 &&
+                        (isNaN(offMs) || c.snappedAt <= offMs + 60000);
+          if (!fresher) return;
+          try {
+            var sc2 = scoreRaceHeadless(race);
+            if (sc2) { plockSave(race, sc2, c.going || L0.going || ''); scoredNow++; }
+          } catch(e){}
+          return;
+        }
         try {
           var sc = scoreRaceHeadless(stored);
           if (sc) { plockSave(stored, sc, c.going || ''); scoredNow++; }
@@ -8488,6 +8676,8 @@ function ensureNapForToday() {
         byCourse[course].forEach(function(item){
           var L = item.lock, p = L.preds[0];
           if (!p || !p.name || !(p.odds > 1)) return;    // needs a real price
+          if (p.odds < NAP_MIN_ODDS) return;             // not an odds-on shot
+          if (!L.preds.every(function(x){ return x.odds > 1; })) return;   // market not formed
           if ((L.fieldSize || 0) < 4) return;            // skip tiny fields
           var gap = p.score - (L.preds[1] ? L.preds[1].score : 0);
           var cand = { raceKey:item.raceKey, course:course, time:L.time||'',
@@ -9133,6 +9323,12 @@ function fetchLiveOdds() {
   });
 }
 
+</script>
+<script>
+(function(){
+  function fixNav(){ var h=document.querySelector('.hdr'), n=document.querySelector('.nav'); if (h && n) n.style.top = h.offsetHeight + 'px'; }
+  window.addEventListener('load', fixNav); window.addEventListener('resize', fixNav); setTimeout(fixNav, 0);
+})();
 </script>
 </body>
 </html>

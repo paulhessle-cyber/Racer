@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Racing Model Trainer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="courses.js?v=1.0"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 :root {
@@ -153,7 +154,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER · v3.3 · 09 Jun 2026</span>
+  <span class="sub">DESKTOP MODEL BUILDER · v3.4 · 20 Oct 2026 · trains v3.1 models</span>
 </header>
 
 <div class="container">
@@ -366,12 +367,18 @@ header .sub {
       The newest 20% of races are held back to test it against the market alone.
       The app only uses the model if it beat the market on that test.
     </p>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;color:var(--tx);margin:0 0 12px;cursor:pointer;line-height:1.45">
+      <input type="checkbox" id="useWeather" checked style="margin-top:3px">
+      <span><strong>Use the weather</strong> — fetches each course's daily rain and wind for the whole date range from Open-Meteo (free, about a minute), so the model can learn whether a wet day makes the price less reliable, and adds a weather report. Untick to train without it.</span>
+    </label>
     <button class="btn btn-g" id="trainBtn" onclick="trainModel()">&#9654; Start Training</button>
     <div class="pb"><div class="pf" id="pf"></div></div>
     <div class="log" id="tlog"><span class="info">Waiting for data&#8230;</span></div>
     <div id="featImp"    style="display:none; margin-top:20px;"></div>
     <div id="accDisplay" style="display:none; margin-top:16px;"></div>
     <div id="classReport" style="display:none; margin-top:16px;"></div>
+    <div id="goingReport" style="display:none; margin-top:16px;"></div>
+    <div id="weatherReport" style="display:none; margin-top:16px;"></div>
   </div>
 
   <!-- ── STEP 3: Export ────────────────────────────────────────── -->
@@ -932,11 +939,18 @@ function goingScore(g) {
 // apart the model's coefficients no longer mean anything.
 // ══════════════════════════════════════════════════════════════════
 var V3 = {
-  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA'],
+  KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA',
+          'wt','age','mktWet','mktBig','mktRain'],
   NAMES: ['Horse win rate','Horse place rate','Jockey win rate','Trainer win rate','Draw (course + stall)',
           'Going record','Distance record','Course record','Freshness','Official Rating vs field','No Official Rating',
           'Last RPR vs field','No previous RPR','Last Topspeed vs field','No previous Topspeed',
-          'Recent form (last 3 runs)','No form'],
+          'Recent form (last 3 runs)','No form',
+          'Weight carried vs field','Age vs field',
+          'Price on soft/heavy ground','Price in big fields','Price on a wet day'],
+  // Features that change how far to trust the price: they multiply the market
+  // term, so a negative weight flattens the market (outsiders win more often).
+  MKX:   [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,
+          false,false,true,true,true],
   HP: 8,    // horse prior: runs' worth of population average
   JP: 30,   // jockey / trainer prior
   DP: 30,   // course-stall prior
@@ -955,6 +969,13 @@ var V3 = {
     var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].split(',')[0].trim();
     return V3.GOING[k] !== undefined ? V3.GOING[k] : 4;
   },
+  // Weight: "9-4" -> 130 lbs; a plain number is taken as lbs
+  lbsOf: function(w) {
+    var s = String(w || '').trim(), m = s.match(/^(\d{1,2})-(\d{1,2})$/);
+    if (m) return (+m[1]) * 14 + (+m[2]);
+    var n = parseFloat(s);
+    return (n > 60 && n < 220) ? n : 0;
+  },
   // Finishing position -> recent-form points
   posPts: function(p) { return p === 1 ? 1 : p === 2 ? 0.6 : p === 3 ? 0.4 : p === 4 ? 0.2 : 0; },
   // Racecard form string ("3-2141", "P/21", "0F12") -> positions, most recent first
@@ -967,10 +988,31 @@ var V3 = {
     }
     return out;
   },
+  // Market chances with the margin removed by the power method: k such that
+  // Σ(1/odds)^k = 1. A thin market's margin sits mostly on the outsiders.
+  mktProbs: function(odds) {
+    var q = odds.map(function(o){ return o > 1 ? 1 / o : 0; }), lo = 0.2, hi = 5, k = 1, i, s, it;
+    for (it = 0; it < 60; it++) {
+      k = (lo + hi) / 2; s = 0;
+      for (i = 0; i < q.length; i++) if (q[i] > 0) s += Math.pow(q[i], k);
+      if (s > 1) lo = k; else hi = k;
+    }
+    var p = q.map(function(x){ return x > 0 ? Math.pow(x, k) : 0; }), t = 0;
+    for (i = 0; i < p.length; i++) t += p[i];
+    return p.map(function(x){ return x / (t || 1); });
+  },
+  // The market term per runner: log of the power-method chance for models
+  // trained from v3.1 (devig 'power'), log(1/odds) for v3.0 models
+  mktLogs: function(odds, model) {
+    if (model && model.devig === 'power') return V3.mktProbs(odds).map(function(p){ return Math.log(Math.max(p, 1e-6)); });
+    return odds.map(function(o){ return Math.log(1 / o); });
+  },
 
-  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp }  (lp = positions, most recent first)
+  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp, lbs, age, ran, rain }
+  //    lp = positions, most recent first; ran = runners in the race; rain = the
+  //    day's rain at the course in mm (0 if unknown)
   // st: { HS, JS, TS, CD, pop, popP }  (pop = population win rate, popP = place rate)
-  // Returns the feature vector before field-relative centring (or/rpr/ts are raw here).
+  // Returns the feature vector before field-relative centring (or/rpr/ts/wt/age are raw here).
   raw: function(x, st) {
     var pop = st.pop || 0.1;
     var H = st.HS[x.h] || null, J = st.JS[x.j] || null, T = st.TS[x.t] || null;
@@ -991,14 +1033,21 @@ var V3 = {
     var lp = x.lp || [], wts = [0.5, 0.3, 0.2], fs = 0, fw = 0;
     for (var i = 0; i < lp.length && i < 3; i++) { fs += wts[i] * V3.posPts(lp[i]); fw += wts[i]; }
     var form = fw > 0 ? fs / fw : 0, formNA = fw > 0 ? 0 : 1;
+    var gs = x.gs || 4;
+    var wet  = Math.min(1, Math.max(0, (4 - gs) / 3));                 // good 0 · soft 0.67 · heavy 1
+    var big  = Math.min(1, Math.max(0, ((x.ran || 0) - 8) / 8));       // 8 runners 0 · 16+ 1
+    var rain = Math.min(1, Math.max(0, (x.rain || 0) / 10));           // 10mm+ in the day = 1
     return [hwr, hpr, jwr, twr, draw, gm, dm, cm, fr,
             x.or > 0 ? x.or : 0, x.or > 0 ? 0 : 1,
             x.lr > 0 ? x.lr : 0, x.lr > 0 ? 0 : 1,
             x.lt > 0 ? x.lt : 0, x.lt > 0 ? 0 : 1,
-            form, formNA];
+            form, formNA,
+            x.lbs > 0 ? x.lbs : 0, x.age > 0 ? x.age : 0,
+            wet, big, rain];
   },
 
-  // Centre OR / last RPR / last TS on the field average of known values, in 10s of lbs.
+  // Centre OR / last RPR / last TS on the field average of known values, in 10s
+  // of lbs; weight carried (10s of lbs) and age (years) likewise, 0 = unknown.
   centre: function(rows) {
     [[9, 10], [11, 12], [13, 14]].forEach(function(pair) {
       var v = pair[0], na = pair[1], s = 0, n = 0;
@@ -1006,14 +1055,25 @@ var V3 = {
       var mean = n ? s / n : 0;
       rows.forEach(function(f){ f[v] = f[na] ? 0 : (f[v] - mean) / 10; });
     });
+    [[17, 10], [18, 1]].forEach(function(pair) {
+      var v = pair[0], sc = pair[1], s = 0, n = 0;
+      rows.forEach(function(f){ if (f[v] > 0) { s += f[v]; n++; } });
+      var mean = n ? s / n : 0;
+      rows.forEach(function(f){ f[v] = (f[v] > 0 && n > 1) ? (f[v] - mean) / sc : 0; });
+    });
     return rows;
   },
 
-  // Win probabilities: p ∝ exp(mkt·log(1/odds) + Σ coef·feature)
+  // Win probabilities: p ∝ exp(mkt·M + Σ coef·feature), where M is the market
+  // term and the MKX features enter as feature × M
   probs: function(rows, odds, model) {
+    var L = V3.mktLogs(odds, model);
     var z = rows.map(function(f, i) {
-      var s = model.mkt * Math.log(1 / odds[i]);
-      for (var k = 0; k < f.length; k++) s += (model.coef[k] || 0) * f[k];
+      var s = model.mkt * L[i];
+      for (var k = 0; k < f.length; k++) {
+        var c = model.coef[k] || 0;
+        if (c) s += c * (V3.MKX[k] ? f[k] * L[i] : f[k]);
+      }
       return s;
     });
     var mx = Math.max.apply(null, z);
@@ -1190,6 +1250,145 @@ function renderClassReport(races, testR, CLS, SPv, POS) {
   el.style.display = 'block';
 }
 
+// ── Going and weather reports ────────────────────────────────────────────────
+// Does the ground, or the weather, make the predictions fail? For each kind of
+// ground and each kind of day: how often the SP favourite won against what its
+// price said (power method, margin removed), how often a 10/1+ outsider won,
+// and on the held-out test races whether Formintel v3 beat the market there.
+function renderGoingWeatherReport(races, testR, thM, thF, P, V, SPv, haveWx) {
+  var isTest = {}; testR.forEach(function(rc){ isTest[rc.s] = 1; });
+  function blank() { return { n: 0, fw: 0, fexp: 0, up: 0, tn: 0, llM: 0, llF: 0, tm: 0, tf: 0 }; }
+  function add(b, rc) {
+    var odds = Array.prototype.slice.call(SPv.subarray(rc.s, rc.s + rc.n));
+    var fav = 0; for (var a = 1; a < rc.n; a++) if (odds[a] < odds[fav]) fav = a;
+    var pm = V3.mktProbs(odds);
+    b.n++; b.fexp += pm[fav]; if (fav === rc.w) b.fw++;
+    if (odds[rc.w] >= 11) b.up++;
+    if (isTest[rc.s]) {
+      var qm = v3RaceProbs(rc, thM, 1, V), qf = v3RaceProbs(rc, thF, P, V), bm = 0, bf = 0;
+      for (a = 1; a < rc.n; a++) { if (qm[a] > qm[bm]) bm = a; if (qf[a] > qf[bf]) bf = a; }
+      b.tn++; b.llM += Math.log(qm[rc.w]); b.llF += Math.log(qf[rc.w]);
+      if (bm === rc.w) b.tm++; if (bf === rc.w) b.tf++;
+    }
+  }
+  var going = { firm: blank(), good: blank(), gs: blank(), soft: blank(), heavy: blank(), aw: blank() };
+  var rain = { dry: blank(), light: blank(), wet: blank(), vwet: blank() }, wind = { calm: blank(), breezy: blank(), windy: blank() };
+  races.forEach(function(rc) {
+    var g = rc.aw ? 'aw' : rc.gs >= 4.5 ? 'firm' : rc.gs >= 3.75 ? 'good' : rc.gs >= 2.75 ? 'gs' : rc.gs >= 1.75 ? 'soft' : 'heavy';
+    add(going[g], rc);
+    if (rc.rain != null && !rc.aw) add(rain[rc.rain >= 10 ? 'vwet' : rc.rain >= 5 ? 'wet' : rc.rain >= 1 ? 'light' : 'dry'], rc);
+    if (rc.gust != null) add(wind[rc.gust >= 40 ? 'windy' : rc.gust >= 25 ? 'breezy' : 'calm'], rc);
+  });
+  var pc = function(a, b){ return b ? (100 * a / b).toFixed(1) + '%' : '—'; };
+  function table(title, sub, rows) {
+    var h = '<div style="font-size:.8rem;color:var(--tx);margin:12px 0 2px">' + title + '</div>'
+      + (sub ? '<div style="font-size:.72rem;color:var(--mt);margin-bottom:4px">' + sub + '</div>' : '')
+      + '<table class="ft"><thead><tr><th></th><th>Races</th><th>SP fav won</th><th>Price said</th><th>Actual ÷ expected</th><th>10/1+ winners</th><th>Test: v3 vs market</th></tr></thead><tbody>';
+    rows.forEach(function(r) {
+      var b = r[1];
+      if (!b.n) { h += '<tr><td>' + r[0] + '</td><td colspan="6" style="color:var(--mt)">none</td></tr>'; return; }
+      var ae = b.fexp ? b.fw / b.fexp : 0, gain = b.tn ? (b.llF - b.llM) / b.tn : 0;
+      h += '<tr><td>' + r[0] + '</td><td>' + b.n.toLocaleString() + '</td><td>' + pc(b.fw, b.n) + '</td><td>' + pc(b.fexp, b.n) + '</td>'
+        + '<td style="color:' + (ae >= 1.03 ? 'var(--g)' : ae <= 0.97 ? '#ff6b6b' : 'var(--tx)') + '">' + ae.toFixed(2) + '</td>'
+        + '<td>' + pc(b.up, b.n) + '</td>'
+        + '<td>' + (b.tn ? '<span style="color:' + (gain > 0.001 ? 'var(--g)' : gain < -0.001 ? '#ff6b6b' : 'var(--tx)') + '">' + (gain >= 0 ? '+' : '') + gain.toFixed(4) + '</span> <span style="color:var(--mt)">(' + b.tn.toLocaleString() + ' races, top pick ' + pc(b.tf, b.tn) + ' vs ' + pc(b.tm, b.tn) + ')</span>' : '—') + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function ae(b) { return b.fexp ? b.fw / b.fexp : 0; }
+  var soft = blank(); ['soft', 'heavy'].forEach(function(k){ var b = going[k]; Object.keys(soft).forEach(function(f){ soft[f] += b[f]; }); });
+  var verdict = '';
+  if (soft.n >= 300 && going.good.n >= 300) {
+    var d = ae(soft) - ae(going.good);
+    verdict = '<div style="font-size:.8rem;margin:8px 0;padding:10px;border:1px solid var(--bd);border-radius:8px">'
+      + (d < -0.04 ? '🌧 <strong>Soft ground does make favourites less reliable.</strong> On soft or heavy ground SP favourites won ' + pc(soft.fw, soft.n) + ' against ' + pc(soft.fexp, soft.n) + ' expected (×' + ae(soft).toFixed(2) + '), compared with ×' + ae(going.good).toFixed(2) + ' on good ground. The model\'s "Price on soft/heavy ground" weight above corrects for this.'
+        : d > 0.04 ? '☀️ <strong>Favourites hold up on soft ground.</strong> ×' + ae(soft).toFixed(2) + ' on soft or heavy vs ×' + ae(going.good).toFixed(2) + ' on good.'
+        : '⛅ <strong>The ground makes little difference to how reliable favourites are</strong> (×' + ae(soft).toFixed(2) + ' soft or heavy, ×' + ae(going.good).toFixed(2) + ' good). A bad week on soft ground is more likely bad luck.')
+      + '</div>';
+  }
+  var el = document.getElementById('goingReport');
+  el.innerHTML = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:4px">Going</div>'
+    + '<div style="font-size:.75rem;color:var(--mt)">"Price said" is the SP favourite\'s chance from its price. Actual ÷ expected below 1.00 = favourites won less often than their prices said. "Test: v3 vs market" is the log-score gain per race on the held-out races (above 0 = v3 better).</div>'
+    + verdict
+    + table('All ' + races.length.toLocaleString() + ' races by official going', '', [['Firm / good to firm', going.firm], ['Good', going.good], ['Good to soft / yielding', going.gs], ['Soft', going.soft], ['Heavy', going.heavy], ['All-weather', going.aw]]);
+  el.style.display = 'block';
+
+  var wel = document.getElementById('weatherReport');
+  if (!haveWx) { wel.style.display = 'none'; return; }
+  var wv = '';
+  if (rain.vwet.n >= 200 && rain.dry.n >= 300) {
+    var dd = ae(rain.vwet) - ae(rain.dry);
+    wv = '<div style="font-size:.8rem;margin:8px 0;padding:10px;border:1px solid var(--bd);border-radius:8px">'
+      + (dd < -0.04 ? '🌧 <strong>Wet days do hurt the favourites.</strong> With 10mm+ of rain at the course SP favourites won ×' + ae(rain.vwet).toFixed(2) + ' of what their prices said, against ×' + ae(rain.dry).toFixed(2) + ' on dry days.'
+        : dd > 0.04 ? '☀️ <strong>Wet days don\'t hurt the favourites</strong> (×' + ae(rain.vwet).toFixed(2) + ' with 10mm+, ×' + ae(rain.dry).toFixed(2) + ' dry).'
+        : '⛅ <strong>Rain on the day makes little difference</strong> once the going is known (×' + ae(rain.vwet).toFixed(2) + ' with 10mm+, ×' + ae(rain.dry).toFixed(2) + ' dry).')
+      + '</div>';
+  }
+  wel.innerHTML = '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.1rem;color:var(--g);letter-spacing:2px;margin-bottom:4px">Weather</div>'
+    + '<div style="font-size:.75rem;color:var(--mt)">The day\'s rain and strongest gust at each course (Open-Meteo, ERA5). Rain is for the whole day, so some fell after racing.</div>'
+    + wv
+    + table('Rain on the day (turf)', '', [['Dry (under 1mm)', rain.dry], ['Light (1–5mm)', rain.light], ['Wet (5–10mm)', rain.wet], ['Very wet (10mm+)', rain.vwet]])
+    + table('Strongest gust of the day', '', [['Under 25mph', wind.calm], ['25–39mph', wind.breezy], ['40mph+', wind.windy]]);
+  wel.style.display = 'block';
+}
+
+// ── Weather for training (Open-Meteo archive, daily) ─────────────────────────
+// One request per course covering its whole date range: the day's rain (mm)
+// and strongest gust (mph). Kept for the page session, so training turf, AW
+// and jumps one after another only downloads each course once. Requests are
+// spaced out to stay inside Open-Meteo's free limits (a long date range
+// counts as several calls), and a "too many requests" reply waits a minute.
+var TRAIN_WX = {};   // courseKey -> { from, to, days: { 'YYYY-MM-DD': [rain, gust] } }
+async function getTrainingWeather(rows) {
+  if (typeof fiCourseGeo !== 'function') { log('Weather helpers (courses.js) did not load — training without weather.', 'err'); return null; }
+  var span = {};
+  rows.forEach(function(r){
+    if (!r.date) return;
+    var k = fiCourseKey(V3.courseKey(r.course)); if (!fiCourseGeo(k)) return;
+    var x = span[k] || (span[k] = { from: r.date, to: r.date });
+    if (r.date < x.from) x.from = r.date; if (r.date > x.to) x.to = r.date;
+  });
+  var lastArchive = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  var todo = Object.keys(span).filter(function(k){
+    var have = TRAIN_WX[k], want = span[k];
+    var to = want.to < lastArchive ? want.to : lastArchive;
+    return !(have && have.from <= want.from && have.to >= to);
+  });
+  if (todo.length) log('Weather: fetching daily rain and wind for ' + todo.length + ' courses from Open-Meteo (about ' + Math.max(1, Math.round(todo.length * 2.8 / 60)) + ' min)…', 'info');
+  var done = 0, failed = [];
+  for (var t = 0; t < todo.length; t++) {
+    var k = todo[t], g = fiCourseGeo(k), want = span[k];
+    var to = want.to < lastArchive ? want.to : lastArchive;
+    if (want.from > to) continue;
+    var url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + g[0] + '&longitude=' + g[1]
+      + '&start_date=' + want.from + '&end_date=' + to
+      + '&daily=precipitation_sum,wind_gusts_10m_max&timezone=Europe%2FLondon&wind_speed_unit=mph';
+    var ok = false;
+    for (var attempt = 0; attempt < 3 && !ok; attempt++) {
+      try {
+        var j = await fiFetchJSON(url, 90000), d = j && j.daily;
+        if (!d || !d.time) throw new Error('no daily data');
+        var days = {};
+        d.time.forEach(function(day, i){ days[day] = [d.precipitation_sum[i] || 0, d.wind_gusts_10m_max[i] || 0]; });
+        TRAIN_WX[k] = { from: want.from, to: to, days: days };
+        ok = true;
+      } catch (e) {
+        if (/429/.test(e.message) && attempt < 2) { log('Weather: Open-Meteo says slow down — waiting a minute…', 'info'); await sleep(65000); }
+        else if (attempt === 2 || !/429/.test(e.message)) { failed.push(k); break; }
+      }
+    }
+    done++;
+    if (done % 10 === 0) log('Weather: ' + done + ' of ' + todo.length + ' courses', 'info');
+    await sleep(2800);
+  }
+  if (failed.length) log('Weather unavailable for ' + failed.length + ' course(s): ' + failed.slice(0, 8).join(', ') + ' — those races count as dry.', 'err');
+  return TRAIN_WX;
+}
+function trainWxFor(r) {
+  var k = fiCourseKey(V3.courseKey(r.course)), w = TRAIN_WX[k];
+  return (w && w.days[r.date]) || null;
+}
+
 async function trainModel() {
   if (!rawData.length) return;
   document.getElementById('trainBtn').disabled = true;
@@ -1208,6 +1407,13 @@ async function trainModel() {
     return oa < ob ? -1 : oa > ob ? 1 : 0;
   });
 
+  var useWx = !!(document.getElementById('useWeather') || {}).checked, haveWx = false;
+  if (useWx) {
+    try { var wxRes = await getTrainingWeather(sorted); haveWx = !!wxRes && Object.keys(TRAIN_WX).length > 0; }
+    catch (e) { log('Weather fetch failed (' + e.message + ') — training without weather.', 'err'); }
+    if (haveWx) log('Weather ready for ' + Object.keys(TRAIN_WX).length + ' courses.', 'ok');
+  }
+
   var K = V3.KEYS.length, N = sorted.length;
   var X   = new Float32Array(N * K);   // features per runner row
   var MK  = new Float32Array(N);       // log(1/SP)
@@ -1221,7 +1427,7 @@ async function trainModel() {
   var popN = 0, popW = 0, popP = 0;
   var st = { HS: HS, JS: JS, TS: TS, CD: CD, pop: 0.1, popP: 0.3 };
 
-  function prep(r) {
+  function prep(r, ran, rain) {
     var h = V3.horseKey(r.horse), H = HS[h];
     var days = 0;
     if (horseLastRun[h] && r.date) {
@@ -1231,7 +1437,8 @@ async function trainModel() {
     return { h: h, j: V3.personKey(r.jockey), t: V3.personKey(r.trainer), c: V3.courseKey(r.course),
              stall: parseInt(r.draw) || 0, dist: parseDist(r.dist), gs: V3.goingScore(r.going),
              days: days, or: parseInt(r.or) || 0,
-             lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: H ? (H.lp || []) : [] };
+             lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: H ? (H.lp || []) : [],
+             lbs: V3.lbsOf(r.lbs || r.wgt), age: parseInt(r.age) || 0, ran: ran || 0, rain: rain || 0 };
   }
 
   function update(r) {
@@ -1294,18 +1501,22 @@ async function trainModel() {
       var wins = [];
       rs.forEach(function(r, a){ if (parsePos(r.pos) === 1) wins.push(a); });
       if (wins.length !== 1) { skip.winner++; return; }
-      var rows = V3.centre(rs.map(function(r){ return V3.raw(prep(r), st); }));
+      var wx = haveWx ? trainWxFor(rs[0]) : null;
+      var rain = wx ? wx[0] : 0;
+      var rows = V3.centre(rs.map(function(r){ return V3.raw(prep(r, rs.length, rain), st); }));
+      var mkl = V3.mktLogs(odds, { devig: 'power' });
       var s = nRow;
       rs.forEach(function(r, a) {
         for (var q = 0; q < K; q++) X[nRow * K + q] = rows[a][q];
-        MK[nRow] = Math.log(1 / odds[a]); SPv[nRow] = odds[a]; POS[nRow] = parsePos(r.pos);
+        MK[nRow] = mkl[a]; SPv[nRow] = odds[a]; POS[nRow] = parsePos(r.pos);
         var hk = V3.horseKey(r.horse);
         var lastC = (useAll ? LC[hk] : (HS[hk] || {}).lc) || 0, nowC = raceClassNum(r);
         CLS[nRow] = (!lastC || !nowC) ? CLS_UNKNOWN : nowC - lastC >= 2 ? CLS_DROP2 : nowC - lastC === 1 ? CLS_DROP1
                   : nowC === lastC ? CLS_SAME : CLS_UP;
         nRow++;
       });
-      races.push({ s: s, n: rs.length, w: wins[0], d: date });
+      races.push({ s: s, n: rs.length, w: wins[0], d: date, gs: V3.goingScore(rs[0].going), aw: isAWRow(rs[0]),
+                   rain: wx ? wx[0] : null, gust: wx ? wx[1] : null });
     });
     for (k = i; k < j; k++) update(sorted[k]);
     i = j;
@@ -1318,8 +1529,14 @@ async function trainModel() {
       + ' · Trainers: ' + Object.keys(TS).length.toLocaleString(), 'ok');
   if (races.length < 500) throw new Error('Only ' + races.length + ' usable races — need SP for every runner. Check the sp/dec column.');
 
-  // Inputs: p=0 is log(1/SP), p>=1 are the K features
-  var V = function(row, p) { return p === 0 ? MK[row] : X[row * K + p - 1]; };
+  // Inputs: p=0 is the market term (log of the power-method chance from SP),
+  // p>=1 are the K features; the MKX ones enter as feature × market term
+  var MKX = V3.MKX;
+  var V = function(row, p) {
+    if (p === 0) return MK[row];
+    var q = p - 1, v = X[row * K + q];
+    return MKX[q] ? v * MK[row] : v;
+  };
   var LAMBDA = 2.0;   // light ridge so rare indicators can't run away
 
   // ── Train on the oldest 80%, test on the newest 20% ───────────
@@ -1370,7 +1587,11 @@ async function trainModel() {
     for (var rr = 0; rr < nRow; rr++) { var v = X[rr * K + q]; s1 += v; s2 += v * v; }
     var mean = s1 / nRow; sd.push(Math.sqrt(Math.max(s2 / nRow - mean * mean, 0)));
   }
-  var effects = V3.NAMES.map(function(n, q){ return { name: n, coef: th[q + 1], mult: Math.exp(th[q + 1] * sd[q]) }; });
+  var effects = [], trust = [];
+  V3.NAMES.forEach(function(n, q){
+    if (V3.MKX[q]) trust.push({ name: n, key: V3.KEYS[q], coef: th[q + 1], trust: (th[0] + th[q + 1]) / (th[0] || 1) });
+    else effects.push({ name: n, coef: th[q + 1], mult: Math.exp(th[q + 1] * sd[q]) });
+  });
 
   // ── Compact stats for export ─────────────────────────────────
   if (useAll) advanceLC(null);   // every remaining run, so lc is each horse's latest class
@@ -1395,12 +1616,12 @@ async function trainModel() {
   var s0 = bW.reduce(function(a, b){ return a + b; }, 0); bW = bW.map(function(w){ return w / s0; });
 
   trainedModel = {
-    version:          '3.0',
+    version:          '3.1',
     created:          new Date().toISOString(),
     surface:          currentSurface,
     trainingRecords:  rawData.length,
     dataTo:           races[races.length - 1].d,
-    v3: { keys: V3.KEYS, names: V3.NAMES, mkt: th[0], coef: th.slice(1),
+    v3: { keys: V3.KEYS, names: V3.NAMES, mkt: th[0], coef: th.slice(1), devig: 'power', weather: haveWx,
           test: { races: testR.length, from: testR[0].d, marketLL: eM.ll, modelLL: eF.ll,
                   marketTop: eM.top, modelTop: eF.top, valueBets: eF.vb, valueWins: eF.vw, valueROI: eF.vroi } },
     weights:          bW,
@@ -1434,6 +1655,15 @@ async function trainModel() {
         + '<td><div class="bar-cell"><div class="mini-bar"><div class="mini-fill" style="width:' + w + '%"></div></div></div></td></tr>';
   });
   ft += '</tbody></table>';
+  var trustWhen = { mktWet: 'on heavy ground (soft = two-thirds of this)', mktBig: 'in fields of 16+ runners (12 runners = half of this)', mktRain: 'on a day with 10mm+ of rain at the course' };
+  ft += '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:var(--g);letter-spacing:2px;margin:14px 0 4px">How far to trust the price</div>'
+     + '<div style="font-size:.75rem;color:var(--mt);margin-bottom:6px">×1.00 = the price is as reliable as usual. Below 1 = the price over-states the favourites there, so the model flattens it; above 1 = favourites are better than their price.</div>'
+     + '<table class="ft"><tbody>';
+  trust.forEach(function(t){
+    var c = t.trust < 0.97 ? '#ff6b6b' : t.trust > 1.03 ? 'var(--g)' : 'var(--tx)';
+    ft += '<tr><td>' + t.name + '</td><td style="color:' + c + '">×' + t.trust.toFixed(2) + '</td><td style="color:var(--mt);font-size:.72rem">' + (trustWhen[t.key] || '') + (t.key === 'mktRain' && !haveWx ? ' — no weather this run' : '') + '</td></tr>';
+  });
+  ft += '</tbody></table>';
   document.getElementById('featImp').innerHTML = ft;
   document.getElementById('featImp').style.display = 'block';
 
@@ -1456,6 +1686,7 @@ async function trainModel() {
     + '<div style="margin-top:4px;font-size:.73rem;color:var(--mt)">Test races were never used for fitting. The exported model is then refitted on all ' + races.length.toLocaleString() + ' races.</div>';
   document.getElementById('accDisplay').style.display = 'block';
   try { renderClassReport(races, testR, CLS, SPv, POS); } catch (e) { log('Class report failed: ' + e.message, 'err'); }
+  try { renderGoingWeatherReport(races, testR, fitM.th, fitF.th, 1 + K, V, SPv, haveWx); } catch (e) { log('Going/weather report failed: ' + e.message, 'err'); }
   pf.style.width = '100%';
 
   document.getElementById('s2').className = 'step done';

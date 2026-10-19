@@ -1,0 +1,103 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   FORMINTEL THEME — light and dark. Shared by the predictor and results app.
+   Follows the phone's setting unless a theme is chosen (html[data-theme]).
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 14px;
+
+  --bg:#0b100e; --sf:#121a17; --sf2:#19231f; --inp:#0f1613; --hdr:rgba(11,16,14,.94);
+  --bd:#24332c; --bd2:#33463d; --bd-rgb:36,51,44;
+  --tx:#e3ece6; --white:#f5f9f6; --mt:#8a9d93;
+  --g:#34e08c; --g-rgb:52,224,140; --g-ink:#04200f; --g-tx:#93f1bf;
+  --gold:#ffc53d; --gold-rgb:255,197,61; --gold-tx:#ffe08a;
+  --re:#ff6b6b; --re-rgb:255,107,107; --re-tx:#ff9d97;
+  --bl:#5cb8ff; --bl-rgb:92,184,255; --bl-tx:#a3d6ff; --bl2-rgb:116,152,255;
+  --pu:#ab8dff; --pu-rgb:171,141,255; --pu-tx:#d0bdff;
+  --or:#ff9147; --or-rgb:255,145,71; --or-tx:#ffc08f;
+  --ov-rgb:255,255,255;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.22);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+
+  /* names the two apps already use */
+  --text:var(--tx); --card:var(--sf); --green:var(--g); --red:var(--re); --blue:var(--bl);
+  --orange:var(--or); --pace:var(--or); --closer:var(--pu);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg:#f2f5f3; --sf:#ffffff; --sf2:#f3f7f4; --inp:#ffffff; --hdr:rgba(255,255,255,.94);
+    --bd:#dce5df; --bd2:#c5d2ca; --bd-rgb:220,229,223;
+    --tx:#15221c; --white:#0c1812; --mt:#5c7066;
+    --g:#0b8a4c; --g-rgb:11,138,76; --g-ink:#ffffff; --g-tx:#096e3c;
+    --gold:#b5730b; --gold-rgb:214,150,20; --gold-tx:#875600;
+    --re:#d43f3f; --re-rgb:212,63,63; --re-tx:#b5302d;
+    --bl:#1f66d1; --bl-rgb:31,102,209; --bl-tx:#1a55ad; --bl2-rgb:40,92,222;
+    --pu:#6a45d6; --pu-rgb:106,69,214; --pu-tx:#5434b6;
+    --or:#d1620d; --or-rgb:209,98,13; --or-tx:#a24c07;
+    --ov-rgb:0,0,0;
+    --shadow:0 1px 2px rgba(16,40,28,.06), 0 6px 18px rgba(16,40,28,.07);
+    --shadow-sm:0 1px 2px rgba(16,40,28,.08);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg:#f2f5f3; --sf:#ffffff; --sf2:#f3f7f4; --inp:#ffffff; --hdr:rgba(255,255,255,.94);
+  --bd:#dce5df; --bd2:#c5d2ca; --bd-rgb:220,229,223;
+  --tx:#15221c; --white:#0c1812; --mt:#5c7066;
+  --g:#0b8a4c; --g-rgb:11,138,76; --g-ink:#ffffff; --g-tx:#096e3c;
+  --gold:#b5730b; --gold-rgb:214,150,20; --gold-tx:#875600;
+  --re:#d43f3f; --re-rgb:212,63,63; --re-tx:#b5302d;
+  --bl:#1f66d1; --bl-rgb:31,102,209; --bl-tx:#1a55ad; --bl2-rgb:40,92,222;
+  --pu:#6a45d6; --pu-rgb:106,69,214; --pu-tx:#5434b6;
+  --or:#d1620d; --or-rgb:209,98,13; --or-tx:#a24c07;
+  --ov-rgb:0,0,0;
+  --shadow:0 1px 2px rgba(16,40,28,.06), 0 6px 18px rgba(16,40,28,.07);
+  --shadow-sm:0 1px 2px rgba(16,40,28,.08);
+}
+
+/* ── Shared pieces ───────────────────────────────────────────────────────── */
+html, body { background: var(--bg); }
+body { font-family: var(--sans); color: var(--tx); -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01'; }
+.theme-btn {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--bd); background: var(--sf2);
+  color: var(--tx); font-size: .95rem; line-height: 1; cursor: pointer; display: inline-flex;
+  align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+}
+.theme-btn:active { transform: scale(.94); }
+.seg { display: inline-flex; border: 1px solid var(--bd); border-radius: 10px; overflow: hidden; background: var(--sf2); }
+.seg button { border: none; background: transparent; color: var(--mt); font: 600 .74rem var(--sans); padding: 8px 14px; cursor: pointer; }
+.seg button.on { background: var(--g); color: var(--g-ink); }
+
+/* Weather */
+.wx-strip { background: var(--sf2); border: 1px solid var(--bd); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+.wx-strip:empty { display: none; }
+.wx-main { display: flex; align-items: center; gap: 10px; }
+.wx-ico { font-size: 1.6rem; line-height: 1; }
+.wx-ttl { font-size: .86rem; font-weight: 700; color: var(--tx); }
+.wx-sub { font-size: .72rem; color: var(--mt); line-height: 1.45; }
+.wx-notes { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--bd); font-size: .74rem; line-height: 1.5; color: var(--tx); display: flex; flex-direction: column; gap: 4px; }
+.wx-chip { font-size: .66rem; font-weight: 600; color: var(--mt); background: var(--sf2); border: 1px solid var(--bd); border-radius: 999px; padding: 2px 8px; margin-top: 4px; white-space: nowrap; }
+.mk-value { background: rgba(var(--gold-rgb), .14); color: var(--gold); border: 1px solid rgba(var(--gold-rgb), .4); font-weight: 700; }
+
+/* Results Weather tab */
+.pad { padding: 16px; }
+.muted { color: var(--mt); }
+.good { color: var(--g); font-weight: 700; }
+.bad { color: var(--re); font-weight: 700; }
+.wx-intro { font-size: .76rem; color: var(--mt); line-height: 1.55; margin-bottom: 10px; }
+.wx-status { font-family: var(--mono); font-size: .64rem; color: var(--mt); margin-bottom: 10px; }
+.wx-verdict { background: var(--sf); border: 1px solid var(--bd); border-left: 4px solid var(--g); border-radius: 12px; padding: 12px 14px; font-size: .8rem; line-height: 1.55; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+.wx-card { background: var(--sf); border: 1px solid var(--bd); border-radius: var(--radius); padding: 12px 12px 6px; margin-bottom: 12px; box-shadow: var(--shadow-sm); overflow-x: auto; }
+.wx-card-ttl { font-size: .86rem; font-weight: 700; color: var(--tx); margin-bottom: 2px; }
+.wx-card-sub { font-size: .68rem; color: var(--mt); margin-bottom: 8px; }
+.wx-tbl { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.wx-tbl th { font-size: .58rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--mt); text-align: right; padding: 4px 5px; border-bottom: 1px solid var(--bd); white-space: nowrap; }
+.wx-tbl th:first-child, .wx-tbl td:first-child { text-align: left; white-space: normal; min-width: 92px; }
+.wx-tbl td { padding: 7px 4px; border-bottom: 1px solid var(--bd); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wx-tbl tr:last-child td { border-bottom: none; }
+.wx-mt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--bd); font-size: .74rem; flex-wrap: wrap; }
+.wx-mt-r { color: var(--mt); font-size: .7rem; }
+.wx-foot { font-size: .62rem; color: var(--mt); margin-top: 6px; line-height: 1.5; }

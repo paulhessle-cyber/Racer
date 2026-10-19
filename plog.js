@@ -139,7 +139,7 @@ var FIPlog = (function(){
         if (k.indexOf(PREFIX) === 0) groups.log += b;
         else if (k === V1_KEY) groups.oldLog += b;
         else if (DEAD_KEYS.indexOf(k) > -1) groups.deadModels += b;
-        else if (/^rp_(card|odds|plock|nap|napday|af)_/.test(k)) groups.dayCache += b;
+        else if (/^rp_(card|odds|plock|nap|napday|af|wx|mpick)_/.test(k)) groups.dayCache += b;
         else if (/^(rq_|fi_|rp_|formintel)/.test(k)) groups.formintel += b;
         else { groups.other += b; otherKeys.push({ key: k, bytes: b }); }
       }
