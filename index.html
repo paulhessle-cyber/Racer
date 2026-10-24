@@ -342,7 +342,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v10.0 · 20 Oct 2026</div>
+      <div class="ver">v10.1 · 24 Oct 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -827,12 +827,12 @@ input,textarea{font-family:var(--sans)}
     <!-- Pace -->
     <div class="h-sec">
       <div class="h-sec-hdr"><div class="h-sec-num">6</div><div class="h-sec-ttl">Pace analysis</div></div>
-      <p class="h-p">The app reads form figures to classify each horse's running style, then assesses the whole race.</p>
+      <p class="h-p">Each horse's running style comes from the race comments on its last three runs ("Led", "Prominent", "Held up"…), from <strong>form.json</strong>, which the trainer builds from your results file. The app then assesses the whole race. Horses that aren't in the file fall back to a guess from their form figures.</p>
       <div class="h-card-row">
-        <div class="h-card"><div class="h-card-ttl">🟠 Front-runner</div><p>Shows 1 or 2 early in recent form. Gets a bonus as lone leader; penalised in contested pace.</p></div>
-        <div class="h-card"><div class="h-card-ttl">🟣 Closer</div><p>Finishes strongly from behind. Benefits when pace is contested; penalised in slow-run races.</p></div>
+        <div class="h-card"><div class="h-card-ttl">🟠 Front-runner</div><p>Led or raced prominently in its recent runs (shown as L-P-L: led, prominent, led). Gets a bonus as lone leader; penalised in contested pace.</p></div>
+        <div class="h-card"><div class="h-card-ttl">🟣 Closer</div><p>Usually held up. Benefits when pace is contested; penalised in slow-run races.</p></div>
       </div>
-      <div class="h-callout h-gold"><span class="ci">💡</span><div>Draw position interacts with pace style. A low draw suits front-runners in big fields; a high draw can cause traffic problems for closers.</div></div>
+      <div class="h-callout h-gold"><span class="ci">💡</span><div>Draw position interacts with pace style. Each race also shows how often each third of the stalls (low, middle, high) has won at that course and trip, from the model file. Tap a horse for its last three runs: beaten distances, RPR, Topspeed, going record and any rider's claim.</div></div>
     </div>
 
     <!-- Jockey & Trainer -->
@@ -1259,20 +1259,325 @@ function classifyPace(formStr) {
   return 'mid';
 }
 
+// ══════════════════════════════════════════════════════════
+// ── RECENT RUNS — models/form.json (built by the trainer) ──
+//
+// Each active horse's last three runs from the results file, on every
+// surface: date, course, trip, going, class, position, beaten distance, RPR,
+// Topspeed, how it raced early (read from the race comment) and SP, plus its
+// record on each kind of going. Optional: without the file the app works as
+// before, guessing running style from the racecard form figures.
+// ══════════════════════════════════════════════════════════
+var FORM_URL = 'models/form.json';
+var STYLE_WORD = ['', 'held up', 'midfield', 'prominent', 'led'];
+var STYLE_LETTER = ['?', 'H', 'M', 'P', 'L'];
+var GOING_BAND_LABEL = { F: 'firm / good to firm', G: 'good', Y: 'good to soft / yielding', S: 'soft', H: 'heavy', A: 'all-weather' };
+var NONFIN_LABEL = { '-1': 'PU', '-2': 'F', '-3': 'UR', '-4': 'BD', '-5': 'RO', '-6': 'SU', '-7': 'RR', '-8': 'DSQ', '-9': 'DNF' };
+
+function fetchFormData() {
+  return fetch(FORM_URL)
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d) {
+      if (!d || !d.horses || !d.fields) throw new Error('not a form file');
+      S.formData = d; S._formCache = {};
+      return { ok: true };
+    })
+    .catch(function(err) { console.warn('form.json not loaded:', err.message); S.formData = null; return { ok: false, err: err.message }; });
+}
+function ukTodayISO() { try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }); } catch(e) { return todayISO(); } }
+function formBaseMs() { return Date.parse(((S.formData && S.formData.base) || '2015-01-01') + 'T12:00:00Z'); }
+function formDayOf(iso) { var t = Date.parse(String(iso).slice(0, 10) + 'T12:00:00Z'); return isNaN(t) ? 0 : Math.round((t - formBaseMs()) / 86400000); }
+function formDateOf(day) { return new Date(formBaseMs() + day * 86400000).toISOString().slice(0, 10); }
+
+// A horse's runs before `beforeISO` (default: today), most recent first, and
+// its going record { F|G|Y|S|H|A: [runs, wins, placed] }; null if not in the file.
+//   run: { date, course, dist (furlongs), going, cls, pos (below 0 = did not
+//          finish), ran, btn (lengths behind the winner; 0 won, -1 unknown),
+//          rpr, ts, style (0 unknown, 1 held up … 4 led), type, sp }
+function formRecord(name, beforeISO) {
+  var F = S.formData;
+  if (!F || !name) return null;
+  var k = V3.horseKey(name), ck = k + '|' + (beforeISO || '');
+  var cache = S._formCache || (S._formCache = {});
+  if (cache[ck] !== undefined) return cache[ck];
+  var rec = F.horses[k], out = null;
+  if (!rec) {
+    // Betfair and the results file don't always agree on punctuation
+    // ("Hat's Off" / "Hats Off"), so fall back to letters and digits only
+    if (!F._loose) { F._loose = {}; Object.keys(F.horses).forEach(function(x) { F._loose[x.replace(/[^a-z0-9]/g, '')] = x; }); }
+    var alt = F._loose[k.replace(/[^a-z0-9]/g, '')];
+    if (alt) rec = F.horses[alt];
+  }
+  if (rec) {
+    if (!F._ix) { F._ix = {}; F.fields.forEach(function(f, i) { F._ix[f] = i; }); }
+    var ix = F._ix, lim = formDayOf(beforeISO || ukTodayISO());
+    var g = function(a, f) { var i = ix[f]; return i === undefined ? 0 : (a[i] || 0); };
+    var runs = (rec[0] || []).filter(function(a) { return g(a, 'day') < lim; }).map(function(a) {
+      var b = ix.btnX10 === undefined ? -1 : a[ix.btnX10];
+      return { date: formDateOf(g(a, 'day')), course: (F.courses || [])[g(a, 'course')] || '',
+               dist: g(a, 'distX10') / 10, going: (F.goings || [])[g(a, 'going')] || '', cls: g(a, 'class'),
+               pos: g(a, 'pos'), ran: g(a, 'ran'), btn: (b === undefined || b < 0) ? -1 : b / 10,
+               rpr: g(a, 'rpr'), ts: g(a, 'ts'), style: g(a, 'style'), type: (F.types || [])[g(a, 'type')] || '',
+               sp: g(a, 'spX10') / 10 };
+    });
+    out = { runs: runs, going: rec[1] || {} };
+  }
+  cache[ck] = out;
+  return out;
+}
+
+// How a horse usually races early, from its last three runs (the most recent
+// counting most, as in the model): v 1-4, the codes run by run, and a label.
+function formStyleOf(fr) {
+  if (!fr || !fr.runs.length) return null;
+  var w = [0.5, 0.3, 0.2], s = 0, sw = 0, codes = [];
+  fr.runs.slice(0, 3).forEach(function(x, i) { codes.push(x.style); if (x.style > 0) { s += w[i] * x.style; sw += w[i]; } });
+  if (!sw) return null;
+  var v = s / sw, known = codes.filter(function(c) { return c > 0; }).length;
+  var led = codes.filter(function(c) { return c === 4; }).length;
+  var label = v >= 3.25 ? 'usually leads' : v >= 2.75 ? 'races prominently' : v >= 1.75 ? 'races midfield' : 'usually held up';
+  return { v: v, n: known, led: led, codes: codes, label: label,
+           letters: codes.map(function(c) { return STYLE_LETTER[c] || '?'; }).join('-') };
+}
+
+// Real running styles replace the guess from form figures wherever the
+// horse is in form.json. The guess is kept for horses that aren't.
+function applyFormStyles(runners) {
+  if (!S.formData || !runners) return;
+  runners.forEach(function(r) {
+    if (!r || !r.name) return;
+    if (r._paceGuess === undefined) r._paceGuess = r._pace || 'mid';
+    var st = formStyleOf(formRecord(r.name));
+    r._style = st || null;
+    r._pace = st ? (st.v >= 3.25 ? 'front' : st.v < 1.75 ? 'closer' : 'mid') : r._paceGuess;
+  });
+}
+
+// Beaten distance as it's written on a card: nse, shd, hd, nk, ½L, 1¼L …
+function fmtBtn(b) {
+  if (!(b > 0)) return '';
+  if (b <= 0.05) return 'nse';
+  if (b <= 0.1) return 'shd';
+  if (b <= 0.2) return 'hd';
+  if (b <= 0.3) return 'nk';
+  if (b >= 15) return Math.round(b) + 'L';
+  var w = Math.floor(b + 1e-9), q = Math.round((b - w) * 4);
+  if (q === 4) { w++; q = 0; }
+  return (w || '') + ['', '¼', '½', '¾'][q] + 'L';
+}
+function fmtTrip(f) {
+  if (!(f > 0)) return '';
+  var m = Math.floor(f / 8 + 1e-9), r = Math.round((f - m * 8) * 2) / 2;
+  if (r >= 8) { m++; r = 0; }
+  return (m ? m + 'm' : '') + (r ? (Math.floor(r) || '') + (r % 1 ? '½' : '') + 'f' : '');
+}
+function goingAbbr(g) {
+  var k = String(g || '').toLowerCase().split('(')[0].trim();
+  var A = { 'firm':'F', 'good to firm':'GF', 'good':'G', 'good to yielding':'GY', 'good to soft':'GS', 'yielding':'Y',
+            'yielding to soft':'YS', 'soft':'S', 'soft to heavy':'SH', 'heavy':'Hy', 'standard':'Std', 'standard to slow':'Std/Slw',
+            'slow':'Slw', 'standard to fast':'Std/Fst', 'fast':'Fst' };
+  return A[k] || g || '';
+}
+// Going band, as the trainer's going record uses: F G Y S H, A all-weather
+function goingBandOf(g, aw) {
+  var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].trim();
+  if (aw || /^(standard|slow|fast)/.test(k)) return 'A';
+  if (/heavy/.test(k)) return 'H';
+  if (/soft|yielding to soft/.test(k) && !/good to soft/.test(k)) return 'S';
+  if (/good to soft|yielding|good to yielding/.test(k)) return 'Y';
+  if (/firm/.test(k)) return 'F';
+  return k ? 'G' : '';
+}
+function fmtFormDate(iso) {
+  var d = new Date(iso + 'T12:00:00Z');
+  return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
+}
+function posText(x) { return x.pos > 0 ? x.pos + '/' + (x.ran || '?') : (NONFIN_LABEL[String(x.pos)] || 'DNF') + (x.ran ? '/' + x.ran : ''); }
+// "2/9 ½L · 1/7 · PU/12"
+function formLast3Parts(fr) {
+  if (!fr || !fr.runs.length) return [];
+  return fr.runs.slice(0, 3).map(function(x) {
+    var b = (x.pos > 1 && x.btn > 0) ? ' ' + fmtBtn(x.btn) : '';
+    return posText(x) + b;
+  });
+}
+function formLast3Compact(fr) { return formLast3Parts(fr).join(' · '); }
+// The same for the screen, each run kept on one line
+function formLast3HTML(fr, style) {
+  var p = formLast3Parts(fr).map(function(t){ return '<span style="white-space:nowrap">' + esc(t) + '</span>'; });
+  if (style) p.push('<span style="white-space:nowrap">' + esc(style.letters) + '</span>');
+  return p.join(' · ');
+}
+// One run, in full: "12 Oct 26 · Kempton · 7f · Std · C4 AW — 2nd/9, btn ½L · RPR 78 · TS 65 · prominent · SP 5/1"
+function formRunLine(x) {
+  var place = x.pos === 1 ? 'won (' + (x.ran || '?') + ' ran)' : x.pos > 0 ? ordinal(x.pos) + ' of ' + (x.ran || '?') + (x.btn > 0 ? ', beaten ' + fmtBtn(x.btn) : '') : (NONFIN_LABEL[String(x.pos)] || 'did not finish') + (x.ran ? ' (' + x.ran + ' ran)' : '');
+  var bits = [fmtFormDate(x.date), x.course, fmtTrip(x.dist), goingAbbr(x.going), (x.cls ? 'C' + x.cls + ' ' : '') + (x.type || '')];
+  var tail = [];
+  if (x.rpr) tail.push('RPR ' + x.rpr);
+  if (x.ts) tail.push('TS ' + x.ts);
+  if (x.style) tail.push(STYLE_WORD[x.style]);
+  if (x.sp > 1) tail.push('SP ' + decToFrac(x.sp));
+  return bits.filter(Boolean).join(' · ') + ' — ' + place + (tail.length ? ' · ' + tail.join(' · ') : '');
+}
+function ordinal(n) { var s = ['th','st','nd','rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+// Speed figures over the last three runs
+function formSpeed(fr) {
+  if (!fr || !fr.runs.length) return null;
+  var r3 = fr.runs.slice(0, 3), rp = r3.map(function(x){ return x.rpr; }).filter(Boolean), ts = r3.map(function(x){ return x.ts; }).filter(Boolean);
+  if (!rp.length && !ts.length) return null;
+  return { lastRpr: r3[0].rpr || 0, bestRpr: rp.length ? Math.max.apply(null, rp) : 0,
+           lastTs: r3[0].ts || 0, bestTs: ts.length ? Math.max.apply(null, ts) : 0 };
+}
+
+// ── Riders' claims ───────────────────────────────────────────
+// The claim (allowance) in lbs: Betfair sends it separately; racecards put it
+// after the jockey's name, "R Kingscote (3)".
+function claimOf(r) {
+  if (!r) return 0;
+  var c = parseInt(r.claim, 10);
+  if (c > 0 && c <= 10) return c;
+  var m = String(r.jockey || '').match(/\((\d{1,2})\)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+// Do the listed weights already have the claim taken off? In a handicap each
+// horse's weight is the top weight less the gap in official ratings, so
+// weight − OR is the same for every runner (bar penalties and horses out of
+// the handicap). A claimer whose weight − OR sits its claim below the others
+// is listed after the claim; level with them, before it. Every handicap seen
+// casts a vote, kept on this device per source (Betfair, racecard).
+var CLAIM_KEY = 'fi_claim_conv_v1';
+function claimVoteForRace(race, runners) {
+  var title = ((race && (race.title || race.name || race.marketName)) || '');
+  if (!/handicap|h'cap|hcap|nursery/i.test(title)) return null;
+  var rows = (runners || []).filter(function(r) { return r && !r._nr && r.or > 0 && r.wst > 0; })
+    .map(function(r) { return { c: r.wst * 14 + (r.wlbs || 0) - (+r.or), cl: claimOf(r) }; });
+  var base = rows.filter(function(x) { return !x.cl; }).map(function(x) { return x.c; }).sort(function(a, b) { return a - b; });
+  if (base.length < 4 || base.length === rows.length) return null;
+  var med = base[Math.floor(base.length / 2)];
+  var fit = base.filter(function(c) { return Math.abs(c - med) <= 1; }).length;
+  if (fit < Math.max(3, base.length * 0.6)) return null;      // weights don't follow the marks here
+  var net = 0, gross = 0;
+  rows.forEach(function(x) {
+    if (!x.cl) return;
+    var d = x.c - med;
+    if (Math.abs(d + x.cl) <= 1) net++;
+    else if (Math.abs(d) <= 1) gross++;
+  });
+  return (net || gross) ? { net: net, gross: gross } : null;
+}
+function claimStore() { try { return JSON.parse(localStorage.getItem(CLAIM_KEY) || '{}') || {}; } catch(e) { return {}; } }
+function recordClaimVote(race, runners) {
+  try {
+    var v = claimVoteForRace(race, runners);
+    if (!v) return;
+    var src = (runners || []).some(function(r) { return r && r._liveCard; }) ? 'bf' : 'card';
+    var all = claimStore(), t = all[src] || (all[src] = {}), k = raceKeyFor(race);
+    t[k] = [v.net, v.gross];
+    var keys = Object.keys(t);
+    if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(function(x) { delete t[x]; });
+    localStorage.setItem(CLAIM_KEY, JSON.stringify(all));
+  } catch(e) {}
+}
+// { conv: 'net' (claim already off) | 'gross' (before the claim) | 'mixed' | '', net, gross }
+function claimConvention(src) {
+  var t = claimStore()[src || 'bf'] || {}, net = 0, gross = 0;
+  Object.keys(t).forEach(function(k) { net += t[k][0] || 0; gross += t[k][1] || 0; });
+  var conv = (net + gross < 3) ? '' : net >= 4 * gross ? 'net' : gross >= 4 * net ? 'gross' : 'mixed';
+  return { conv: conv, net: net, gross: gross };
+}
+function claimSourceOf(r) { return r && r._liveCard ? 'bf' : 'card'; }
+function claimConvText(src) {
+  var c = claimConvention(src), who = src === 'card' ? 'The racecard' : 'Betfair';
+  if (c.conv === 'net')   return who + ' lists weights with the claim already taken off (checked on ' + c.net + ' claimers in handicaps).';
+  if (c.conv === 'gross') return who + ' lists weights before the claim — the horse carries the listed weight less the claim (checked on ' + c.gross + ' claimers in handicaps).';
+  if (c.conv === 'mixed') return 'Not clear whether the listed weights include the claim (handicaps checked so far disagree: ' + c.net + ' after, ' + c.gross + ' before).';
+  return 'Not yet known whether the listed weights include the claim — the app works it out from handicap weights as it sees more races.';
+}
+// Weight for the model: the listing converted to the results file's
+// convention (the trainer records which it uses), when both are known.
+function modelWeightLbs(r, m) {
+  var lbs = (r.wst || r.wlbs) ? (r.wst || 0) * 14 + (r.wlbs || 0) : V3.lbsOf(r.lbs || r.wgt);
+  var cl = claimOf(r);
+  if (!lbs || !cl || !m || typeof m.weightsNetOfClaim !== 'boolean') return lbs;
+  var conv = claimConvention(claimSourceOf(r)).conv;
+  if (m.weightsNetOfClaim && conv === 'gross') return lbs - cl;
+  if (!m.weightsNetOfClaim && conv === 'net') return lbs + cl;
+  return lbs;
+}
+
+// ── Draw bias from the model file (course × trip band × draw third) ──
+// The real starting stall only: a jumps race, or a card that gave no draw,
+// has none (r.stall is the saddle-cloth number).
+function realStall(r, race) {
+  if (race && /jump|nh/i.test(race.surface || '')) return 0;
+  return parseInt(r && r.draw, 10) || 0;
+}
+// { band, thirds: [{ n, w, rate, ratio }] (L, M, H), avg, n, label, going } or null
+function raceDrawBias(race, m) {
+  m = m || getModelForRace(race);
+  if (!race || !m || !m.drawBias || /jump|nh/i.test(race.surface || '')) return null;
+  var b = V3.distBand(parseDist(race.dist)), c = V3.courseKey(race.course);
+  if (!b) return null;
+  var going = getGoingForRace(race, (document.getElementById('gsel') || {}).value || '') || race.going || '';
+  var soft = V3.goingScore(going) <= 3 && !isAWGoing(going) && race.surface !== 'aw';
+  function build(rec, gl) {
+    if (!rec) return null;
+    var n = rec[0] + rec[1] + rec[2], w = rec[3] + rec[4] + rec[5];
+    if (rec[0] < 60 || rec[1] < 60 || rec[2] < 60 || !w) return null;
+    var avg = w / n;
+    return { band: b, n: n, w: w, avg: avg, going: gl,
+             thirds: [0, 1, 2].map(function(i) { var rt = rec[i + 3] / rec[i]; return { n: rec[i], w: rec[i + 3], rate: rt, ratio: rt / avg }; }) };
+  }
+  var key = c + '|' + b;
+  var gRec = m.drawBiasGoing ? m.drawBiasGoing[key + '|' + (soft ? 'soft' : 'good')] : null;
+  return (soft && build(gRec, 'soft')) || build(m.drawBias[key], '');
+}
+var DRAW_BAND_LABEL = { s: 'up to 6½f', m: '7f–8½f', i: '9f–12½f', l: '13f+' };
+var THIRD_NAME = ['low', 'middle', 'high'];
+function drawBiasText(db, race) {
+  if (!db) return '';
+  var t = db.thirds;
+  var best = 0, worst = 0;
+  t.forEach(function(x, i) { if (x.ratio > t[best].ratio) best = i; if (x.ratio < t[worst].ratio) worst = i; });
+  var verdict = t[best].ratio >= 1.2 ? ' — ' + THIRD_NAME[best] + ' draws have done best' + (t[worst].ratio <= 0.8 ? ', ' + THIRD_NAME[worst] + ' worst' : '')
+              : t[worst].ratio <= 0.8 ? ' — ' + THIRD_NAME[worst] + ' draws have done worst'
+              : ' — no strong bias';
+  return 'Draw at ' + (race.course || '').replace(/\s*\(.*?\)\s*/g, '') + ', ' + (DRAW_BAND_LABEL[db.band] || db.band)
+    + (db.going ? ' on soft ground' : '') + ': runners drawn low won ' + (100 * t[0].rate).toFixed(1) + '%, middle '
+    + (100 * t[1].rate).toFixed(1) + '%, high ' + (100 * t[2].rate).toFixed(1) + '% (average ' + (100 * db.avg).toFixed(1)
+    + '%, from ' + db.w.toLocaleString() + ' races)' + verdict + '.';
+}
+function drawBiasStrong(db) { return !!db && db.thirds.some(function(x) { return x.ratio >= 1.2 || x.ratio <= 0.8; }); }
+// One runner's draw: { third: 'L'|'M'|'H', idx, ratio } or null
+function runnerDrawBias(r, race, db, nRunners) {
+  var st = realStall(r, race), t = V3.drawThird(st, nRunners);
+  if (!t) return null;
+  var i = t === 'L' ? 0 : t === 'M' ? 1 : 2;
+  return { stall: st, third: t, idx: i, ratio: db ? db.thirds[i].ratio : null, rate: db ? db.thirds[i].rate : null };
+}
+
 // ── Assess pace scenario for the whole field ───────────────
 // Returns { scenario, frontRunners, closers, fieldSize }
 // scenario: 'lone_front' | 'contested' | 'slow' | 'normal'
 function assessPace(runners) {
+  applyFormStyles(runners);
   var active = runners.filter(function(r){ return !r._nr; });
   var fronts  = active.filter(function(r){ return r._pace === 'front'; });
   var closers = active.filter(function(r){ return r._pace === 'closer'; });
+  var known   = active.filter(function(r){ return r._style; }).length;
 
   var scenario;
   if (fronts.length === 0) scenario = 'slow';           // no obvious leader
   else if (fronts.length === 1) scenario = 'lone_front'; // lone leader — big advantage
   else scenario = 'contested';                           // multiple pace horses — punishing
 
-  return { scenario, fronts, closers, fieldSize: active.length };
+  var nm = function(r){ return r.name; };
+  var label = scenario === 'lone_front' ? 'Lone front-runner: ' + fronts.map(nm).join(', ')
+            : scenario === 'contested' ? 'Contested — ' + fronts.length + ' likely leaders: ' + fronts.map(nm).join(', ')
+            : 'No obvious front-runner — may be steadily run';
+  label += known ? ' (running styles from the comments on each horse\'s last 3 runs; known for ' + known + ' of ' + active.length + ')'
+                 : ' (guessed from form figures — no run comments available)';
+  return { scenario: scenario, fronts: fronts, closers: closers, fieldSize: active.length, known: known, label: label };
 }
 
 // ── Pace adjustment multiplier for a single runner ────────
@@ -1347,7 +1652,10 @@ function paceBannerHTML(paceInfo) {
     icon = '⚪';
     text = 'Mixed pace profile — no strong advantage identified from form.';
   }
-  return '<div class="pace-banner ' + cls + '"><span class="pace-icon">' + icon + '</span><div>' + text + '</div></div>';
+  var src = paceInfo.known
+    ? '<div style="font-size:.62rem;opacity:.75;margin-top:3px">Running styles from the comments on each horse\'s last 3 runs (' + paceInfo.known + ' of ' + paceInfo.fieldSize + ' runners).</div>'
+    : (S.formData ? '' : '<div style="font-size:.62rem;opacity:.75;margin-top:3px">Guessed from form figures — upload form.json from the trainer for real running styles.</div>');
+  return '<div class="pace-banner ' + cls + '"><span class="pace-icon">' + icon + '</span><div>' + text + src + '</div></div>';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3123,6 +3431,43 @@ function buildHorseNote(r, race, scored) {
     L.push('📋 <b>Form</b> — no recent figures available for this horse.');
   }
 
+  // --- Last 3 runs, speed figures, going record (form.json) ------------------
+  var fr = formRecord(r.name);
+  if (fr && fr.runs.length) {
+    var nR = Math.min(3, fr.runs.length);
+    L.push('📈 <b>Last ' + (nR > 1 ? nR + ' runs' : 'run') + '</b> <span style="color:var(--mt)">(results file to ' + esc(fmtFormDate(S.formData.dataTo || '')) + ')</span>');
+    fr.runs.slice(0, 3).forEach(function(x) {
+      L.push('<span style="font-family:var(--mono);font-size:.62rem;color:var(--mt)">• ' + esc(formRunLine(x)) + '</span>');
+    });
+    var spd = formSpeed(fr);
+    if (spd) {
+      var field = (scored || []).filter(function(x){ return !x._nr; });
+      var bestR = field.map(function(x){ var q = formSpeed(formRecord(x.name)); return q ? q.bestRpr : 0; });
+      var rk = spd.bestRpr ? 1 + bestR.filter(function(v){ return v > spd.bestRpr; }).length : 0;
+      var sBits = [];
+      if (spd.lastRpr || spd.bestRpr) sBits.push('RPR ' + (spd.lastRpr || '—') + ' last time' + (spd.bestRpr > spd.lastRpr ? ', best ' + spd.bestRpr + ' in the last 3' : ''));
+      if (spd.lastTs || spd.bestTs) sBits.push('Topspeed ' + (spd.lastTs || '—') + (spd.bestTs > spd.lastTs ? ' (best ' + spd.bestTs + ')' : ''));
+      L.push('⚡ <b>Speed figures</b> — ' + sBits.join(' · ')
+        + (rk && field.length > 2 ? ' · ' + (rk === 1 ? '<b>top</b>' : ordinal(rk)) + ' best recent RPR in this field' : '') + '.');
+    }
+    var gTxt = getGoingForRace(race, (document.getElementById('gsel') || {}).value || '') || (race && race.going) || '';
+    var gb = goingBandOf(gTxt, race && race.surface === 'aw');
+    var gRec = fr.going || {}, gOrder = ['F', 'G', 'Y', 'S', 'H', 'A'];
+    var gAll = gOrder.filter(function(k){ return gRec[k] && gRec[k][0]; }).map(function(k){
+      var g = gRec[k], t = GOING_BAND_LABEL[k] + ' ' + g[0] + '-' + g[1] + '-' + g[2];
+      return k === gb ? '<b>' + t + '</b>' : t;
+    });
+    if (gb) {
+      var gt = gRec[gb];
+      L.push('🌱 <b>Going</b> — today ' + esc(GOING_BAND_LABEL[gb]) + ': '
+        + (gt && gt[0] ? gt[0] + ' run' + (gt[0] > 1 ? 's' : '') + ', ' + gt[1] + ' win' + (gt[1] === 1 ? '' : 's') + ', ' + gt[2] + ' placed'
+                       : 'no runs on it in the results file')
+        + (gAll.length ? '<div style="color:var(--mt);font-size:.62rem">Runs-wins-placed: ' + gAll.join(' · ') + '</div>' : ''));
+    }
+  } else if (S.formData) {
+    L.push('📈 <b>Last runs</b> — not in the results file (no UK/Irish run in the last 15 months, or a debutant).');
+  }
+
   // --- Jockey ---------------------------------------------------------------
   var jn = (r.jockey || '').replace(/\s*\(\d+\)/,'').trim();
   if (jn) {
@@ -3132,10 +3477,24 @@ function buildHorseNote(r, race, scored) {
       var sr = js.w / js.r * 100;
       var verdict = sr >= 18 ? 'in strong form' : sr >= 13 ? 'around average' : 'below average';
       L.push('🏇 <b>' + esc(jn) + '</b> — ' + sr.toFixed(0) + '% strike rate from ' +
-             js.r + ' rides, ' + verdict + '.' + (r.claim ? ' Claims ' + r.claim + 'lb.' : ''));
+             js.r + ' rides, ' + verdict + '.');
     } else {
       L.push('🏇 <b>' + esc(jn) + '</b> — not enough rides in the model to judge form.');
     }
+  }
+
+  // --- Weight and claim ------------------------------------------------------
+  var cl = claimOf(r);
+  if (r.wst || cl) {
+    var wTxt = r.wst ? r.wst + '-' + (r.wlbs || 0) : '—', cv = claimConvention(claimSourceOf(r)).conv, cTxt = '';
+    if (cl) {
+      var lbsL = r.wst ? r.wst * 14 + (r.wlbs || 0) : 0, net = lbsL - cl;
+      cTxt = ' · rider claims <b>' + cl + 'lb</b> — '
+        + (cv === 'net' ? 'already taken off the listed weight'
+          : cv === 'gross' ? 'not taken off the listed weight, so it carries ' + (lbsL ? Math.floor(net / 14) + '-' + (net % 14) : 'less')
+          : 'not yet known whether the listed weight includes it');
+    }
+    L.push('⚖ <b>Weight</b> ' + wTxt + cTxt + '.');
   }
 
   // --- Trainer --------------------------------------------------------------
@@ -3163,12 +3522,17 @@ function buildHorseNote(r, race, scored) {
 
   // --- Draw / pace ----------------------------------------------------------
   var extras = [];
-  if (r._pace === 'front') extras.push('likely to lead');
-  else if (r._pace === 'closer') extras.push('held-up runner');
-  if (drawOf(r)) extras.push('drawn ' + drawOf(r));
+  if (r._style) extras.push('<b>' + r._style.label + '</b> (' + r._style.letters + ' in the last 3 — L led, P prominent, M midfield, H held up)');
+  else if (r._pace === 'front') extras.push('likely to lead (guessed from form figures)');
+  else if (r._pace === 'closer') extras.push('held-up runner (guessed from form figures)');
+  var nAct = (scored || []).filter(function(x){ return !x._nr; }).length;
+  var dbR = raceDrawBias(race), rd = runnerDrawBias(r, race, dbR, nAct);
+  if (rd) extras.push('drawn ' + rd.stall + ' of ' + nAct + ' (' + THIRD_NAME[rd.idx] + ' third'
+    + (dbR ? ' — wins ' + (100 * rd.rate).toFixed(1) + '% here vs ' + (100 * dbR.avg).toFixed(1) + '% average' : '') + ')');
+  else if (realStall(r, race)) extras.push('drawn ' + realStall(r, race));
   if (r._mv === 'steam') extras.push('odds shortening');
   else if (r._mv === 'drift') extras.push('odds drifting');
-  if (extras.length) L.push('🏁 ' + extras.join(' · ') + '.');
+  if (extras.length) { var ex = extras.join(' · '); L.push('🏁 ' + ex.replace(/^(<b>)?([a-z])/, function(m, b, c){ return (b || '') + c.toUpperCase(); }) + '.'); }
 
   return L;
 }
@@ -3187,8 +3551,11 @@ function toggleHorseNote(id) {
 // trainer's recent record or a pedigree with complete confidence, and those
 // inventions look exactly like the real thing.
 function buildAIBrief(scored, race, paceInfo) {
-  var going = (document.getElementById('gsel') || {}).value || 'unknown';
-  var when  = new Date().toISOString().slice(0,10);
+  var going = getGoingForRace(race, (document.getElementById('gsel') || {}).value || '') || race.going || 'unknown';
+  var when  = race.date || ukTodayISO();
+  var active = scored.filter(function(r){ return !r._nr; });
+  var allPricedB = active.length && active.every(function(r){ return r.odds > 1; });
+  var mktB = allPricedB ? powerDevig(active.map(function(r){ return r.odds; })) : null;
   var L = [];
 
   L.push('# Race brief — ' + (race.course || 'Unknown') + ' ' + (race.time || '') + ' (' + when + ')');
@@ -3206,9 +3573,23 @@ function buildAIBrief(scored, race, paceInfo) {
   L.push('');
   L.push('## Race');
   L.push('- Course: ' + (race.course || '?') + '   Time: ' + (race.time || '?'));
-  L.push('- Distance: ' + (race.dist || '?') + '   Class: ' + (race.cls || 'unknown') + '   Going: ' + going);
-  L.push('- Runners: ' + scored.filter(function(r){ return !r._nr; }).length);
+  L.push('- Distance: ' + (race.dist || '?') + '   Class: ' + (race.cls || 'unknown') + '   Going: ' + going
+         + (race.title ? '   Race: ' + race.title : ''));
+  L.push('- Runners: ' + active.length);
   if (paceInfo && paceInfo.label) L.push('- Pace shape: ' + paceInfo.label);
+  var dbB = raceDrawBias(race);
+  if (dbB) L.push('- ' + drawBiasText(dbB, race) + ' These are plain win rates — the prices may already allow for the bias.');
+  else if (!/jump|nh/i.test(race.surface || '')) {
+    var mdB = getModelForRace(race);
+    L.push(mdB && mdB.drawBias ? '- Draw bias: not enough races in my results at this course and trip to say.'
+                               : '- Draw bias: not in this model file yet (it comes with the next retrain).');
+  }
+  var wx = (typeof raceWeatherCached === 'function') ? raceWeatherCached(race) : null;
+  if (wx) {
+    L.push('- Weather at the off (forecast): ' + (wx.label || '') + (wx.temp != null ? ', ' + wx.temp + '°C' : '')
+      + (wx.wind != null ? ', wind ' + wx.wind + 'mph' + (wx.gust != null ? ' gusting ' + wx.gust : '') : '')
+      + (wx.rainSince7 >= 0.1 ? ', ' + wx.rainSince7 + 'mm of rain since 7am' : '') + (wx.rainDay >= 0.1 ? ', ' + wx.rainDay + 'mm in the day' : ''));
+  }
   if (typeof getCourseTrait === 'function') {
     var t = getCourseTrait(race.course);
     if (t) {
@@ -3217,29 +3598,66 @@ function buildAIBrief(scored, race, paceInfo) {
              + ', ' + t.finish + ' finish, ' + t.runIn + ' run-in. ' + (t.notes || ''));
     }
   }
+  var anyClaim = active.some(function(r){ return claimOf(r) > 0; });
+  if (anyClaim) L.push('- Weights and claims: ' + claimConvText(active.some(function(r){ return r._liveCard; }) ? 'bf' : 'card'));
   L.push('');
   L.push('## Runners (model order)');
   L.push('');
-  L.push('| # | Horse | Model % | Odds | Mkt % | Jockey | Trainer | OR | Draw | No. | Age | Wgt | Form | Days | Pace | Headgear |');
-  L.push('|---|-------|---------|------|-------|--------|---------|----|------|-----|-----|-----|------|------|------|----------|');
+  L.push('Model % = Formintel\'s chance. Mkt % = the price\'s chance with the bookmaker margin removed.');
+  L.push('Style = how it raced early in each of its last 3 runs, most recent first (L led, P prominent, M midfield, H held up, ? not recorded).');
+  L.push('');
+  L.push('| # | Horse | Model % | Odds | Mkt % | Jockey | Claim | Trainer | OR | Draw | No. | Age | Wgt | Form | Days | Style | Headgear |');
+  L.push('|---|-------|---------|------|-------|--------|-------|---------|----|------|-----|-----|-----|------|------|-------|----------|');
   scored.forEach(function(r, i) {
     if (r._nr) return;
-    var mkt = r.odds > 1 ? (100/r.odds).toFixed(0) + '%' : '—';
+    var ai = active.indexOf(r);
+    var mkt = mktB ? (100 * mktB[ai]).toFixed(0) + '%' : (r.odds > 1 ? (100/r.odds).toFixed(0) + '%' : '—');
     var wgt = (r.wst ? r.wst + '-' + (r.wlbs || 0) : '—');
+    var cl = claimOf(r);
+    var sty = r._style ? r._style.label + ' (' + r._style.letters + ')' : (r._pace ? r._pace + ' (guess from form figures)' : '—');
     L.push('| ' + (i+1) + ' | ' + r.name + ' | ' + Math.round(r.score*100) + '% | '
       + (r.odds > 1 ? r.odds.toFixed(2) : '—') + ' | ' + mkt + ' | '
-      + ((r.jockey || '—').replace(/\|/g,'')) + ' | ' + ((r.trainer || '—').replace(/\|/g,'')) + ' | '
-      + (r.or || '—') + ' | ' + (r.draw ? r.draw : '?') + ' | ' + (clothOf(r) || '—') + ' | '
+      + ((r.jockey || '—').replace(/\s*\(\d+\)/, '').replace(/\|/g,'')) + ' | ' + (cl ? cl + 'lb' : '—') + ' | '
+      + ((r.trainer || '—').replace(/\|/g,'')) + ' | '
+      + (r.or || '—') + ' | ' + (realStall(r, race) || '?') + ' | ' + (clothOf(r) || '—') + ' | '
       + (r.age || '—') + ' | ' + wgt + ' | '
       + (r.form || '—') + ' | ' + (r.daysSince != null ? r.daysSince : '—') + ' | '
-      + (r._pace || '—') + ' | ' + (r._headgear || '—') + ' |');
+      + sty + ' | ' + (r._headgear || '—') + ' |');
   });
   L.push('');
-  var noDraw = scored.filter(function(r){ return !r._nr && !r.draw; }).length;
-  if (noDraw) {
+  var noDraw = active.filter(function(r){ return !realStall(r, race); }).length;
+  if (noDraw && !/jump|nh/i.test(race.surface || '')) {
     L.push('> NOTE: the starting stall was not supplied for ' + noDraw + ' runner(s) — shown as "?".');
     L.push('> Do NOT treat the "No." column as a draw; it is the saddle-cloth number.');
     L.push('');
+  }
+
+  // Recent runs from the results file (form.json)
+  if (S.formData) {
+    var gb = goingBandOf(going, race.surface === 'aw');
+    L.push('## Recent runs (most recent first)');
+    L.push('');
+    L.push('From my results file, which runs to ' + (S.formData.dataTo || '?') + ' — anything since then is only in the Form column above.');
+    L.push('Each run: date · course · trip · going · class and type — result, beaten distance · RPR · Topspeed · how it raced early · SP.');
+    L.push('Going record = runs-wins-placed on each kind of ground over the whole file; today\'s ground is ' + (GOING_BAND_LABEL[gb] || going) + '.');
+    L.push('');
+    scored.forEach(function(r, i) {
+      if (r._nr) return;
+      var fr = formRecord(r.name);
+      if (!fr || !fr.runs.length) { L.push('**' + (i + 1) + '. ' + r.name + '** — no runs in the results file (debutant, or no UK/Irish run in 15 months).'); L.push(''); return; }
+      var sp = formSpeed(fr), bits = [];
+      if (sp) {
+        if (sp.lastRpr || sp.bestRpr) bits.push('RPR last ' + (sp.lastRpr || '—') + ', best of last 3 ' + (sp.bestRpr || '—'));
+        if (sp.lastTs || sp.bestTs) bits.push('Topspeed last ' + (sp.lastTs || '—') + ', best ' + (sp.bestTs || '—'));
+      }
+      var gr = fr.going || {}, gTxt = ['F', 'G', 'Y', 'S', 'H', 'A'].filter(function(k){ return gr[k] && gr[k][0]; })
+        .map(function(k){ return GOING_BAND_LABEL[k] + ' ' + gr[k].join('-') + (k === gb ? ' (today)' : ''); });
+      if (gb && !(gr[gb] && gr[gb][0])) gTxt.unshift('never run on ' + GOING_BAND_LABEL[gb]);
+      L.push('**' + (i + 1) + '. ' + r.name + '**' + (bits.length ? ' — ' + bits.join(' · ') : ''));
+      if (gTxt.length) L.push('- Going record: ' + gTxt.join(' · '));
+      fr.runs.slice(0, 3).forEach(function(x){ L.push('- ' + formRunLine(x)); });
+      L.push('');
+    });
   }
 
   // Flags the model raised
@@ -3249,18 +3667,16 @@ function buildAIBrief(scored, race, paceInfo) {
     if (r._bfAlert) flags.push('- ' + r.name + ': beaten favourite'
       + (r._bfCourse ? ' at ' + r._bfCourse : '') + (r._bfDays ? ', ' + r._bfDays + ' days ago' : '')
       + (r._bfDrop ? ' — DROPPING IN CLASS today' : ''));
+    var cc = classChange(r, race);
+    if (cc) flags.push('- ' + r.name + ': ' + (cc.diff > 0 ? 'drops in class' : 'rises in class') + ' — Class ' + cc.from + ' last time, Class ' + cc.to + ' today'
+      + (cc.diff > 0 ? ' (an easier race)' : ' (a harder race)'));
     if (r._mv === 'steam') flags.push('- ' + r.name + ': odds shortening');
     else if (r._mv === 'drift') flags.push('- ' + r.name + ': odds drifting');
+    if (r._jockeyWas) flags.push('- ' + r.name + ': jockey change (was ' + r._jockeyWas + ')');
   });
   if (flags.length) { L.push('## Model flags'); L.push.apply(L, flags); L.push(''); }
 
-  L.push('## What my logged results say (2,000+ races)');
-  L.push('- Top pick overall: ~30% strike, about -10% ROI at level stakes.');
-  L.push('- Where the model rates a horse WELL ABOVE the market, it performs badly:');
-  L.push('  15%+ above market = -75% ROI. Treat large model-vs-market gaps as a warning, not value.');
-  L.push('- Picks where model and market roughly agree are the most reliable.');
-  L.push('- Short-priced picks win often but rarely pay enough to cover the losers.');
-  L.push('');
+  L.push.apply(L, predLogSummaryLines());
   L.push('## What I want back');
   L.push('1. Which runner looks strongest on THIS data, and where you disagree with the model.');
   L.push('2. The pace scenario and who it favours.');
@@ -3269,6 +3685,50 @@ function buildAIBrief(scored, race, paceInfo) {
   L.push('5. Keep it brief. Say plainly if the race is unpredictable — do not manufacture confidence.');
 
   return L.join('\n');
+}
+
+// "What my logged results say", worked out from this device's log rather
+// than fixed numbers, so the AI gets the model's current record.
+function predLogSummaryLines() {
+  var log = [];
+  try { log = getPredLog(); } catch(e) {}
+  var n = 0, tw = 0, nO = 0, pnl = 0, fw = 0, nF = 0, from = '', to = '';
+  var B = { above: { n: 0, w: 0, exp: 0, pnl: 0 }, near: { n: 0, w: 0, exp: 0, pnl: 0 }, below: { n: 0, w: 0, exp: 0, pnl: 0 } };
+  (log || []).forEach(function(e) {
+    var P = e.predictions || [], win = (e.actual || [])[0];
+    if (P.length < 2 || !win) return;
+    n++;
+    if (e.date && (!from || e.date < from)) from = e.date;
+    if (e.date && (!to || e.date > to)) to = e.date;
+    var top = P[0];
+    if (top.name === win) tw++;
+    if (top.odds > 1) { nO++; pnl += top.name === win ? top.odds - 1 : -1; }
+    if (e.favName) { nF++; if (e.favWon) fw++; }
+    var full = !e.fieldSize || e.fieldSize === P.length;
+    if (!full || P.some(function(p){ return !(p.odds > 1) || !(p.score >= 0); })) return;
+    var mk = powerDevig(P.map(function(p){ return p.odds; }));
+    P.forEach(function(p, i) {
+      var gap = p.score - 100 * mk[i], b = gap >= 3 ? B.above : gap <= -3 ? B.below : B.near, won = p.name === win;
+      b.n++; if (won) b.w++; b.exp += p.score / 100; b.pnl += won ? p.odds - 1 : -1;
+    });
+  });
+  var out = [];
+  var pc = function(a, b){ return b ? (100 * a / b).toFixed(1) + '%' : '—'; };
+  if (n < 50) { out.push('## What my logged results say'); out.push(n ? '- Only ' + n + ' logged races so far — too few to judge the model\'s record.' : '- No logged results on this device yet.'); out.push(''); return out; }
+  out.push('## What my logged results say (' + n.toLocaleString() + ' races, ' + from + ' to ' + to + ')');
+  out.push('- Top pick won ' + pc(tw, n) + (nO ? '; level-stakes return at the logged prices ' + (pnl >= 0 ? '+' : '') + (100 * pnl / nO).toFixed(1) + '% per bet' : '') + '.');
+  if (nF) out.push('- Market favourite won ' + pc(fw, nF) + ' of the same races.');
+  [['above', '3+ points ABOVE its price (margin removed)'], ['near', 'within 3 points of its price'], ['below', '3+ points BELOW its price']].forEach(function(k) {
+    var b = B[k[0]];
+    if (b.n < 30) return;
+    out.push('- Runners the model rated ' + k[1] + ': won ' + pc(b.w, b.n) + ' against the ' + pc(b.exp, b.n) + ' the model gave them ('
+      + b.n.toLocaleString() + ' runners); return ' + (b.pnl >= 0 ? '+' : '') + (100 * b.pnl / b.n).toFixed(1) + '% per bet.');
+  });
+  if (B.above.n >= 30) out.push(B.above.pnl < 0
+    ? '- So far a big model-vs-market gap has LOST money — treat it as a warning, not value.'
+    : '- So far a big model-vs-market gap has made money, on ' + B.above.n + ' runners — check that\'s a big enough sample before leaning on it.');
+  out.push('');
+  return out;
 }
 
 // ── Whole-meeting brief for AI ───────────────────────────────────────────────
@@ -3341,16 +3801,21 @@ function buildMeetingBrief(meeting) {
     var byName = {};
     (race.runners || []).forEach(function(r){ byName[r.name] = r; });
 
-    L.push('| Pick | Horse | Model % | Odds | Mkt % | Draw | Jockey | OR | Form |');
-    L.push('|------|-------|---------|------|-------|------|--------|----|------|');
+    var dbM = raceDrawBias(race);
+    if (drawBiasStrong(dbM)) L.push(drawBiasText(dbM, race));
+    var mkM = (preds.length === field && preds.every(function(p){ return p.odds > 1; })) ? powerDevig(preds.map(function(p){ return p.odds; })) : null;
+    L.push('| Pick | Horse | Model % | Odds | Mkt % | Draw | Jockey | Claim | OR | Form | Last 3 (pos/ran, beaten) | Style |');
+    L.push('|------|-------|---------|------|-------|------|--------|-------|----|------|--------------------------|-------|');
     preds.slice(0, 5).forEach(function(p, i) {
       var full = byName[p.name] || {};
-      var mkt = (p.odds > 1) ? (100/p.odds).toFixed(0) + '%' : '—';
+      var mkt = mkM ? (100 * mkM[i]).toFixed(0) + '%' : (p.odds > 1) ? (100/p.odds).toFixed(0) + '%' : '—';
+      var fr = formRecord(p.name), st = full._style || formStyleOf(fr), cl = claimOf(full);
       L.push('| ' + (i+1) + ' | ' + p.name + ' | ' + (p.score != null ? p.score + '%' : '—') + ' | '
         + (p.odds > 1 ? p.odds.toFixed(2) : '—') + ' | ' + mkt + ' | '
-        + (full.draw ? full.draw : '?') + ' | '
-        + ((full.jockey || '—').replace(/\s*\(\d+\)/,'').replace(/\|/g,'')) + ' | '
-        + (full.or || '—') + ' | ' + (full.form || '—') + ' |');
+        + (realStall(full, race) || '?') + ' | '
+        + ((full.jockey || '—').replace(/\s*\(\d+\)/,'').replace(/\|/g,'')) + ' | ' + (cl ? cl + 'lb' : '—') + ' | '
+        + (full.or || '—') + ' | ' + (full.form || '—') + ' | ' + (formLast3Compact(fr) || '—') + ' | '
+        + (st ? st.letters : '—') + ' |');
     });
     if (preds.length > 5) L.push('_(top 5 of ' + preds.length + ' shown)_');
     L.push('');
@@ -3365,12 +3830,13 @@ function buildMeetingBrief(meeting) {
     L.push('');
   }
 
-  L.push('## What my logged results say (2,000+ races)');
-  L.push('- Top pick overall: ~30% strike, about -10% ROI at level stakes.');
-  L.push('- Where the model rates a horse WELL ABOVE the market it does badly:');
-  L.push('  15%+ above market = -75% ROI. Big model-vs-market gaps are a warning, not value.');
-  L.push('- Picks where model and market roughly agree are the most reliable.');
-  L.push('');
+  L.push('Mkt % = the price\'s chance with the bookmaker margin removed (where the whole field is priced).');
+  if (S.formData) {
+    L.push('Last 3 = each runner\'s last three runs from my results file (to ' + (S.formData.dataTo || '?') + '), most recent first.');
+    L.push('Style = how it raced early in those runs: L led, P prominent, M midfield, H held up, ? not recorded.');
+    L.push('');
+  }
+  L.push.apply(L, predLogSummaryLines());
   L.push('## What I want back');
   L.push('1. Which races look most and least predictable, and why.');
   L.push('2. Where you disagree with the model\'s top pick, race by race.');
@@ -3465,6 +3931,11 @@ function showResults(scored, val, race, paceInfo) {
 
   // Pace banner
   h += paceBannerHTML(paceInfo);
+  recordClaimVote(race, scored);
+
+  // Draw bias at this course and trip (from the model file)
+  var _db = raceDrawBias(race);
+  if (_db) h += '<div style="margin:0 0 12px;padding:8px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--sf2);font-size:.72rem;line-height:1.5;color:var(--tx)">🎯 ' + esc(drawBiasText(_db, race)) + '</div>';
 
   // Weather at the course (filled in once fetched)
   h += '<div id="wxStrip" class="wx-strip"></div>';
@@ -3481,7 +3952,9 @@ function showResults(scored, val, race, paceInfo) {
     + row('Cloth no.', clothOf(w) || '—')
     + (w.or > 0 ? row('Official Rating', w.or) : '')
     + row('Form', w.form || '—')
-    + row('Pace style', w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
+    + (formLast3Compact(formRecord(w.name)) ? row('Last 3 runs', '<span style="font-family:var(--mono);font-size:.8em">' + formLast3HTML(formRecord(w.name)) + '</span>') : '')
+    + row('Pace style', w._style ? (w._pace === 'front' ? '▶ ' : w._pace === 'closer' ? '◀ ' : '~ ') + w._style.label.charAt(0).toUpperCase() + w._style.label.slice(1) + ' (' + w._style.letters + ')'
+                                 : w._pace === 'front' ? '▶ Front-runner' : w._pace === 'closer' ? '◀ Closer' : '~ Mid-pack')
     + row('Pace scenario', paceInfo.scenario === 'lone_front' ? '✅ Lone leader' : paceInfo.scenario === 'contested' ? '⚠ Contested' : paceInfo.scenario === 'slow' ? '🟣 Slow' : '—')
     + row('Confidence', '<span style="color:var(--g)">' + conf + '%</span>')
     + '<div class="cb"><div class="cf" style="width:' + conf + '%;background:var(--g)"></div></div>'
@@ -3710,6 +4183,7 @@ function showResults(scored, val, race, paceInfo) {
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—')
         + (r._jockeyWas ? ' <span style="color:var(--gold);font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
         + ' · Draw ' + drawOf(r) + (r.or > 0 ? ' · OR ' + r.or : '') + '</div>'
+        + (formLast3Compact(formRecord(r.name)) ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px;font-family:var(--mono)">Last 3: ' + formLast3HTML(formRecord(r.name), r._style) + '</div>' : '')
         + (explainStr ? '<div style="font-size:.6rem;color:var(--mt);margin-top:2px">' + explainStr + '</div>' : '')
       + '</div>'
       + '<div class="rr">'
@@ -4263,17 +4737,21 @@ function selRace(i) {
 // ══════════════════════════════════════════════════════════════════
 var V3 = {
   KEYS:  ['hwr','hpr','jwr','twr','draw','gm','dm','cm','fr','or','orNA','rpr','rprNA','ts','tsNA','form','formNA',
-          'wt','age','mktWet','mktBig','mktRain'],
+          'wt','age','mktWet','mktBig','mktRain',
+          'btn','btnNA','sty','styNA','lone','dbias'],
   NAMES: ['Horse win rate','Horse place rate','Jockey win rate','Trainer win rate','Draw (course + stall)',
           'Going record','Distance record','Course record','Freshness','Official Rating vs field','No Official Rating',
           'Last RPR vs field','No previous RPR','Last Topspeed vs field','No previous Topspeed',
           'Recent form (last 3 runs)','No form',
           'Weight carried vs field','Age vs field',
-          'Price on soft/heavy ground','Price in big fields','Price on a wet day'],
+          'Price on soft/heavy ground','Price in big fields','Price on a wet day',
+          'Beaten distances (last 3 runs)','No beaten distances','Running style (early position)','No running style',
+          'Lone front-runner','Draw bias (course, trip, draw third)'],
   // Features that change how far to trust the price: they multiply the market
   // term, so a negative weight flattens the market (outsiders win more often).
   MKX:   [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,
-          false,false,true,true,true],
+          false,false,true,true,true,
+          false,false,false,false,false,false],
   HP: 8,    // horse prior: runs' worth of population average
   JP: 30,   // jockey / trainer prior
   DP: 30,   // course-stall prior
@@ -4291,6 +4769,26 @@ var V3 = {
   goingScore: function(g) {
     var k = String(g || '').toLowerCase().split('(')[0].split('-')[0].split(',')[0].trim();
     return V3.GOING[k] !== undefined ? V3.GOING[k] : 4;
+  },
+  // Trip bands for draw bias: sprint (to 6½f), mile (to 8½f), middle (to 12½f), long
+  distBand: function(f) { return !(f > 0) ? '' : f <= 6.5 ? 's' : f <= 8.5 ? 'm' : f <= 12.5 ? 'i' : 'l'; },
+  // Draw third: L low / M middle / H high; '' if unknown or under 6 runners
+  drawThird: function(stall, n) {
+    if (!(stall > 0) || !(n >= 6)) return '';
+    var rel = (Math.min(stall, n) - 1) / (n - 1);
+    return rel < 1 / 3 ? 'L' : rel < 2 / 3 ? 'M' : 'H';
+  },
+  // Draw bias for one runner: log of its draw third's win rate at this course
+  // and trip (shrunk towards the average by 50 runners) over the average.
+  // st.DB: { 'course|band': [runnersL, runnersM, runnersH, winsL, winsM, winsH] }
+  drawBias: function(st, x) {
+    var t = V3.drawThird(x.stall, x.ran), b = V3.distBand(x.dist);
+    if (!t || !b || !st.DB) return 0;
+    var rec = st.DB[x.c + '|' + b];
+    if (!rec) return 0;
+    var k = t === 'L' ? 0 : t === 'M' ? 1 : 2, pop = st.pop || 0.1;
+    var rate = (rec[k + 3] + 50 * pop) / (rec[k] + 50);
+    return Math.log(rate / pop);
   },
   // Weight: "9-4" -> 130 lbs; a plain number is taken as lbs
   lbsOf: function(w) {
@@ -4331,9 +4829,12 @@ var V3 = {
     return odds.map(function(o){ return Math.log(1 / o); });
   },
 
-  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp, lbs, age, ran, rain }
+  // x: { h, j, t, c, stall, dist, gs, days, or, lr, lt, lp, lbs, age, ran, rain, lb, ls }
   //    lp = positions, most recent first; ran = runners in the race; rain = the
-  //    day's rain at the course in mm (0 if unknown)
+  //    day's rain at the course in mm (0 if unknown); lb = beaten lengths in the
+  //    last 3 runs, most recent first (a non-finisher counts as 20, -1 unknown);
+  //    ls = running style in those runs (4 led, 3 prominent, 2 midfield,
+  //    1 held up, 0 unknown); stall = the real starting stall, 0 if none
   // st: { HS, JS, TS, CD, pop, popP }  (pop = population win rate, popP = place rate)
   // Returns the feature vector before field-relative centring (or/rpr/ts/wt/age are raw here).
   raw: function(x, st) {
@@ -4360,18 +4861,37 @@ var V3 = {
     var wet  = Math.min(1, Math.max(0, (4 - gs) / 3));                 // good 0 · soft 0.67 · heavy 1
     var big  = Math.min(1, Math.max(0, ((x.ran || 0) - 8) / 8));       // 8 runners 0 · 16+ 1
     var rain = Math.min(1, Math.max(0, (x.rain || 0) / 10));           // 10mm+ in the day = 1
+    var lb = x.lb || [], bs = 0, bw = 0;
+    for (i = 0; i < lb.length && i < 3; i++) if (lb[i] >= 0) { bs += wts[i] * Math.log(1 + Math.min(lb[i], 30)); bw += wts[i]; }
+    var ls = x.ls || [], ss = 0, sw = 0;
+    for (i = 0; i < ls.length && i < 3; i++) if (ls[i] > 0) { ss += wts[i] * ls[i]; sw += wts[i]; }
     return [hwr, hpr, jwr, twr, draw, gm, dm, cm, fr,
             x.or > 0 ? x.or : 0, x.or > 0 ? 0 : 1,
             x.lr > 0 ? x.lr : 0, x.lr > 0 ? 0 : 1,
             x.lt > 0 ? x.lt : 0, x.lt > 0 ? 0 : 1,
             form, formNA,
             x.lbs > 0 ? x.lbs : 0, x.age > 0 ? x.age : 0,
-            wet, big, rain];
+            wet, big, rain,
+            bw > 0 ? bs / bw : 0, bw > 0 ? 0 : 1,
+            sw > 0 ? ss / sw : 0, sw > 0 ? 0 : 1,
+            0, V3.drawBias(st, x)];
   },
 
   // Centre OR / last RPR / last TS on the field average of known values, in 10s
-  // of lbs; weight carried (10s of lbs) and age (years) likewise, 0 = unknown.
+  // of lbs; weight carried (10s of lbs) and age (years) likewise, 0 = unknown;
+  // beaten distances and running style on the field average of known values.
+  // Lone front-runner: the only habitual leader (style 3.25+) with nobody else
+  // in the field at 3.0+.
   centre: function(rows) {
+    var leaders = rows.filter(function(f){ return !f[25] && f[24] >= 3.25; });
+    var handy   = rows.filter(function(f){ return !f[25] && f[24] >= 3.0; });
+    rows.forEach(function(f){ f[26] = (leaders.length === 1 && handy.length === 1 && f === leaders[0]) ? 1 : 0; });
+    [[22, 23], [24, 25]].forEach(function(pair) {
+      var v = pair[0], na = pair[1], s = 0, n = 0;
+      rows.forEach(function(f){ if (!f[na]) { s += f[v]; n++; } });
+      var mean = n ? s / n : 0;
+      rows.forEach(function(f){ f[v] = f[na] ? 0 : f[v] - mean; });
+    });
     [[9, 10], [11, 12], [13, 14]].forEach(function(pair) {
       var v = pair[0], na = pair[1], s = 0, n = 0;
       rows.forEach(function(f){ if (!f[na]) { s += f[v]; n++; } });
@@ -4489,7 +5009,7 @@ function v3ModelProbs(active, race, m) {
   if (m.v3.test && !(m.v3.test.modelLL > m.v3.test.marketLL + V3_MIN_GAIN)) return null;
   for (var i = 0; i < active.length; i++) if (!(active[i].odds > 1)) return null;
   var st = { HS: m.horseStats || {}, JS: m.jockeyStats || {}, TS: m.trainerStats || {},
-             CD: m.courseDrawStats || {}, pop: m.popWinRate || 0.1, popP: m.popPlaceRate || 0.3 };
+             CD: m.courseDrawStats || {}, DB: m.drawBias || null, pop: m.popWinRate || 0.1, popP: m.popPlaceRate || 0.3 };
   var c = V3.courseKey(race.course), dist = parseDist(race.dist);
   // Going: the per-course going if known, else the dropdown. Training used
   // the official going at the time of each race, which already allows for
@@ -4505,13 +5025,18 @@ function v3ModelProbs(active, race, m) {
     var h = V3.horseKey(r.name), H = st.HS[h];
     var lp = V3.formToPositions(r.form);
     if (!lp.length && H && H.lp) lp = H.lp;          // feed gave no form: use the model's history
+    // Last 3 runs from form.json: beaten lengths (a non-finisher counts as 20,
+    // as in training) and running style; empty when the file isn't loaded
+    var fr = formRecord(r.name), F3 = fr ? fr.runs.slice(0, 3) : [];
     return V3.raw({ h: h, j: V3.personKey(r.jockey), t: V3.personKey(r.trainer), c: c,
-                    stall: parseInt(r.draw || r.stall) || 0, dist: dist,
-                    gs: r.going ? V3.goingScore(r.going) : gsEff,
+                    stall: realStall(r, race), dist: dist,
+                    gs: gsEff,
                     days: r.daysSince > 0 ? r.daysSince : 0, or: parseInt(r.or) || 0,
                     lr: H ? (H.lr || 0) : 0, lt: H ? (H.lt || 0) : 0, lp: lp,
-                    lbs: (r.wst || r.wlbs) ? (r.wst || 0) * 14 + (r.wlbs || 0) : V3.lbsOf(r.lbs || r.wgt),
-                    age: parseInt(r.age) || 0, ran: active.length, rain: dayRain }, st);
+                    lbs: modelWeightLbs(r, m),
+                    age: parseInt(r.age) || 0, ran: active.length, rain: dayRain,
+                    lb: F3.map(function(x){ return x.pos < 0 ? 20 : x.btn; }),
+                    ls: F3.map(function(x){ return x.style; }) }, st);
   });
   V3.centre(rows);
   return V3.probs(rows, active.map(function(r){ return r.odds; }), m.v3);
@@ -4723,6 +5248,7 @@ function calibReliability(c, mode) {
 
 function renderPredict(race) {
   setTimeout(updateOddsFormatBtn, 0);
+  try { applyFormStyles(race && race.runners); } catch(e) {}
   document.getElementById('nosel').style.display = 'none';
   document.getElementById('rdet').style.display = 'block';
   document.getElementById('arCard').style.display = 'block';
@@ -4966,8 +5492,16 @@ document.addEventListener('DOMContentLoaded', function() {
             ? '<div class="al als" style="font-family:var(--mono);font-size:.65rem">✓ Loaded from GitHub: ' + loadedStr + '</div>'
             : '<div class="al alw" style="font-family:var(--mono);font-size:.65rem">⚠ No models loaded from GitHub. Check models/ folder or upload manually.</div>';
           if (failed.length) msg += '<div style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:4px">Failed: ' + failed.join(', ') + '</div>';
+          msg += '<div id="formStatus" style="font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:4px">⏳ Loading recent runs (form.json)…</div>';
           mstEl.innerHTML = msg;
         }
+        // Recent runs last, so the models are never held up by it
+        fetchFormData().then(function(fr) {
+          var fe = document.getElementById('formStatus');
+          if (fe) fe.innerHTML = (fr && fr.ok && S.formData)
+            ? '✓ Recent runs (form.json): ' + (S.formData.count || Object.keys(S.formData.horses).length).toLocaleString() + ' horses, results to ' + esc(S.formData.dataTo || '?')
+            : 'No form.json yet — upload it from the trainer to the models folder for last-3-run details and real running styles.';
+        });
       });
   }, 100);
 
@@ -7877,6 +8411,7 @@ function bfRunnerToAppRunner(r, i) {
     daysSince: (r.daysSince === 0 || r.daysSince) ? r.daysSince : 21,
     rf: parseForm(fClean), odds: odds, _pace: classifyPace(fClean),
     trainer: r.trainer || '', _liveCard: true };
+  if (parseInt(r.claim, 10) > 0) run.claim = parseInt(r.claim, 10);
   if (odds) run._openingOdds = odds;
   if (r.wearing) run._headgear = r.wearing;
   if (r.jockeyWas) run._jockeyWas = r.jockeyWas;   // jockey change (proxy, from Sporting Life)
@@ -8250,6 +8785,7 @@ function scoreRaceHeadless(race, going) {
   if (active.length < 2) return null;
   active.forEach(function(r){ r.going = going; });
   var paceInfo = assessPace(active), ctx = buildFieldCtx(active);
+  recordClaimVote(race, active);
   var oddsEntered = active.filter(function(r){ return r.odds > 0; }).length;
   var ratio = oddsEntered / active.length;
   var noOdds = oddsEntered === 0, partial = oddsEntered > 0 && ratio < 0.5;
