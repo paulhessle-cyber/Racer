@@ -1593,8 +1593,11 @@ function renderPaceDrawReport(races, testR, SPv, STY, STYK, LONE, THIRD, SPRINT,
     html += box('⚠ <strong>Few runners have a running style</strong> — the results file needs the <code>comment</code> column (rpscrape includes it). Without it the model can\'t use running style.');
   } else if (all.lead.n >= 500) {
     var aL = ae(all.lead), aH = ae(all.held);
+    var heldOK = all.held.n >= 500;
     html += box(aL >= 1.05
       ? '🏁 <strong>Front-runners beat their prices.</strong> Horses that usually lead won ×' + aL.toFixed(2) + ' of what their SPs said (held-up horses ×' + aH.toFixed(2) + '). The model\'s "Running style" weight uses this.'
+      : heldOK && aH >= 1.05
+        ? '🐎 <strong>Held-up horses beat their prices</strong> (×' + aH.toFixed(2) + '; usual leaders ×' + aL.toFixed(2) + '). The model\'s "Running style" weight uses this.'
       : aL <= 0.95
         ? '🐢 <strong>Front-runners do worse than their prices say</strong> (×' + aL.toFixed(2) + '; held-up horses ×' + aH.toFixed(2) + ').'
         : '⚖️ <strong>The market already prices running style</strong> (usual leaders ×' + aL.toFixed(2) + ', held-up ×' + aH.toFixed(2) + '). The pace map still helps read how a race will be run.');
