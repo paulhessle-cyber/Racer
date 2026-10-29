@@ -342,7 +342,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v10.2 · 26 Oct 2026</div>
+      <div class="ver">v10.3 · 29 Oct 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -2838,7 +2838,8 @@ function predict() {
   try {
   var race = S.sel;
   if (!race) { alert('Select a race first'); return; }
-  var going = document.getElementById('gsel').value;
+  var going = getGoingForRace(race, '') || defaultGoingFor(race);
+  race._goingUsed = going;
 
   // Auto-select the right model for this race's surface
   var selectedModel = getModelForRace(race);
@@ -3060,7 +3061,7 @@ function fillRaceWeather(race) {
   var el = document.getElementById('wxStrip');
   if (!el || !race || typeof fiCourseGeo !== 'function' || !fiCourseGeo(race.course)) { if (el) el.style.display = 'none'; return; }
   el.innerHTML = '<div class="wx-sub">Loading the weather…</div>';
-  var going = (document.getElementById('gsel') || {}).value || race.going || '';
+  var going = getGoingForRace(race, '') || defaultGoingFor(race);
   fiWxForecast(race.course).then(function(h){
     var cur = document.getElementById('wxStrip');
     if (!cur) return;
@@ -4314,7 +4315,7 @@ function showResults(scored, val, race, paceInfo) {
                   S._napLocked.race.time === race.time &&
                   (S._napLocked.race.course||'') === (race.course||''))
                  ? S._napLocked.runner.name : null;
-  S._logRace = { course: race.course, time: race.time, dist: race.dist, going: document.getElementById('gsel').value, runners: race.runners || [], napName: _napHere };
+  S._logRace = { course: race.course, time: race.time, dist: race.dist, going: race._goingUsed || getGoingForRace(race, '') || defaultGoingFor(race), runners: race.runners || [], napName: _napHere };
 }
 
 // ── localStorage ───────────────────────────────────────────
@@ -4418,7 +4419,7 @@ function persistTodaysCards(meetings) {
         races.sort(function(a,b){ return a.time < b.time ? -1 : 1; });
       }
       localStorage.setItem(cardKey(m.course),
-        JSON.stringify({ course: m.course, going: (document.getElementById('gsel')||{}).value || '', races: races }));
+        JSON.stringify({ course: m.course, going: getGoingForRace({ course: m.course }, '') || '', races: races }));
     } catch(e) { failed.push(m.course); }
   });
   if (failed.length && !S._quotaWarned) {
@@ -4438,9 +4439,9 @@ function restoreTodaysCards() {
         if (d && d.races && d.races.length) {
           rehydrateCardRaces(d.races);
           S.meetings.push({ course: d.course, races: d.races });
-          if (d.going && !S._goingChosenTurf && !S._goingChosenAW) {
-            var g = document.getElementById('gsel');
-            if (g) g.value = d.going;
+          if (d.going && !(S.goingByCourse || {})[goingCourseKey(d.course)]) {
+            if (!S.goingByCourse) S.goingByCourse = {};
+            S.goingByCourse[goingCourseKey(d.course)] = d.going;   // until the live going arrives
           }
           restored++;
         }
@@ -4701,13 +4702,13 @@ function selRace(i) {
   // Auto-set going based on the race surface (AW vs Turf)
   var gsel = document.getElementById('gsel');
   var raceSurf = (S.sel && S.sel.surface) ? S.sel.surface : null;
-  if (raceSurf === 'aw') {
-    // AW race: always set to Standard unless user has manually set an AW going
-    if (!S._goingChosenAW) gsel.value = 'Standard';
-  } else {
-    // Turf race: set to Good unless user has manually set a turf going
-    if (!S._goingChosenTurf) gsel.value = 'Good';
-  }
+  // This course's going if known, else Standard (AW) / Good (turf)
+  var known = getGoingForRace(S.sel, '');
+  if (!known || !setGoingDropdown(known)) gsel.value = raceSurf === 'aw' ? 'Standard' : 'Good';
+  var selNow = S.sel;
+  refreshCourseGoing(S.sel.course).then(function(g){
+    if (S.sel === selNow && g && !(S.goingManual || {})[goingCourseKey(selNow.course)]) setGoingDropdown(g);
+  });
   // Track which surface's going has been user-chosen
   S._currentSurface = raceSurf;
   // Update surface badge
@@ -5570,9 +5571,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Track when user manually changes going so we don't override their choice
   var gselEl = document.getElementById('gsel');
   if (gselEl) gselEl.addEventListener('change', function(){
-    // Track which surface the user has manually set going for
-    if (S._currentSurface === 'aw') S._goingChosenAW = true;
-    else S._goingChosenTurf = true;
+    // Your choice applies to the selected race's course only
+    if (S.sel && S.sel.course) {
+      if (!S.goingManual) S.goingManual = {};
+      S.goingManual[goingCourseKey(S.sel.course)] = gselEl.value;
+    }
   });
   var ppGoingEl = document.getElementById('pp-going');
   if (ppGoingEl) ppGoingEl.addEventListener('change', function(){ S._ppGoingChosen = true; });
@@ -8452,17 +8455,65 @@ function bfRunnerToAppRunner(r, i) {
 // stores it on each race's lock, so prefer that and fall back to the dropdown
 // only when we genuinely don't know. Returns '' if nothing is known, so the
 // caller's own default applies.
+function goingCourseKey(c) { return String(c || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z]/g, ''); }
+// Remember a course's official going (from the proxy or a server snapshot)
+function noteCourseGoing(course, going) {
+  if (!course || !going) return;
+  if (!S.goingByCourse) S.goingByCourse = {};
+  if (!S.goingFetchedAt) S.goingFetchedAt = {};
+  var k = goingCourseKey(course);
+  S.goingByCourse[k] = going; S.goingByCourse[course] = going;
+  S.goingFetchedAt[k] = Date.now();
+}
+// Fetch a course's going unless we have it from the last 10 minutes (the
+// proxy caches it for 10). Official changes during the day are announced
+// before races, so this is called again before each race's final lock.
+function refreshCourseGoing(course, maxAgeMs) {
+  var base = getProxyUrl(), k = goingCourseKey(course);
+  var at = (S.goingFetchedAt || {})[k] || 0;
+  if (!base || !course) return Promise.resolve(getGoingForRace({ course: course }, ''));
+  if (Date.now() - at < (maxAgeMs || 10 * 60000)) return Promise.resolve(S.goingByCourse[k]);
+  var c = String(course).replace(/\s*\(.*?\)\s*/g, '').trim();
+  return fetch(base + '/going?course=' + encodeURIComponent(c))
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ if (d && d.going) noteCourseGoing(course, d.going); return getGoingForRace({ course: course }, ''); })
+    .catch(function(){ return getGoingForRace({ course: course }, ''); });
+}
+// Going for scoring a race: your own choice for that course if you changed
+// the dropdown while on one of its races, else the course's official going,
+// else what was recorded when it was last predicted, else the fallback.
 function getGoingForRace(race, fallback) {
   if (!race) return fallback || '';
   try {
-    // 1. Live per-course going captured by the sweep
-    var m = (S && S.goingByCourse) ? S.goingByCourse[race.course] : null;
+    var k = goingCourseKey(race.course);
+    var man = S && S.goingManual ? S.goingManual[k] : null;
+    if (man) return man;
+    var m = (S && S.goingByCourse) ? (S.goingByCourse[k] || S.goingByCourse[race.course]) : null;
     if (m) return m;
-    // 2. Going recorded on this race's lock when it was predicted
-    var lk = (typeof plockAll === 'function') ? plockAll()[raceKeyFor(race)] : null;
+    var lk = (typeof plockAll === 'function' && race.time) ? plockAll()[raceKeyFor(race)] : null;
     if (lk && lk.going) return lk.going;
   } catch(e) {}
   return fallback || '';
+}
+// Last resort when a course's going isn't known: the dropdown, unless it's
+// the wrong surface for the race (Good for an all-weather race, say)
+function defaultGoingFor(race) {
+  var g = (document.getElementById('gsel') || {}).value || '';
+  var aw = race && race.surface === 'aw';
+  if (aw && !isAWGoing(g)) return 'Standard';
+  if (!aw && (isAWGoing(g) || !g)) return 'Good';
+  return g;
+}
+// Show a going in the dropdown (matching one of its options)
+function setGoingDropdown(raw) {
+  var gsel = document.getElementById('gsel');
+  if (!gsel || !raw) return false;
+  var main = String(raw).split('(')[0].trim().toLowerCase();
+  for (var i = 0; i < gsel.options.length; i++) {
+    var o = gsel.options[i];
+    if (!o.disabled && o.value.toLowerCase() === main) { gsel.value = o.value; return true; }
+  }
+  return false;
 }
 
 function liveSurface(course, marketName) {
@@ -8527,7 +8578,7 @@ function predictFromLiveCard(idx) {
       var gCourse = (m.course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
       fetch(base + '/going?course=' + encodeURIComponent(gCourse))
         .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(d){ if (d && d.going) applyAutoGoing(d.going); })
+        .then(function(d){ if (d && d.going) { noteCourseGoing(m.course, d.going); applyAutoGoing(d.going); } })
         .catch(function(){})
         .then(function(){ try { runPlacepot(); } catch(e){} });
     } catch(e) { try { runPlacepot(); } catch(e2){} }
@@ -8806,7 +8857,8 @@ function raceKeyFor(race){
 // DOM-free clone of predict()'s scoring pipeline (model select, pace,
 // dynamic market weight, power-scale, calibration) — same numbers, no render.
 function scoreRaceHeadless(race, going) {
-  going = going || (document.getElementById('gsel')||{}).value || 'Good';
+  going = going || getGoingForRace(race, '') || defaultGoingFor(race);
+  race._goingUsed = going;
   var mdl = getModelForRace(race);
   if (mdl) S.model = mdl;
   var active = (race.runners||[]).filter(function(r){ return !r._nr; });
@@ -8849,6 +8901,7 @@ function scoreRaceHeadless(race, going) {
 function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); }
 function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
 function plockSave(race, scored, going) {
+  if (race && race._goingUsed) going = race._goingUsed;
   try {
     var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
       jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey) }; });
@@ -9060,7 +9113,7 @@ function autoPredictAllMeetings(force) {
         var wxP = (typeof fiWxForecast === 'function') ? fiWxForecast(c).catch(function(){}) : Promise.resolve();
         return fetch(base + '/going?course=' + encodeURIComponent(c))
           .then(function(r){ return r.ok ? r.json() : null; })
-          .then(function(g){ if (g && g.going) goingByCourse[c] = g.going; })
+          .then(function(g){ if (g && g.going) { goingByCourse[c] = g.going; noteCourseGoing(c, g.going); } })
           .catch(function(){})
           .then(function(){ return wxP; })
           .then(function(){ return new Promise(function(res){ setTimeout(res, 250); }); })
@@ -9081,7 +9134,7 @@ function autoPredictAllMeetings(force) {
               title: mn, cls: dj.raceClass || 0, runners: runners, topTip:'', watchFor:'' };
             var stored = ensureRaceInMeetings(w.course, race);
             try {
-              var sc = scoreRaceHeadless(stored);
+              var sc = scoreRaceHeadless(stored, goingByCourse[w.course] || '');
               if (sc) { plockSave(stored, sc, goingByCourse[w.course] || ''); built++; }
               // keep it for the rest of the session (L15 / placepot per-course going)
               if (goingByCourse[w.course]) {
@@ -9139,6 +9192,7 @@ function catchUpFromCards() {
         // Always put it in S.meetings so it shows in the race list and
         // syncResults can log its result.
         var stored = ensureRaceInMeetings(c.course, race);
+        if (c.going) noteCourseGoing(c.course, c.going);
         if (getPredictionLog(rk)) return;
         if (locks[rk]) {
           // Locked earlier on thinner prices. If the server caught this card
@@ -9495,15 +9549,15 @@ function autoPipelineTick() {
       // Final prediction lock: fresh odds ~5 min before the off
       if (now > off - 6*60000 && now < off && !race._t5done) {
         race._t5done = true;
-        fetchOddsForRace(race).then(function(){
-          try { var sc = scoreRaceHeadless(race); if (sc) plockSave(race, sc, (document.getElementById('gsel')||{}).value||''); } catch(e){}
+        Promise.all([fetchOddsForRace(race), refreshCourseGoing(race.course).catch(function(){})]).then(function(){
+          try { var sc = scoreRaceHeadless(race); if (sc) plockSave(race, sc, ''); } catch(e){}
         });
       }
       // Baseline lock as soon as odds exist, so no race is ever unjudgeable
       if (!race._snapInit && now < off && (race.runners||[]).some(function(r){ return r.odds > 0; })) {
         race._snapInit = true;
         if (!plockAll()[raceKeyFor(race)]) {
-          try { var sc0 = scoreRaceHeadless(race); if (sc0) plockSave(race, sc0, (document.getElementById('gsel')||{}).value||''); } catch(e){}
+          try { var sc0 = scoreRaceHeadless(race); if (sc0) plockSave(race, sc0, ''); } catch(e){}
         }
       }
     }); });
@@ -9783,7 +9837,6 @@ function applyAutoGoing(raw) {
   }
   if (!hit) return false;
   gsel.value = hit;
-  if (surface === 'aw') S._goingChosenAW = true; else S._goingChosenTurf = true;
   var pp = document.getElementById('pp-going');
   if (pp) {
     for (var j = 0; j < pp.options.length; j++) {
@@ -9810,7 +9863,7 @@ function autoFetchAllOdds(races) {
     var gCourse = (races[0].course || '').replace(/\s*\(.*?\)\s*/g, '').trim();
     fetch(getProxyUrl() + '/going?course=' + encodeURIComponent(gCourse))
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ if (d && d.going) applyAutoGoing(d.going); })
+      .then(function(d){ if (d && d.going) { noteCourseGoing(races[0].course, d.going); applyAutoGoing(d.going); } })
       .catch(function(){});
   } catch(e){}
 
