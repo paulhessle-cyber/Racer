@@ -154,7 +154,7 @@ header .sub {
 
 <header>
   <h1>&#127943; Racing Trainer</h1>
-  <span class="sub">DESKTOP MODEL BUILDER · v3.5 · 24 Oct 2026 · trains v3.2 models</span>
+  <span class="sub">DESKTOP MODEL BUILDER · v3.6 · 31 Oct 2026 · trains v3.2 models</span>
 </header>
 
 <div class="container">
@@ -402,6 +402,15 @@ header .sub {
       <strong style="color:var(--tx)">form.json</strong> holds every active horse's last three runs (beaten distances, running style, speed figures) and its record on each going.
       It's built from the whole results file, so it's the same whichever surface you trained — download it once and upload it to the <strong style="color:var(--tx)">models</strong> folder with the model files.
     </p>
+    <div style="border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin:0 0 16px;font-size:.78rem;color:var(--mt);line-height:1.5">
+      <strong style="color:var(--tx)">One-off: history for the results checker's search.</strong>
+      The search reads the results the droplet scrapes each night (from early October 2026). This adds the two years before that, so a horse's last 10 runs are all there.
+      Copy it to the droplet's <code>/root/formintel-history</code> folder — it is <em>not</em> for GitHub.
+      <div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-o" id="histBtn" onclick="dlHistory()" style="padding:6px 12px">&#8659; Download history.csv.gz</button>
+        <span id="histInfo" style="font-family:'IBM Plex Mono',monospace;font-size:.7rem"></span>
+      </div>
+    </div>
 
     <div class="alert alert-i" style="margin-bottom:12px;">
       <strong>&#128203; If the download doesn't work — Save via Notepad:</strong><br><br>
@@ -445,6 +454,8 @@ var ALL_RUNS = [];
 // form.json for the app: each active horse's last 3 runs and its record on
 // each kind of going, built once from the whole file when it loads.
 var FORM_DATA = null;
+// Every row of the loaded file, for the one-off history export (server search)
+var ALL_ROWS = [];
 
 // ── Running style from the race comment ────────────────────────────────
 // Racing Post comments open with where the horse raced early: "Led", "Prominent",
@@ -544,6 +555,59 @@ function buildRunIndexes(data) {
   FORM_DATA = { version: 1, created: new Date().toISOString(), dataTo: last, base: '2015-01-01',
                 fields: ['day','course','distX10','going','class','pos','ran','btnX10','rpr','ts','style','type','spX10'],
                 courses: courses, goings: goings, types: FORM_TYPES, horses: horses, count: nH };
+}
+
+// ── History file for the odds proxy's search (one-off) ─────────────────────
+// The results checker's search reads the full results the droplet scrapes
+// each night, which only go back to early October 2026. This file gives it
+// the two years before that, so a horse's last 10 runs are all there.
+// UK/IRE only, newest first; race comments are left out (each run keeps the
+// running style read from its comment).
+function offMinutes(t) {
+  var m = String(t || '').match(/(\d{1,2})[:.](\d{2})/);
+  if (!m) return 0;
+  var h = parseInt(m[1], 10); if (h < 10) h += 12;
+  return h * 60 + parseInt(m[2], 10);
+}
+function csvCell(v) {
+  var x = String(v == null ? '' : v).replace(/[\r\n]+/g, ' ');
+  return /[",]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x;
+}
+async function dlHistory() {
+  if (!ALL_ROWS.length) { alert('Load the results file first.'); return; }
+  var btn = document.getElementById('histBtn'), label = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+  await sleep(30);
+  try {
+    var last = '';
+    ALL_ROWS.forEach(function(r){ var d = String(r.date || '').slice(0, 10); if (d > last) last = d; });
+    var cutoff = new Date(Date.parse(last + 'T12:00:00Z') - 730 * 86400000).toISOString().slice(0, 10);
+    var rows = ALL_ROWS.filter(function(r){ return r.horse && r.date && String(r.date).slice(0, 10) >= cutoff && isUkIre(r); });
+    rows.sort(function(a, b) {
+      var da = String(a.date).slice(0, 10), db = String(b.date).slice(0, 10);
+      if (da !== db) return da < db ? 1 : -1;
+      return offMinutes(b.off) - offMinutes(a.off);
+    });
+    var cols = ['date','course','off','race_name','type','class','dist','going','ran','pos','draw','ovr_btn','horse','age','wgt','jockey','trainer','sp','or','rpr','ts'];
+    var parts = [cols.concat('style').join(',') + '\n'], chunk = [];
+    rows.forEach(function(r) {
+      chunk.push(cols.map(function(c){ return csvCell(c === 'date' ? String(r.date).slice(0, 10) : r[c]); }).concat(runStyle(r.comment)).join(','));
+      if (chunk.length >= 5000) { parts.push(chunk.join('\n') + '\n'); chunk = []; }
+    });
+    if (chunk.length) parts.push(chunk.join('\n') + '\n');
+    var blob = new Blob(parts, { type: 'text/csv' }), name = 'history.csv';
+    if (typeof CompressionStream === 'function') {
+      blob = await new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).blob();
+      name = 'history.csv.gz';
+    }
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    var info = document.getElementById('histInfo');
+    if (info) info.textContent = name + ': ' + rows.length.toLocaleString() + ' runs, ' + cutoff + ' to ' + last + ' (' + (blob.size / 1048576).toFixed(1) + ' MB)';
+  } catch (e) { alert('Could not build the history file: ' + e.message); }
+  if (btn) { btn.disabled = false; btn.innerHTML = label; }
 }
 
 function dlForm() {
@@ -918,6 +982,7 @@ function loadFile(f) {
       ALL_CLASS_RUNS = data.map(function(r){ return { h: V3.horseKey(r.horse), d: r.date || '', c: raceClassNum(r) }; })
         .filter(function(x){ return x.h && x.d; })
         .sort(function(a, b){ return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+      ALL_ROWS = data;
       try { buildRunIndexes(data); } catch (e) { ALL_RUNS = []; FORM_DATA = null; console.warn('recent-runs index failed', e); }
       var filtered = data.filter(isValidRow);
       rawData = filtered;

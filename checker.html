@@ -157,6 +157,44 @@
 
   .tab-content{display:none}
   .tab-content.active{display:block}
+  /* Search: a horse's, jockey's or trainer's last 10 races */
+  .srch-bar{display:flex;gap:8px;margin-bottom:12px;align-items:stretch}
+  .srch-bar select,.srch-bar input{background:var(--inp);border:1px solid var(--bd2);border-radius:10px;color:var(--text);
+    font:500 16px var(--sans);padding:9px 10px;outline:none;min-width:0}
+  .srch-bar select{flex:0 0 auto;padding-right:6px}
+  .srch-bar input{flex:1 1 auto}
+  .srch-bar select:focus,.srch-bar input:focus{border-color:var(--green)}
+  .srch-btn{flex:0 0 auto;border:none;border-radius:10px;background:var(--g);color:var(--g-ink);font:700 .8rem var(--sans);padding:0 14px;cursor:pointer}
+  .srch-hint{font-size:.74rem;color:var(--mt);line-height:1.55;padding:4px 2px}
+  .srch-head{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+  .srch-name{font-size:1.15rem;font-weight:800;color:var(--white);line-height:1.2}
+  .srch-role{font-family:var(--mono);font-size:.58rem;color:var(--mt);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+  .srch-stats{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+  .srch-stat b{display:block;font-size:1.05rem;font-weight:800;color:var(--text)}
+  .srch-stat b.good{color:var(--g)} .srch-stat b.bad{color:var(--re)}
+  .srch-d .nw{white-space:nowrap}
+  .srch-stat span{font-family:var(--mono);font-size:.56rem;color:var(--mt);text-transform:uppercase;letter-spacing:.5px}
+  .srch-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .srch-chip{border:1px solid var(--bd2);background:var(--sf2);color:var(--text);border-radius:999px;padding:4px 10px;font:600 .7rem var(--sans);cursor:pointer}
+  .srch-run{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:start;background:var(--card);border:1px solid var(--bd);
+    border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  .srch-pos{border-radius:9px;text-align:center;padding:5px 0;background:var(--sf2);border:1px solid var(--bd)}
+  .srch-pos b{display:block;font-size:.95rem;font-weight:800;color:var(--text);line-height:1.1}
+  .srch-pos span{font-family:var(--mono);font-size:.52rem;color:var(--mt)}
+  .srch-pos.p1{background:rgba(var(--g-rgb),.14);border-color:rgba(var(--g-rgb),.45)} .srch-pos.p1 b{color:var(--g)}
+  .srch-pos.p23{background:rgba(var(--gold-rgb),.12);border-color:rgba(var(--gold-rgb),.4)} .srch-pos.p23 b{color:var(--gold)}
+  .srch-pos.pnf{background:rgba(var(--re-rgb),.08);border-color:rgba(var(--re-rgb),.35)} .srch-pos.pnf b{color:var(--re)}
+  .srch-main{min-width:0}
+  .srch-t{font-size:.86rem;font-weight:700;color:var(--text);line-height:1.3;overflow-wrap:anywhere}
+  .srch-m{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px;line-height:1.5}
+  .srch-d{font-size:.68rem;color:var(--mt);margin-top:3px;line-height:1.45}
+  .srch-fi{display:inline-block;margin-top:5px;font-family:var(--mono);font-size:.58rem;padding:2px 7px;border-radius:5px;
+    border:1px solid rgba(var(--bl2-rgb),.35);background:rgba(var(--bl2-rgb),.08);color:var(--bl)}
+  .srch-sp{text-align:right;font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--text);white-space:nowrap}
+  .srch-sp span{display:block;font-size:.52rem;font-weight:400;color:var(--mt)}
+  .srch-foot{font-family:var(--mono);font-size:.56rem;color:var(--mt);line-height:1.6;margin-top:6px}
+  .srch-note{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.3);border-radius:12px;padding:10px 12px;
+    font-size:.72rem;line-height:1.5;color:var(--text);margin-bottom:10px}
 
   /* Bet tracker modal & legs */
   .modal-title{font-size:1.3rem;font-weight:800;color:var(--white);
@@ -175,7 +213,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.0 · 20 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.1 · 31 Oct 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -188,6 +226,7 @@
   <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
   <button class="tab-btn" onclick="showTab('backtest')">Backtest</button>
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
+  <button class="tab-btn" onclick="showTab('search')">🔍 Search</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
   <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
@@ -264,7 +303,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','search','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -283,6 +322,7 @@ function showTab(tab) {
   if (tab === 'conf') renderConfTab();
   if (tab === 'jockeys') renderJockeyTab();
   if (tab === 'weather') renderWeatherTab();
+  if (tab === 'search') renderSearchTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
@@ -321,6 +361,7 @@ function renderAll() {
     '<div class="tab-content active" id="tab-overview">' + renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) + '</div>' +
     '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
+    '<div class="tab-content" id="tab-search"></div>' +
     '<div class="tab-content" id="tab-bets"></div>' +
     '<div class="tab-content" id="tab-insights"></div>' +
     '<div class="tab-content" id="tab-bf"></div>' +
@@ -2467,6 +2508,220 @@ function renderValueTab() {
 // Runners ridden by the app's elite jockeys (the "Jockey +X%" bonus), and how
 // they got on: won / lost, overall and when priced under 3.0. Uses the jockey
 // points the predictor logs per runner (jp), recorded from app v9.1 (17 Oct 2026).
+// ══════════════════════════════════════════════════════════════════════════
+// SEARCH — a horse's, jockey's or trainer's last 10 races
+// From the server's /search, which reads the full results the droplet scrapes
+// every night (every runner's position, beaten distance, SP, jockey and
+// trainer). Each race Formintel predicted also shows where it had the horse.
+// If the server hasn't got /search yet, falls back to the races in this log.
+// ══════════════════════════════════════════════════════════════════════════
+var SRCH_KEY = 'fi_search_last';
+var SRCH_EG = { horse: 'e.g. Constitution Hill', jockey: 'e.g. Harry Skelton', trainer: 'e.g. Dan Skelton' };
+var SRCH_NOUN = { horse: ['run', 'runs'], jockey: ['ride', 'rides'], trainer: ['runner', 'runners'] };
+var STYLE_WORDS = ['', 'held up', 'midfield', 'prominent', 'led'];
+var _srchSeq = 0;
+
+function renderSearchTab() {
+  var el = document.getElementById('tab-search');
+  if (!el || el.getAttribute('data-built')) return;     // keep the last results when coming back to the tab
+  var last = {};
+  try { last = JSON.parse(localStorage.getItem(SRCH_KEY) || '{}') || {}; } catch(e) {}
+  var by = SRCH_EG[last.by] ? last.by : 'jockey';
+  el.innerHTML = '<div class="pad">'
+    + '<form class="srch-bar" onsubmit="runSearch(); return false;">'
+    + '<select id="srchBy" aria-label="Search for a" onchange="srchByChanged()">'
+    + ['horse', 'jockey', 'trainer'].map(function(k){ return '<option value="' + k + '"' + (k === by ? ' selected' : '') + '>' + k.charAt(0).toUpperCase() + k.slice(1) + '</option>'; }).join('')
+    + '</select>'
+    + '<input id="srchQ" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"'
+    + ' placeholder="' + SRCH_EG[by] + '" value="' + esc(last.q || '') + '" aria-label="Name">'
+    + '<button class="srch-btn" type="submit">Search</button>'
+    + '</form>'
+    + '<div id="srchOut"><div class="srch-hint">Shows the last 10 races of a horse, jockey or trainer: where they finished, by how far, the starting price, and what Formintel made of the race if you logged it. Part of a name is fine — "Skelton" finds both Skeltons.</div></div>'
+    + '</div>';
+  el.setAttribute('data-built', '1');
+}
+function srchByChanged() {
+  var by = document.getElementById('srchBy').value, q = document.getElementById('srchQ');
+  if (q) q.placeholder = SRCH_EG[by] || '';
+}
+
+function runSearch(exactName) {
+  var byEl = document.getElementById('srchBy'), qEl = document.getElementById('srchQ'), out = document.getElementById('srchOut');
+  if (!byEl || !qEl || !out) return;
+  var by = byEl.value, q = String(exactName || qEl.value || '').trim();
+  if (exactName) qEl.value = exactName;
+  try { qEl.blur(); } catch(e) {}
+  if (q.replace(/[^a-z]/gi, '').length < 3) { out.innerHTML = '<div class="srch-hint">Type at least 3 letters of the name.</div>'; return; }
+  try { localStorage.setItem(SRCH_KEY, JSON.stringify({ by: by, q: q })); } catch(e) {}
+  var token = ++_srchSeq;
+  out.innerHTML = '<div class="srch-hint">Searching the results for ' + esc(q) + '…</div>';
+  var url = getProxyBase() + '/search?by=' + by + '&q=' + encodeURIComponent(q) + '&n=10';
+  fetch(url).then(function(r) {
+    if (r.status === 404) return { _notInstalled: true };
+    if (r.status === 429) return { error: 'The server says slow down — wait a few seconds and search again.' };
+    return r.json();
+  }).then(function(d) {
+    if (token !== _srchSeq) return;
+    if (!d || d._notInstalled) { out.innerHTML = renderLogSearch(by, q, 'The full-results search isn\'t set up on the server yet, so these are only the races in your log.'); return; }
+    if (d.error) { out.innerHTML = '<div class="srch-note">⚠ ' + esc(d.error) + '</div>'; return; }
+    out.innerHTML = renderSearchResult(d);
+  }).catch(function() {
+    if (token !== _srchSeq) return;
+    out.innerHTML = renderLogSearch(by, q, 'Couldn\'t reach the server, so these are only the races in your log.');
+  });
+}
+
+// ── helpers ──
+function srchKey(s) { return String(s || '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/['’`.]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function srchCourse(c) { return String(c || '').toUpperCase().replace(/\([^)]*\)/g, '').replace(/[^A-Z]/g, ''); }
+function srchDate(iso) {
+  var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z');
+  if (isNaN(d)) return iso || '';
+  var thisYear = new Date().getUTCFullYear() === d.getUTCFullYear();
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: thisYear ? undefined : '2-digit', timeZone: 'UTC' });
+}
+function srchOrd(n) { var s = ['th','st','nd','rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+function srchBtn(b) {
+  b = parseFloat(b);
+  if (!(b > 0)) return '';
+  if (b <= 0.05) return 'nse'; if (b <= 0.1) return 'shd'; if (b <= 0.2) return 'hd'; if (b <= 0.3) return 'nk';
+  if (b >= 15) return Math.round(b) + 'L';
+  var w = Math.floor(b + 1e-9), q = Math.round((b - w) * 4);
+  if (q === 4) { w++; q = 0; }
+  return (w || '') + ['', '¼', '½', '¾'][q] + 'L';
+}
+function srchGoing(g) {
+  var k = String(g || '').toLowerCase().split('(')[0].trim();
+  var A = { 'firm':'Firm', 'good to firm':'Gd/Fm', 'good':'Good', 'good to yielding':'Gd/Yld', 'good to soft':'Gd/Sft', 'yielding':'Yld',
+            'yielding to soft':'Yld/Sft', 'soft':'Soft', 'soft to heavy':'Sft/Hvy', 'heavy':'Heavy', 'standard':'Std',
+            'standard to slow':'Std/Slw', 'slow':'Slow', 'standard to fast':'Std/Fst', 'fast':'Fast' };
+  return A[k] || g || '';
+}
+// SP "5/2F" → 3.5, "Evs" → 2; fav marker separately
+function srchSP(sp) {
+  var s = String(sp || '').trim(), fav = /(\d|ev|evs|evens)[FJC]$/i.test(s);
+  var core = s.replace(/[A-Z]+$/i, '');
+  var dec = 0, m = core.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);
+  if (m) dec = parseFloat(m[1]) / parseFloat(m[2]) + 1;
+  else if (/^ev/i.test(s)) dec = 2;
+  else if (parseFloat(core) > 1) dec = parseFloat(core);
+  return { dec: dec, txt: /^ev/i.test(s) ? 'Evs' : core, fav: fav };
+}
+// Logged races by date + course, to show what Formintel made of each one
+function srchLogIndex() {
+  var ix = {};
+  (loadedLog || []).forEach(function(e) {
+    if (!e || !e.date || !e.course) return;
+    var k = e.date + '|' + srchCourse(e.course);
+    (ix[k] || (ix[k] = [])).push(e);
+  });
+  return ix;
+}
+function srchMins(t) { var m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : NaN; }
+function srchFormintel(run, ix) {
+  var list = ix[run.date + '|' + srchCourse(run.course)];
+  if (!list) return '';
+  var t = srchMins(run.off), best = null, bd = 1e9;
+  list.forEach(function(e) { var d = Math.abs(srchMins(e.time) - t); if (!isNaN(d) && d < bd) { bd = d; best = e; } });
+  if (!best || bd > 10) return '';
+  var hk = srchKey(run.horse), P = best.predictions || [], at = -1;
+  for (var i = 0; i < P.length; i++) if (srchKey(P[i].name) === hk) { at = i; break; }
+  if (at < 0) return '';
+  var p = P[at], pick = at === 0 ? 'top pick' : srchOrd(at + 1) + ' pick of ' + P.length;
+  return '🧠 Formintel: ' + pick + (p.score != null ? ' · ' + p.score + '%' : '');
+}
+
+function renderSearchResult(d) {
+  var by = d.by, noun = SRCH_NOUN[by] || ['run', 'runs'];
+  var range = d.from && d.to ? srchDate(d.from) + ' – ' + srchDate(d.to) : '';
+  if (!d.name || !d.runs || !d.runs.length) {
+    return '<div class="srch-note">No ' + by + ' matching “' + esc(d.q) + '” in the results' + (range ? ' (' + range + ')' : '') + '. Check the spelling, or try just the surname.</div>';
+  }
+  var runs = d.runs, wins = 0, placed = 0, pnl = 0, nsp = 0;
+  runs.forEach(function(r) {
+    var p = parseInt(r.pos, 10), sp = srchSP(r.sp);
+    if (p === 1) wins++;
+    if (p >= 1 && p <= 3) placed++;
+    if (sp.dec > 1) { nsp++; pnl += p === 1 ? sp.dec - 1 : -1; }
+  });
+  var h = '<div class="srch-head">'
+    + '<div class="srch-role">' + esc(by) + ' · last ' + runs.length + ' ' + (runs.length === 1 ? noun[0] : noun[1]) + '</div>'
+    + '<div class="srch-name">' + esc(d.name) + '</div>'
+    + '<div class="srch-stats">'
+    + '<div class="srch-stat"><b>' + wins + '</b><span>won</span></div>'
+    + '<div class="srch-stat"><b>' + placed + '</b><span>1st–3rd</span></div>'
+    + '<div class="srch-stat"><b>' + Math.round(100 * wins / runs.length) + '%</b><span>strike rate</span></div>'
+    + (nsp ? '<div class="srch-stat"><b class="' + (pnl >= 0 ? 'good' : 'bad') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '</b><span>£1 level stakes at SP</span></div>' : '')
+    + '</div>';
+  if (d.others && d.others.length) {
+    h += '<div class="srch-chips"><span class="srch-hint" style="padding:0">Also matching:</span>'
+      + d.others.map(function(o) { return '<button class="srch-chip" onclick="runSearch(this.getAttribute(\'data-n\'))" data-n="' + esc(o.name) + '">' + esc(o.name) + '</button>'; }).join('')
+      + '</div>';
+  }
+  h += '</div>';
+  var ix = srchLogIndex();
+  runs.forEach(function(r) {
+    var p = parseInt(r.pos, 10), fin = p >= 1;
+    var cls = p === 1 ? 'p1' : (p === 2 || p === 3) ? 'p23' : fin ? '' : 'pnf';
+    var title = by === 'horse' ? esc(r.course) + (r.off ? ' <span style="font-weight:500;color:var(--mt)">' + esc(r.off) + '</span>' : '') : esc(r.horse);
+    var meta = [srchDate(r.date), by === 'horse' ? '' : esc(r.course) + (r.off ? ' ' + esc(r.off) : ''), esc(r.dist), esc(srchGoing(r.going)),
+                esc(String(r.cls || '').replace(/^class\s*/i, 'C')), esc(r.type)].filter(Boolean).join(' · ');
+    var nw = function(t){ return '<span class="nw">' + t + '</span>'; };
+    var people = by === 'jockey' ? nw('Trainer ' + esc(r.trainer)) : by === 'trainer' ? nw('Jockey ' + esc(r.jockey))
+               : nw('Jockey ' + esc(r.jockey)) + ' · ' + nw('Trainer ' + esc(r.trainer));
+    var bits = [];
+    if (fin && p > 1 && srchBtn(r.btn)) bits.push(nw('beaten ' + srchBtn(r.btn)));
+    if (r.style) bits.push(nw(STYLE_WORDS[r.style]));
+    if (r.wgt) bits.push(nw('carried ' + esc(r.wgt)));
+    var figs = [r.or ? 'OR ' + esc(r.or) : '', r.rpr ? 'RPR ' + esc(r.rpr) : '', r.ts ? 'TS ' + esc(r.ts) : ''].filter(Boolean).join(' · ');
+    var sp = srchSP(r.sp), fi = srchFormintel(r, ix);
+    h += '<div class="srch-run">'
+      + '<div class="srch-pos ' + cls + '"><b>' + (fin ? srchOrd(p) : esc(r.pos || '—')) + '</b><span>' + (r.ran ? 'of ' + r.ran : '') + '</span></div>'
+      + '<div class="srch-main">'
+      +   '<div class="srch-t">' + title + '</div>'
+      +   '<div class="srch-m">' + meta + '</div>'
+      +   '<div class="srch-d">' + people + (bits.length ? ' · ' + bits.join(' · ') : '') + (figs ? '<br>' + figs : '') + '</div>'
+      +   (fi ? '<div class="srch-fi">' + esc(fi) + '</div>' : '')
+      + '</div>'
+      + '<div class="srch-sp">' + (sp.txt ? esc(sp.txt) : '—') + '<span>' + (sp.fav ? 'fav' : 'SP') + '</span></div>'
+      + '</div>';
+  });
+  h += '<div class="srch-foot">Full results from the server' + (range ? ', ' + range : '') + '. Races run today appear after the overnight update (about 6:15am).'
+    + (runs.length < 10 && by === 'horse' && !d.history ? ' Older runs need the history file on the server.' : '') + '</div>';
+  return h;
+}
+
+// Fallback: the races in this log (only the races Formintel predicted, and
+// only the first three home are known)
+function renderLogSearch(by, q, why) {
+  var h = '<div class="srch-note">ℹ️ ' + esc(why) + (by === 'trainer' ? ' Trainers aren\'t recorded in the log, so a trainer search needs the server.' : '') + '</div>';
+  if (by === 'trainer') return h;
+  var words = srchKey(q).split(' ').filter(function(w){ return w.length >= 2; });
+  var hits = [];
+  (loadedLog || []).forEach(function(e) {
+    (e.predictions || []).forEach(function(p, i) {
+      var v = srchKey(by === 'horse' ? p.name : p.jk);
+      if (!v || !words.every(function(w){ return v.indexOf(w) > -1; })) return;
+      hits.push({ e: e, p: p, rank: i + 1 });
+    });
+  });
+  hits.sort(function(a, b) { return (b.e.date || '').localeCompare(a.e.date || '') || (b.e.time || '').localeCompare(a.e.time || ''); });
+  if (!hits.length) return h + '<div class="srch-hint">No logged races ' + (by === 'horse' ? 'with a horse' : 'ridden by a jockey') + ' matching “' + esc(q) + '”.' + (by === 'jockey' ? ' Jockeys are only recorded from app v9.1 (17 Oct).' : '') + '</div>';
+  hits.slice(0, 10).forEach(function(x) {
+    var e = x.e, a = e.actual || [], won = a[0] === x.p.name, plc = !won && a.indexOf(x.p.name) > -1;
+    var res = !a.length ? '—' : won ? '1st' : plc ? 'plcd' : 'unpl';
+    var cls = won ? 'p1' : plc ? 'p23' : '';
+    h += '<div class="srch-run">'
+      + '<div class="srch-pos ' + cls + '"><b>' + res + '</b><span>' + (e.fieldSize ? 'of ' + e.fieldSize : '') + '</span></div>'
+      + '<div class="srch-main"><div class="srch-t">' + esc(by === 'horse' ? courseName(e.course) + ' ' + (e.time || '') : x.p.name) + '</div>'
+      + '<div class="srch-m">' + [srchDate(e.date), by === 'horse' ? '' : esc(courseName(e.course) + ' ' + (e.time || '')), esc(e.dist || ''), esc(srchGoing(e.going))].filter(Boolean).join(' · ') + '</div>'
+      + '<div class="srch-fi">🧠 Formintel: ' + (x.rank === 1 ? 'top pick' : srchOrd(x.rank) + ' pick of ' + (e.predictions || []).length) + (x.p.score != null ? ' · ' + x.p.score + '%' : '') + '</div></div>'
+      + '<div class="srch-sp">' + (x.p.odds > 1 ? (+x.p.odds).toFixed(2) : '—') + '<span>price</span></div>'
+      + '</div>';
+  });
+  return h + '<div class="srch-foot">From your logged races only: first three home, unordered places; "unpl" = not in the first three.</div>';
+}
+
 var _jkMin = 10;   // "over 9 points"
 function setJockeyMin(v) { _jkMin = v; renderJockeyTab(); }
 
