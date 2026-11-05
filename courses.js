@@ -55,6 +55,67 @@ function fiCourseGeo(name) {
   return null;
 }
 
+// ── Country and race type (shared by both apps) ─────────────────────────────
+// Courses outside England by country; anything not listed is English.
+// Northern Ireland races under the Irish authority but is kept separate.
+var FI_COUNTRY = {};
+(function () {
+  var add = function (list, c) { list.split(' ').forEach(function (n) { FI_COUNTRY[n] = c; }); };
+  add('ayr hamilton kelso musselburgh perth', 'sco');
+  add('bangor bangorondee chepstow ffoslas', 'wal');
+  add('downroyal downpatrick', 'ni');
+  add('ballinrobe bellewstown clonmel cork curragh dundalk fairyhouse galway gowranpark kilbeggan killarney laytown ' +
+      'leopardstown limerick listowel naas navan punchestown roscommon sligo thurles tipperary tralee tramore wexford', 'ire');
+})();
+function fiCourseCountry(name) {
+  var k = fiCourseKey(name);
+  return FI_COUNTRY[FI_COURSE_ALIAS[k] || k] || 'eng';
+}
+// British courses that only race over jumps, or only on the flat
+var FI_JUMPS_ONLY = {}, FI_FLAT_ONLY = {}, FI_AW_ONLY = {};
+('aintree bangor cartmel cheltenham exeter fakenham fontwell hereford hexham huntingdon kelso ludlow marketrasen ' +
+ 'newtonabbot perth plumpton sedgefield stratford taunton towcester uttoxeter warwick wetherby wincanton worcester')
+  .split(' ').forEach(function (n) { FI_JUMPS_ONLY[n] = 1; });
+('bath beverley brighton chester epsom goodwood hamilton newmarket nottingham pontefract redcar ripon salisbury ' +
+ 'thirsk windsor yarmouth york wolverhampton chelmsford dundalk laytown')
+  .split(' ').forEach(function (n) { FI_FLAT_ONLY[n] = 1; });
+'wolverhampton chelmsford dundalk'.split(' ').forEach(function (n) { FI_AW_ONLY[n] = 1; });
+// "2m4½f" / "2m 4f" / "7f" -> furlongs
+function fiFurlongs(d) {
+  var s = String(d || '').toLowerCase().replace(/½/g, '.5').replace(/\s+/g, '');
+  var m = s.match(/^(?:(\d+)m)?(?:(\d+(?:\.\d+)?)f)?/);
+  return m ? (parseInt(m[1] || 0, 10) * 8 + parseFloat(m[2] || 0)) : 0;
+}
+// 'jumps' | 'aw' | 'turf' for a race { title, course, going, dist, surface? }.
+// The race name decides when there is one ("2m4f Hcap Chs", "7f Hcap"),
+// then a jumps-only course, then the going and the trip.
+function fiRaceType(race) {
+  race = race || {};
+  var t = String(race.title || '').toLowerCase();
+  if (race.surface === 'jumps' || /\b(hrd|hurdle|chs|chase|steeplechase|nhf|inhf|bumper|national hunt|nh flat)\b/.test(t)) return 'jumps';
+  var k = fiCourseKey(race.course); k = FI_COURSE_ALIAS[k] || k;
+  if (FI_JUMPS_ONLY[k]) return 'jumps';     // whatever going was recorded
+  var g = String(race.going || '').toLowerCase().trim();
+  if (race.surface === 'aw' || /^(standard|slow|fast)/.test(g) || /\(\s*a\.?\s*w\.?\s*\)/i.test(race.course || '') || FI_AW_ONLY[k]) return 'aw';
+  if (!t && !FI_FLAT_ONLY[k] && fiFurlongs(race.dist) >= 16) return 'jumps';
+  return 'turf';
+}
+
+// ── The Sweet Spot rule (set 5 Nov 2026) ────────────────────────────────────
+// Formintel's top pick at decimal odds 2.0-3.99 (evens to just under 3/1) in
+// a British flat or all-weather race. On the 30 Sep - 5 Nov log: 309 bets,
+// 41% won at average odds of 2.95, +16.7% at the logged prices. It was picked
+// from about 180 rules tested on those races, so it could partly be luck: the
+// results app tracks it from 6 Nov, which is the real test.
+var FI_SWEET = { min: 2.0, max: 4.0, setOn: '2026-11-05', testFrom: '2026-11-06' };
+function fiSweetRace(race) {
+  var c = fiCourseCountry(race && race.course);
+  return c !== 'ire' && c !== 'ni' && fiRaceType(race) !== 'jumps';
+}
+function fiSweetSpot(race, odds) {
+  return odds >= FI_SWEET.min && odds < FI_SWEET.max && fiSweetRace(race);
+}
+
 // WMO weather codes (what Open-Meteo returns) -> icon + words
 function fiWxCode(code) {
   var c = +code;

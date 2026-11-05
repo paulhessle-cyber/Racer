@@ -157,6 +157,19 @@
 
   .tab-content{display:none}
   .tab-content.active{display:block}
+  /* Sweet Spot tab */
+  .sw-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .sw-card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;box-shadow:var(--shadow-sm);min-width:0}
+  .sw-card.test{border-color:rgba(var(--g-rgb),.45)}
+  .sw-k{font-family:var(--mono);font-size:.55rem;color:var(--mt);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+  .sw-big{font-size:1.4rem;font-weight:800;color:var(--text);line-height:1.1}
+  .sw-big.good{color:var(--g)} .sw-big.bad{color:var(--re)}
+  .sw-sub{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:4px;line-height:1.5}
+  .sw-verdict{background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;font-size:.74rem;line-height:1.55;color:var(--text);margin-bottom:10px}
+  .sw-chart{position:relative;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:10px 10px 4px;margin-bottom:10px}
+  .sw-tip{position:absolute;pointer-events:none;background:var(--sf);border:1px solid var(--bd2);border-radius:8px;padding:6px 8px;font-size:.66rem;
+    line-height:1.4;color:var(--text);box-shadow:var(--shadow);display:none;white-space:nowrap;z-index:2}
+  .sw-tip b{font-size:.78rem}
   /* Search: a horse's, jockey's or trainer's last 10 races */
   .srch-bar{display:flex;gap:8px;margin-bottom:12px;align-items:stretch}
   .srch-bar select,.srch-bar input{background:var(--inp);border:1px solid var(--bd2);border-radius:10px;color:var(--text);
@@ -213,7 +226,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.1 · 31 Oct 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.2 · 5 Nov 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -227,6 +240,7 @@
   <button class="tab-btn" onclick="showTab('backtest')">Backtest</button>
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
   <button class="tab-btn" onclick="showTab('search')">🔍 Search</button>
+  <button class="tab-btn" onclick="showTab('sweet')">📈 Sweet Spot</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
   <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
@@ -244,7 +258,7 @@
 </div>
 
 <script src="plog.js?v=6.4"></script>
-<script src="courses.js?v=1.0"></script>
+<script src="courses.js?v=1.1"></script>
 <script>
 var LOG_KEY = 'rq_pred_log_v1';
 var loadedLog = null;
@@ -303,7 +317,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','search','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','search','sweet','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -323,6 +337,7 @@ function showTab(tab) {
   if (tab === 'jockeys') renderJockeyTab();
   if (tab === 'weather') renderWeatherTab();
   if (tab === 'search') renderSearchTab();
+  if (tab === 'sweet') renderSweetTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
@@ -362,6 +377,7 @@ function renderAll() {
     '<div class="tab-content" id="tab-backtest">' + renderBacktest(sorted) + '</div>' +
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
     '<div class="tab-content" id="tab-search"></div>' +
+    '<div class="tab-content" id="tab-sweet"></div>' +
     '<div class="tab-content" id="tab-bets"></div>' +
     '<div class="tab-content" id="tab-insights"></div>' +
     '<div class="tab-content" id="tab-bf"></div>' +
@@ -3286,6 +3302,172 @@ function confGap(e) {
   var p = e.predictions || [];
   if (p.length < 2 || p[0].score == null || p[1].score == null) return null;
   return p[0].score - p[1].score;
+}
+
+// ══ SWEET SPOT TAB ════════════════════════════════════════════════════════════
+// The rule (in courses.js): Formintel's top pick at decimal odds 2.0-3.99 in a
+// British flat or all-weather race. It was found on 5 Nov by testing about 180
+// rules on the 30 Sep - 5 Nov races, so those races are where it was found and
+// the races from 6 Nov on are the real test. Bets are £1 (points) unless said.
+function sweetRaceOf(e) { return { course: e.course, title: e.title || '', going: e.going || '', dist: e.dist || '' }; }
+function sweetBets() {
+  if (typeof fiSweetSpot !== 'function') return [];
+  var out = [];
+  (loadedLog || []).forEach(function(e) {
+    var P = e.predictions || [], A = e.actual || [];
+    if (!P.length || !A.length) return;
+    var o = P[0].odds || e.topPickOdds || 0;
+    if (!fiSweetSpot(sweetRaceOf(e), o)) return;
+    var won = A[0] === P[0].name;
+    out.push({ date: e.date || '', time: e.time || '', course: e.course || '', name: P[0].name, odds: o, score: P[0].score,
+               won: won, placed: !won && !!e.topPickPlaced, pnl: won ? o - 1 : -1, type: fiRaceType(sweetRaceOf(e)) });
+  });
+  out.sort(function(a, b) { return (a.date + a.time) < (b.date + b.time) ? -1 : (a.date + a.time) > (b.date + b.time) ? 1 : 0; });
+  return out;
+}
+function sweetAgg(rows) {
+  var n = rows.length, w = 0, pnl = 0, odds = 0, ss = 0;
+  rows.forEach(function(r) { if (r.won) w++; pnl += r.pnl; odds += r.odds; });
+  var mean = n ? pnl / n : 0;
+  rows.forEach(function(r) { ss += (r.pnl - mean) * (r.pnl - mean); });
+  var se = n > 1 ? Math.sqrt(ss / (n - 1) / n) : 0;
+  return { n: n, w: w, pnl: pnl, roi: n ? 100 * mean : 0, odds: n ? odds / n : 0, lo: 100 * (mean - 1.96 * se), hi: 100 * (mean + 1.96 * se) };
+}
+function sweetSign(x, dp) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(dp == null ? 1 : dp); }
+
+function renderSweetTab() {
+  var el = document.getElementById('tab-sweet');
+  if (!el) return;
+  if (typeof fiSweetSpot !== 'function') { el.innerHTML = '<div class="pad muted">The rule didn\'t load — refresh the page.</div>'; return; }
+  var all = sweetBets(), from = FI_SWEET.testFrom;
+  var test = all.filter(function(r) { return r.date >= from; }), found = all.filter(function(r) { return r.date < from; });
+  var T = sweetAgg(test), F = sweetAgg(found);
+  function card(cls, title, a, empty) {
+    if (!a.n) return '<div class="sw-card ' + cls + '"><div class="sw-k">' + title + '</div><div class="sw-sub">' + empty + '</div></div>';
+    return '<div class="sw-card ' + cls + '"><div class="sw-k">' + title + '</div>'
+      + '<div class="sw-big ' + (a.pnl >= 0 ? 'good' : 'bad') + '">' + sweetSign(a.roi) + '%</div>'
+      + '<div class="sw-sub">' + a.n + ' bets · ' + a.w + ' won (' + Math.round(100 * a.w / a.n) + '%)<br>avg odds ' + a.odds.toFixed(2)
+      + ' · £10 stakes ' + (a.pnl >= 0 ? '+' : '−') + '£' + Math.abs(10 * a.pnl).toFixed(2) + '</div></div>';
+  }
+  var h = '<div class="pad">'
+    + '<div class="wx-intro">Formintel\'s <b>top pick at odds of 2.0–3.99</b> (evens to just under 3/1) in <b>British flat and all-weather races</b> — no jumps, no Irish races. '
+    + 'Picked on 5 Nov from the 30 Sep – 5 Nov results after testing about 180 rules, so it could partly be luck. The races from 6 Nov are the real test.</div>'
+    + '<div class="sw-cards">'
+    + card('test', 'From 6 Nov · the test', T, 'No qualifying race logged yet — they\'ll appear here as today\'s results come in.')
+    + card('', '30 Sep – 5 Nov · where it was found', F, 'No races in this log from that period.')
+    + '</div>';
+  // verdict on the test so far
+  var v;
+  if (!T.n) v = 'Nothing to judge yet.';
+  else if (T.n < 100) v = 'Too early to judge: ' + T.n + ' bet' + (T.n === 1 ? '' : 's') + ' so far. With this few, anything from ' + sweetSign(T.lo, 0) + '% to ' + sweetSign(T.hi, 0) + '% is plausible. Around 300 bets — roughly a month — will give a fair answer.';
+  else if (T.lo > 0) v = '✅ Holding up: ' + sweetSign(T.roi) + '% on ' + T.n + ' bets, and even the low end of the likely range (' + sweetSign(T.lo, 0) + '%) is a profit.';
+  else if (T.hi < 0) v = '❌ Not holding up: ' + sweetSign(T.roi) + '% on ' + T.n + ' bets — the whole likely range (' + sweetSign(T.lo, 0) + '% to ' + sweetSign(T.hi, 0) + '%) is a loss. Time to drop it.';
+  else v = 'Undecided: ' + sweetSign(T.roi) + '% on ' + T.n + ' bets; the likely range (' + sweetSign(T.lo, 0) + '% to ' + sweetSign(T.hi, 0) + '%) still spans profit and loss.';
+  h += '<div class="sw-verdict">' + v + ' <span class="muted">Returns are at the prices the app logged (often well before the off); exchange commission would take another 1–2%.</span></div>';
+  if (all.length >= 2) h += '<div class="sw-chart" id="swChart"></div>';
+  // weeks
+  var wk = {}, order = [];
+  all.forEach(function(r) {
+    var d = new Date(r.date + 'T12:00:00Z'), k = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+    if (!wk[k]) { wk[k] = []; order.push(k); }
+    wk[k].push(r);
+  });
+  if (order.length) {
+    h += '<div class="wx-card"><div class="wx-card-ttl">Week by week</div><div class="wx-card-sub">£1 level stakes at the logged prices</div>'
+      + '<table class="wx-tbl"><thead><tr><th>Week of</th><th>Bets</th><th>Won</th><th>Profit</th><th>Return</th></tr></thead><tbody>';
+    order.slice().reverse().forEach(function(k) {
+      var a = sweetAgg(wk[k]);
+      var nt = wk[k].filter(function(r){ return r.date >= from; }).length;
+      h += '<tr><td>' + srchDate(k) + (nt === wk[k].length ? ' <span class="muted">· test</span>' : nt ? ' <span class="muted">· part test</span>' : '') + '</td><td>' + a.n + '</td><td>' + a.w + '</td>'
+        + '<td class="' + (a.pnl >= 0 ? 'good' : 'bad') + '">' + sweetSign(a.pnl, 2) + '</td><td>' + sweetSign(a.roi, 0) + '%</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  // splits
+  var splits = [['Turf', function(r){ return r.type === 'turf'; }], ['All-weather', function(r){ return r.type === 'aw'; }],
+                ['Odds 2.0–2.99', function(r){ return r.odds < 3; }], ['Odds 3.0–3.99', function(r){ return r.odds >= 3; }]];
+  h += '<div class="wx-card"><div class="wx-card-ttl">Where it works</div><div class="wx-card-sub">Return per bet, with the number of bets</div>'
+    + '<table class="wx-tbl"><thead><tr><th></th><th>Test (from 6 Nov)</th><th>Found (to 5 Nov)</th></tr></thead><tbody>';
+  splits.forEach(function(sp) {
+    var a = sweetAgg(test.filter(sp[1])), b = sweetAgg(found.filter(sp[1]));
+    var cell = function(x) { return x.n ? '<span class="' + (x.pnl >= 0 ? 'good' : 'bad') + '">' + sweetSign(x.roi, 0) + '%</span> <span class="muted">(' + x.n + ')</span>' : '<span class="muted">—</span>'; };
+    h += '<tr><td>' + sp[0] + '</td><td>' + cell(a) + '</td><td>' + cell(b) + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  // recent bets
+  if (all.length) {
+    h += '<div class="wx-card"><div class="wx-card-ttl">Latest bets</div><div class="wx-card-sub">Newest first</div>'
+      + '<table class="wx-tbl"><thead><tr><th>Race</th><th>Odds</th><th>Result</th><th>£1</th></tr></thead><tbody>';
+    all.slice(-25).reverse().forEach(function(r) {
+      h += '<tr><td><b>' + esc(r.name) + '</b><br><span class="muted">' + srchDate(r.date) + ' · ' + esc(courseName(r.course)) + ' ' + esc(r.time) + '</span></td>'
+        + '<td>' + r.odds.toFixed(2) + '</td><td>' + (r.won ? '<span class="good">Won</span>' : r.placed ? 'Placed' : '<span class="muted">Lost</span>') + '</td>'
+        + '<td class="' + (r.pnl >= 0 ? 'good' : 'bad') + '">' + sweetSign(r.pnl, 2) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
+  if (all.length >= 2) drawSweetChart(document.getElementById('swChart'), all, from);
+}
+
+// Running profit (£1 level stakes) over every qualifying bet, oldest first,
+// with the start of the test marked. One series, so no legend: the title says it.
+function drawSweetChart(box, rows, from) {
+  if (!box) return;
+  var W = Math.max(280, Math.min(760, (box.clientWidth || 340) - 20)), H = 196, padL = 34, padR = 44, padT = 32, padB = 20;
+  var cum = [], run = 0;
+  rows.forEach(function(r) { run += r.pnl; cum.push(run); });
+  var lo = Math.min(0, Math.min.apply(null, cum)), hi = Math.max(0, Math.max.apply(null, cum));
+  var span = hi - lo || 1, step = Math.pow(10, Math.floor(Math.log10(span / 3))), m = span / step;
+  step *= m > 15 ? 5 : m > 6 ? 2 : 1;
+  var y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
+  var X = function(i) { return padL + (W - padL - padR) * (rows.length === 1 ? 0.5 : i / (rows.length - 1)); };
+  var Y = function(v) { return padT + (H - padT - padB) * (1 - (v - y0) / ((y1 - y0) || 1)); };
+  var svg = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Running profit of the Sweet Spot bets">';
+  svg += '<text x="' + padL + '" y="12" style="fill:var(--text);font:700 11px var(--sans)">Running profit, £1 bets</text>';
+  for (var v = y0; v <= y1 + 1e-9; v += step) {
+    svg += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" style="stroke:' + (Math.abs(v) < 1e-9 ? 'var(--bd2)' : 'var(--bd)') + ';stroke-width:1"/>'
+      + '<text x="' + (padL - 6) + '" y="' + (Y(v) + 3) + '" text-anchor="end" style="fill:var(--mt);font:10px var(--mono)">' + (v > 0 ? '+' : '') + (Math.round(v * 10) / 10) + '</text>';
+  }
+  var ti = -1;
+  for (var i = 0; i < rows.length; i++) if (rows[i].date >= from) { ti = i; break; }
+  if (ti > 0) {
+    var tx = (X(ti - 1) + X(ti)) / 2;
+    svg += '<line x1="' + tx + '" x2="' + tx + '" y1="' + (padT - 10) + '" y2="' + (H - padB) + '" style="stroke:var(--mt);stroke-width:1"/>'
+      + '<text x="' + (tx - 4) + '" y="' + (padT - 3) + '" text-anchor="end" style="fill:var(--mt);font:10px var(--sans)">found</text>'
+      + '<text x="' + (tx + 4) + '" y="' + (padT - 3) + '" style="fill:var(--mt);font:10px var(--sans)">test</text>';
+  }
+  var d = cum.map(function(c, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(c).toFixed(1); }).join(' ');
+  svg += '<path d="' + d + '" style="fill:none;stroke:var(--g);stroke-width:2;stroke-linejoin:round;stroke-linecap:round"/>';
+  var ex = X(rows.length - 1), ey = Y(run);
+  svg += '<circle cx="' + ex + '" cy="' + ey + '" r="4" style="fill:var(--g);stroke:var(--card);stroke-width:2"/>'
+    + '<text x="' + (ex + 7) + '" y="' + (ey + 4) + '" style="fill:var(--text);font:700 11px var(--mono)">' + sweetSign(run, 1) + '</text>';
+  svg += '<line id="swX" x1="0" x2="0" y1="' + padT + '" y2="' + (H - padB) + '" style="stroke:var(--mt);stroke-width:1;display:none"/>'
+    + '<circle id="swDot" r="4" style="fill:var(--g);stroke:var(--card);stroke-width:2;display:none"/>';
+  svg += '<text x="' + padL + '" y="' + (H - 5) + '" style="fill:var(--mt);font:10px var(--mono)">' + srchDate(rows[0].date) + '</text>'
+    + '<text x="' + (W - padR) + '" y="' + (H - 5) + '" text-anchor="end" style="fill:var(--mt);font:10px var(--mono)">' + srchDate(rows[rows.length - 1].date) + '</text>';
+  svg += '<rect id="swHit" x="' + padL + '" y="' + padT + '" width="' + (W - padL - padR) + '" height="' + (H - padT - padB) + '" style="fill:transparent"/></svg>';
+  box.innerHTML = svg + '<div class="sw-tip" id="swTip"></div>';
+  var hit = box.querySelector('#swHit'), xl = box.querySelector('#swX'), dot = box.querySelector('#swDot'), tip = box.querySelector('#swTip');
+  function at(ev) {
+    var r = box.querySelector('svg').getBoundingClientRect(), px = (ev.clientX - r.left);
+    var i = Math.round((px - padL) / ((W - padL - padR) || 1) * (rows.length - 1));
+    i = Math.max(0, Math.min(rows.length - 1, i));
+    var b = rows[i], cx = X(i), cy = Y(cum[i]);
+    xl.setAttribute('x1', cx); xl.setAttribute('x2', cx); xl.style.display = '';
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.style.display = '';
+    tip.textContent = '';
+    var s1 = document.createElement('b'); s1.textContent = sweetSign(cum[i], 2) + ' pts'; tip.appendChild(s1);
+    tip.appendChild(document.createElement('br'));
+    tip.appendChild(document.createTextNode('bet ' + (i + 1) + ' · ' + srchDate(b.date)));
+    tip.appendChild(document.createElement('br'));
+    tip.appendChild(document.createTextNode(b.name + ' @ ' + b.odds.toFixed(2) + ' — ' + (b.won ? 'won' : 'lost')));
+    tip.style.display = 'block';
+    var left = cx + 12; if (left + tip.offsetWidth > W) left = cx - tip.offsetWidth - 12;
+    tip.style.left = Math.max(0, left) + 'px'; tip.style.top = Math.max(0, cy - 20) + 'px';
+  }
+  function off() { xl.style.display = 'none'; dot.style.display = 'none'; tip.style.display = 'none'; }
+  hit.addEventListener('pointermove', at); hit.addEventListener('pointerdown', at); hit.addEventListener('pointerleave', off);
 }
 
 function renderConfTab() {

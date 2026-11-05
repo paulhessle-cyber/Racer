@@ -342,7 +342,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v10.3 · 29 Oct 2026</div>
+      <div class="ver">v10.4 · 5 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -370,6 +370,12 @@ input,textarea{font-family:var(--sans)}
     <div id="todaysMeetings"><div style="color:var(--mt);font-size:.78rem;font-family:var(--mono);padding:8px 0">Tap ↻ Refresh to load today's meetings…</div></div>
     <button class="btn bo" style="width:100%;margin-top:10px;margin-bottom:0;font-size:.72rem" onclick="checkTodaysResults()">🩺 Check today's results</button>
     <div id="resultsCheck" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--sf2);font-family:var(--mono);font-size:.66rem;line-height:1.55;white-space:pre-wrap;color:var(--tx)"></div>
+  </div>
+
+  <div class="card" id="sweetCard" style="display:none">
+    <div class="ct">📈 Sweet Spot today</div>
+    <p class="mu" style="margin-bottom:10px">Formintel's top pick at odds of 2.0–3.99 (evens to just under 3/1) in British flat and all-weather races. It made a profit on the five weeks it was found on; the results app is testing it from 6 Nov, so treat it as a trial. Prices move — check it's still in range before you bet.</p>
+    <div id="sweetList"></div>
   </div>
 
   <div class="card">
@@ -908,7 +914,7 @@ input,textarea{font-family:var(--sans)}
 </div>
 
 <script src="plog.js?v=6.4"></script>
-<script src="courses.js?v=1.0"></script>
+<script src="courses.js?v=1.1"></script>
 <script>
 
 
@@ -967,6 +973,7 @@ function go(n) {
   if (n === 'l15')      showL15Tab();
   if (n === 'setup')    initCalibCount();
   if (n === 'races') {
+    sweetSoon();
     // Auto-load today's meetings on first visit if proxy configured and not already loaded
     var box = document.getElementById('todaysMeetings');
     if (box && getProxyUrl() && box.querySelector('div') && /Tap ↻ Refresh/.test(box.textContent)) {
@@ -3946,7 +3953,7 @@ function showResults(scored, val, race, paceInfo) {
              : w._pace === 'closer' ? '<span class="mk closer" style="margin-left:6px">◀ CLOSER</span>' : '';
   h += '<div class="rwin">'
     + '<div class="slbl">🏆 Predicted Winner</div>'
-    + '<div class="bn gn">' + w.name + paceMk + classChangeBadge(w, race) + '</div>'
+    + '<div class="bn gn">' + w.name + paceMk + classChangeBadge(w, race) + (isSweetSpot(race, w) ? sweetBadge() : '') + '</div>'
     + row('Decimal odds', w.odds > 0 ? w.odds.toFixed(1) : 'not entered')
     + row('Jockey', (w.jockey.replace(/\s*\(\d+\)/,'') || '—') + (w._jockeyWas ? ' <span style="color:var(--gold)">🔄 was ' + esc(w._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : ''))
     + row('Draw (stall)', drawOf(w) || '—')
@@ -4179,7 +4186,7 @@ function showResults(scored, val, race, paceInfo) {
     h += '<div class="rrr ' + pc + '" onclick="toggleHorseNote(\'' + noteId + '\')" style="cursor:pointer">'
       + '<div class="rp">' + (i+1) + '</div>'
       + '<div class="ri2">'
-        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert + classChangeBadge(r, race)
+        + '<div class="rn2">' + r.name + paceLbl + mvLbl + vpLbl + bfAlert + geldingAlert + travelAlert + classChangeBadge(r, race) + (i === 0 && isSweetSpot(race, r) ? sweetBadge(true) : '')
           + ' <span style="color:var(--mt);font-size:.62rem;font-weight:400">ⓘ</span></div>'
         + '<div class="rs2">' + (r.jockey.replace(/\s*\(\d+\)/,'')||'—')
         + (r._jockeyWas ? ' <span style="color:var(--gold);font-weight:600" title="Jockey change — Betfair still lists ' + esc(r._jockeyWas) + '">🔄 was ' + esc(r._jockeyWas.replace(/\s*\(\d+\)/,'')) + '</span>' : '')
@@ -8305,19 +8312,70 @@ function showLiveStatus(msg, type) {
 }
 
 
+// ══ SWEET SPOT (rule in courses.js, set 5 Nov 2026) ═══════════════════════════
+// Formintel's top pick at 2.0-3.99 in a British flat or all-weather race.
+function raceSweetInfo(race) {
+  return { title: race.title || '', course: race.course, dist: race.dist, surface: race.surface,
+           going: getGoingForRace(race, '') || race.going || '' };
+}
+function isSweetSpot(race, runner) {
+  return !!(race && runner && runner.odds > 1 && typeof fiSweetSpot === 'function' && fiSweetSpot(raceSweetInfo(race), runner.odds));
+}
+function sweetBadge(small) {
+  return ' <span class="mk" style="background:rgba(var(--g-rgb),.14);color:var(--g);border:1px solid rgba(var(--g-rgb),.45);font-weight:700' + (small ? '' : ';margin-left:6px') + '"'
+    + ' title="Sweet Spot: Formintel\'s top pick at 2.0–3.99 in a British flat or all-weather race. Being tested in the results app from 6 Nov.">📈 SWEET SPOT</span>';
+}
+// Today's qualifying races, from the saved predictions (each race's latest:
+// the one made about 5 minutes before the off, once that has happened)
+function sweetSpotToday() {
+  var locks = (typeof plockAll === 'function') ? plockAll() : {}, out = [];
+  if (typeof fiSweetSpot !== 'function') return out;
+  Object.keys(locks).forEach(function(k) {
+    var L = locks[k];
+    if (!L || !L.preds || !L.preds.length || !L.course || !L.time) return;
+    var top = L.preds[0];
+    if (!fiSweetSpot({ course: L.course, title: L.title || '', going: L.going || '', dist: L.dist || '' }, top.odds || 0)) return;
+    var lg = (typeof getPredictionLog === 'function') ? getPredictionLog(k) : null;
+    var res = (lg && lg.actual && lg.actual.length) ? (lg.actual[0] === top.name ? 'won' : 'lost') : '';
+    out.push({ time: L.time, course: L.course, name: top.name, odds: top.odds || 0, score: top.score, res: res });
+  });
+  out.sort(function(a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+  return out;
+}
+function renderSweetSpotCard() {
+  var card = document.getElementById('sweetCard'), box = document.getElementById('sweetList');
+  if (!card || !box) return;
+  var list = sweetSpotToday();
+  if (!list.length) { card.style.display = 'none'; return; }
+  var won = 0, lost = 0, pnl = 0;
+  var h = list.map(function(x) {
+    if (x.res === 'won') { won++; pnl += x.odds - 1; } else if (x.res === 'lost') { lost++; pnl -= 1; }
+    var st = x.res === 'won' ? '<span style="color:var(--g);font-weight:700">✓ Won</span>'
+           : x.res === 'lost' ? '<span style="color:var(--re)">✗ Lost</span>'
+           : '<span style="color:var(--mt)">To run</span>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)">'
+      + '<div style="font-family:var(--mono);font-size:.72rem;color:var(--mt);width:40px;flex-shrink:0">' + esc(x.time) + '</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:.82rem;font-weight:700;color:var(--tx);overflow-wrap:anywhere">' + esc(x.name) + '</div>'
+      + '<div style="font-size:.64rem;color:var(--mt)">' + courseFlagHTML(x.course) + esc(x.course) + (x.score != null ? ' · Formintel ' + x.score + '%' : '') + '</div></div>'
+      + '<div style="text-align:right;flex-shrink:0"><div style="font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--tx)">' + esc(fmtOdds(x.odds) || x.odds) + '</div>'
+      + '<div style="font-size:.62rem">' + st + '</div></div>'
+      + '</div>';
+  }).join('');
+  var done = won + lost;
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding-top:8px;border-top:1px solid var(--bd)">'
+    + list.length + ' qualifying today' + (done ? ' · ' + won + ' won, ' + lost + ' lost · ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' pts to £1 level stakes at the logged prices' : '')
+    + '</div>';
+  box.innerHTML = h;
+  card.style.display = 'block';
+}
+var _sweetT = 0;
+function sweetSoon() { clearTimeout(_sweetT); _sweetT = setTimeout(function(){ try { renderSweetSpotCard(); } catch(e) {} }, 400); }
+
 // ══ TODAY'S MEETINGS (Betfair) ════════════════════════════════════════════════
 // ── Country flag for a course (Today's Racing list) ──────────────────
 // Northern Ireland has no flag emoji of its own, so it shows the Union flag
 // (it races under the Irish authority, but is in the UK).
-var COURSE_COUNTRY = {};
-(function() {
-  var add = function(list, c) { list.split(',').forEach(function(n) { COURSE_COUNTRY[n] = c; }); };
-  add('ayr,hamilton,kelso,musselburgh,perth', 'sco');
-  add('bangor,bangorondee,chepstow,ffoslas', 'wal');
-  add('downroyal,downpatrick', 'ni');
-  add('ballinrobe,bellewstown,clonmel,cork,curragh,dundalk,fairyhouse,galway,gowranpark,kilbeggan,killarney,laytown,'
-    + 'leopardstown,limerick,listowel,naas,navan,punchestown,roscommon,sligo,thurles,tipperary,tramore,wexford', 'ire');
-})();
+// (the course → country list lives in courses.js, shared with the results app)
 var COUNTRY_FLAG = {
   eng: ['🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'England'],
   sco: ['🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Scotland'],
@@ -8326,8 +8384,7 @@ var COUNTRY_FLAG = {
   ni:  ['🇬🇧', 'Northern Ireland']
 };
 function courseCountry(course) {
-  var k = String(course || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z]/g, '');
-  return COURSE_COUNTRY[k] || 'eng';
+  return typeof fiCourseCountry === 'function' ? fiCourseCountry(course) : 'eng';
 }
 function courseFlagHTML(course) {
   var f = COUNTRY_FLAG[courseCountry(course)];
@@ -8937,6 +8994,7 @@ function plockSave(race, scored, going) {
     // A full store used to fail here silently: no lock, so no result could
     // ever be logged for the race, and nothing on screen said why.
     var w = safeSetItem(plockKey(), JSON.stringify(all));
+    sweetSoon();
     if (!w.ok && !S._lockWarned) {
       S._lockWarned = true;
       try { showLiveStatus('⚠ Phone storage is full, so today\'s predictions can\'t be saved and results won\'t log. Setup → 🧹 Free up storage.', 'warn'); } catch(e2) {}
@@ -9378,6 +9436,7 @@ function fullSweep(force) {
   return catchUpFromCards().then(function(caught){
     return autoPredictAllMeetings(force).then(function(built){
       try { ensureNapForToday(); } catch(e){}
+      sweetSoon();
       // Check results every sweep. It used to run here only when a race had
       // just been scored from a snapshot, so on reopening after racing (races
       // already locked) nothing was logged until the 1-minute heartbeat — and
