@@ -226,7 +226,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v9.2 · 5 Nov 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v10.0 · 10 Nov 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -406,6 +406,8 @@ function renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) {
   h += sc('streak',maxStreak,        'Best<br>Streak');
   h += '</div>';
 
+  h += renderRatingTiers(sorted);
+
   h += '<div class="chart-wrap"><div class="chart-title">Result Breakdown</div>';
   h += br('Wins',   wins,   total, 'win');
   h += br('Places', places, total, 'place');
@@ -419,7 +421,121 @@ function renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) {
   h += '</div>';
 
   h += renderMonthlyTable(sorted);
+  h += renderPriceTiming(sorted);
 
+  return h;
+}
+
+// ── Win rate by rating ───────────────────────────────────────────────────────
+// The headline win rate counts every race, and across every race no method
+// wins much more often than the favourite does (about a third of the time).
+// The win rate only rises by being choosier, so this shows how often the top
+// pick has won when Formintel rated it at least so highly — and whether those
+// picks paid at the logged prices. Only races on today's rating scale are
+// counted (the ones that record which model scored them).
+function tierRows(rows) {
+  return (rows || []).filter(function(e){
+    return e && e.mv && e.date && (e.topPickOdds || 0) > 1 && (e.topPickConf || 0) > 0 && e.actual && e.actual.length;
+  });
+}
+function tierStats(cur, lo) {
+  var n = 0, w = 0, ret = 0;
+  cur.forEach(function(e){ if (e.topPickConf >= lo) { n++; if (e.topPickWon) { w++; ret += e.topPickOdds; } } });
+  return { lo: lo, n: n, w: w, ret: ret, win: n ? w / n * 100 : 0, roi: n ? (ret - n) / n * 100 : 0 };
+}
+function niceDay(iso) {
+  try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); } catch(e) { return iso; }
+}
+function renderRatingTiers(rows) {
+  var cur = tierRows(rows);
+  if (cur.length < 100) return '';
+  var from = cur.reduce(function(a, e){ return e.date < a ? e.date : a; }, cur[0].date);
+  var favN = 0, favW = 0;
+  cur.forEach(function(e){ if (e.favName) { favN++; if (e.favWon) favW++; } });
+  var all = tierStats(cur, 0);
+  var tiers = [25, 30, 35, 40, 50, 60].map(function(lo){ return tierStats(cur, lo); }).filter(function(b){ return b.n >= 20; });
+  if (!tiers.length) return '';
+  // the tier nearest to "wins half the time", among those with 100+ races
+  var half = null;
+  tiers.forEach(function(b){ if (b.n >= 100 && (!half || Math.abs(b.win - 50) < Math.abs(half.win - 50))) half = b; });
+  function money(v){ return (v < 0 ? '-£' : '+£') + Math.abs(v).toFixed(2); }
+  function row(label, b, hi) {
+    var pl = b.ret - b.n, col = pl >= 0 ? 'var(--g)' : 'var(--re)';
+    return '<tr style="text-align:right;border-top:1px solid var(--bd);background:' + (hi ? 'rgba(var(--g-rgb),0.07)' : 'transparent') + '">'
+      + '<td style="text-align:left;padding:7px 4px;color:var(--tx);font-weight:' + (hi ? 700 : 600) + '">' + label + '</td>'
+      + '<td style="padding:7px 4px;color:var(--mt)">' + b.n + '</td>'
+      + '<td style="padding:7px 4px;color:var(--mt)">' + Math.round(b.n / all.n * 100) + '%</td>'
+      + '<td style="padding:7px 4px;color:var(--tx);font-weight:700">' + b.win.toFixed(1) + '%</td>'
+      + '<td style="padding:7px 4px;color:' + col + '">' + money(pl) + '</td>'
+      + '<td style="padding:7px 4px;color:' + col + ';font-weight:700">' + (b.roi >= 0 ? '+' : '') + b.roi.toFixed(1) + '%</td></tr>';
+  }
+  var h = '<div class="chart-wrap">';
+  h += '<div class="chart-title">Win Rate By Rating — The Stronger The Pick, The More Often It Wins</div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.62rem">';
+  h += '<tr style="color:var(--mt);text-align:right">'
+     + '<th style="text-align:left;padding:6px 4px;font-weight:400">Top pick rated</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Races</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Of all</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Win%</th>'
+     + '<th style="padding:6px 4px;font-weight:400">£1 P/L</th>'
+     + '<th style="padding:6px 4px;font-weight:400">ROI</th></tr>';
+  h += row('Every race', all, false);
+  tiers.forEach(function(b){ h += row(b.lo + '% or more', b, b === half); });
+  h += '</table></div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding:10px 4px 2px;line-height:1.6">';
+  if (half) {
+    h += '<span style="color:var(--g);font-weight:700">▲ Picks rated ' + half.lo + '%+ won ' + half.win.toFixed(0) + '% of the time</span> — '
+       + half.n + ' races, about ' + Math.round(half.n / all.n * 100) + ' in every 100.<br>';
+  }
+  h += 'Across every race the top pick won ' + all.win.toFixed(1) + '%'
+     + (favN >= 50 ? '; the favourite won ' + (favW / favN * 100).toFixed(1) + '% of the same races' : '')
+     + '. Nothing wins much more often than the favourite across every race, so the win rate rises only by being choosier.<br>'
+     + 'A high win rate is not the same as a profit: stronger picks are shorter prices, so judge each row by its ROI. '
+     + 'Races from ' + esc(niceDay(from)) + ' on, when the ratings moved to their present scale. £1 win stakes at the logged prices.'
+     + '</div></div>';
+  return h;
+}
+
+// ── When the prices were taken ───────────────────────────────────────────────
+// From app v10.5 each result records how many minutes before the off its
+// prediction was priced (pm). A prediction made on the last prices before the
+// off reads the race far better than one made that morning, so nearly every
+// race should land in the first row.
+function renderPriceTiming(rows) {
+  var r = (rows || []).filter(function(e){ return e && typeof e.pm === 'number' && (e.topPickOdds || 0) > 1 && e.actual && e.actual.length; });
+  if (r.length < 10) return '';
+  var groups = [
+    { label: 'Last 10 min before the off', test: function(m){ return m >= 0 && m <= 10; } },
+    { label: '11–60 min before',          test: function(m){ return m > 10 && m <= 60; } },
+    { label: 'Over an hour before',       test: function(m){ return m > 60; } },
+    { label: 'After the off',             test: function(m){ return m < 0; } }
+  ];
+  var h = '<div class="chart-wrap">';
+  h += '<div class="chart-title">When The Prices Were Taken</div>';
+  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.62rem">';
+  h += '<tr style="color:var(--mt);text-align:right">'
+     + '<th style="text-align:left;padding:6px 4px;font-weight:400">Prediction priced</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Races</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Of all</th>'
+     + '<th style="padding:6px 4px;font-weight:400">Win%</th>'
+     + '<th style="padding:6px 4px;font-weight:400">ROI</th></tr>';
+  groups.forEach(function(g){
+    var n = 0, w = 0, ret = 0;
+    r.forEach(function(e){ if (g.test(e.pm)) { n++; if (e.topPickWon) { w++; ret += e.topPickOdds; } } });
+    if (!n) return;
+    var roi = (ret - n) / n * 100, col = roi >= 0 ? 'var(--g)' : 'var(--re)';
+    h += '<tr style="text-align:right;border-top:1px solid var(--bd)">'
+       + '<td style="text-align:left;padding:7px 4px;color:var(--tx);font-weight:600">' + g.label + '</td>'
+       + '<td style="padding:7px 4px;color:var(--mt)">' + n + '</td>'
+       + '<td style="padding:7px 4px;color:var(--mt)">' + Math.round(n / r.length * 100) + '%</td>'
+       + '<td style="padding:7px 4px;color:var(--tx);font-weight:700">' + (w / n * 100).toFixed(1) + '%</td>'
+       + '<td style="padding:7px 4px;color:' + col + ';font-weight:700">' + (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%</td></tr>';
+  });
+  h += '</table></div>';
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding:10px 4px 2px;line-height:1.6">'
+     + 'Recorded from 10 Nov 2026 (app v10.5): ' + r.length + ' races so far. Before that, a race the phone slept through was usually judged on that morning\'s prices. '
+     + 'Races in the lower rows are ones where neither the phone nor the server caught the last prices.'
+     + '</div></div>';
   return h;
 }
 

@@ -342,7 +342,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v10.4 · 5 Nov 2026</div>
+      <div class="ver">v10.5 · 10 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -1589,7 +1589,7 @@ function assessPace(runners) {
 
 // ── Pace adjustment multiplier for a single runner ────────
 // Given the pace scenario, return a score multiplier
-function paceAdjust(runner, paceInfo) {
+function paceAdjust(runner, paceInfo, race) {
   var s = paceInfo.scenario;
   var n = paceInfo.fieldSize || 10;
 
@@ -1608,7 +1608,10 @@ function paceAdjust(runner, paceInfo) {
   // Low draw (1-3) benefits front-runners and horses that race prominently
   // High draw can be a problem for front-runners in large fields
   // Closers are less affected by draw but high draw in small fields is fine
-  var draw = runner.stall || runner.draw || 0;
+  // The real starting stall only. This used to read runner.stall first, which is
+  // the saddle-cloth number: every jumps race, and every flat race where the
+  // number and the stall differ, was adjusted for a draw the horse didn't have.
+  var draw = race ? realStall(runner, race) : (parseInt(runner.draw, 10) || 0);
   if (draw > 0 && n > 0) {
     var drawPos = draw / n; // 0 = lowest draw, 1 = highest
 
@@ -1765,8 +1768,7 @@ function buildFieldCtx(runners) {
   var ors  = runners.map(function(r){ return r.or || 0; });
   var odds = runners.map(function(r){ return r.odds || 0; });
   var jwrs = runners.map(function(r){
-    var j = (r.jockey || '').toLowerCase().replace(/\s*\(\d+\)/,'');
-    var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[j] : null;
+    var js = (S.model && S.model.jockeyStats) ? statLookup(S.model.jockeyStats, r.jockey) : null;
     return js ? js.w / Math.max(js.r, 1) : 0.12;
   });
 
@@ -1824,25 +1826,77 @@ var COMBO_BONUSES = {
   'colin keane|dermot weld':       0.07,
 };
 
+// "A. P. O'Brien" -> "a p obrien", "Mrs John Harrington" -> "john harrington",
+// "John & Thady Gosden" -> "john gosden", "R Havlin (3)" -> "r havlin"
+function personNorm(n) {
+  var s = String(n || '').toLowerCase().replace(/\s*\(\d+\)/g, '').replace(/['’`]/g, '').replace(/[.]/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim().replace(/^(mrs|mr|miss|ms|sir|lady|dr) /, '');
+  var amp = s.match(/^(\S+) .*& .*?(\S+)$/) || s.match(/^(\S+) & .*?(\S+)$/);
+  if (amp) s = amp[1] + ' ' + amp[2];
+  return s;
+}
+// Same person, both names already through personNorm: identical, identical
+// ignoring spaces ("david o meara" / "david omeara"), or the same surname
+// and first initial ("w p mullins" / "willie mullins").
+function samePerson(a, b) {
+  if (!a || !b) return false;
+  if (a === b || a.replace(/ /g, '') === b.replace(/ /g, '')) return true;
+  var ap = a.split(' '), bp = b.split(' ');
+  if (ap.length < 2 || bp.length < 2) return false;
+  return ap[ap.length - 1] === bp[bp.length - 1] && ap[0].charAt(0) === bp[0].charAt(0);
+}
+
+// The surname alone used to be enough, so Michael Appleby was rated as Charlie
+// Appleby, every Williams as Ian Williams and every Mullins as Willie — while
+// A. P. O'Brien and David O'Meara never matched at all (the apostrophe).
 function trainerMultiplier(trainerName) {
   if (!trainerName) return 1.0;
-  var t = trainerName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
+  var t = personNorm(trainerName);
   if (TRAINER_TIERS[t]) return TRAINER_TIERS[t];
-  // Partial match on last name
-  var parts = t.split(' ');
-  var last = parts[parts.length-1];
   for (var k in TRAINER_TIERS) {
-    if (k.indexOf(last) > -1 && last.length > 3) return TRAINER_TIERS[k];
+    if (samePerson(t, k)) return TRAINER_TIERS[k];
   }
   return 1.0;
 }
 
 function comboBonus(jockeyName, trainerName) {
   if (!jockeyName || !trainerName) return 0;
-  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/,'').trim();
-  var t = trainerName.toLowerCase().trim();
-  var key = j + '|' + t;
-  return COMBO_BONUSES[key] || 0;
+  var j = personNorm(jockeyName), t = personNorm(trainerName);
+  if (COMBO_BONUSES[j + '|' + t]) return COMBO_BONUSES[j + '|' + t];
+  for (var k in COMBO_BONUSES) {
+    var kp = k.split('|');
+    if (samePerson(j, kp[0]) && samePerson(t, kp[1])) return COMBO_BONUSES[k];
+  }
+  return 0;
+}
+
+// A jockey's or trainer's record in a model file, whatever the punctuation:
+// Betfair sends "Kieran O'Neill" and "P. J. McDonald", the results the models
+// are built from have "kieran oneill" and "p j mcdonald". On the logged races
+// the exact-text lookup found 73% of jockeys; this finds 79%.
+var _looseIdx = (typeof WeakMap === 'function') ? new WeakMap() : null;
+function looseKey(s) { return String(s || '').toLowerCase().replace(/\s*\(\d+\)/g, '').replace(/[^a-z0-9]/g, ''); }
+function statLookup(stats, name) {
+  if (!stats || !name) return null;
+  var k = String(name).toLowerCase().replace(/\s*\(\d+\)/g, '').trim();
+  if (stats[k]) return stats[k];
+  if (!_looseIdx) return null;
+  var idx = _looseIdx.get(stats);
+  if (!idx) {
+    idx = {};
+    for (var key in stats) { var lk = looseKey(key); if (!(lk in idx)) idx[lk] = key; }
+    _looseIdx.set(stats, idx);
+  }
+  var hit = idx[looseKey(k)];
+  return hit ? stats[hit] : null;
+}
+// Wins at about today's trip. Betfair names a race to the furlong ("2m4f");
+// the results have half furlongs (19.5, 20, 20.5), which an exact match missed
+// — 28% of jumps wins in the model are at a half-furlong trip.
+function winsNear(map, x, tol) {
+  var n = 0;
+  for (var k in (map || {})) { if (Math.abs(parseFloat(k) - x) <= tol + 1e-9) n += map[k]; }
+  return n;
 }
 
 // ── Jockey tier multipliers ────────────────────────────────
@@ -2572,22 +2626,30 @@ function rawScoreMdl(r, race, ctx) {
   var m  = S.model;
   var gm = m.goingMap || {firm:6,'good to firm':5,good:4,'good to soft':3,soft:2,heavy:1,standard:4,'standard to fast':5,'standard to slow':3,slow:2};
   var hs = m.horseStats || {}, js = m.jockeyStats || {}, ts = m.trainerStats || {}, cd = m.courseDrawStats || {};
-  var h  = r.name.toLowerCase(), j = r.jockey.toLowerCase().replace(/\s*\(\d+\)/,'');
-  var t  = (r.trainer||'').toLowerCase(), c = race.course.toLowerCase();
+  // (r.jockey was read without a check, so a runner with no jockey recorded —
+  // every race put back from a saved prediction after a reload — threw here,
+  // and the caller's try/catch quietly dropped that race's final prediction.)
+  var h  = String(r.name || '').toLowerCase();
+  var t  = (r.trainer||'').toLowerCase(), c = V3.courseKey(race.course);
   var dist = parseDist(race.dist);
-  var gs = gm[(r.going||'good').toLowerCase()] || 4;
-  var H  = hs[h] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
-  var J  = js[j] || {r:1,w:0};
-  var T2 = ts[t] || {r:1,w:0};
+  // "Good To Soft (Good In Places)" -> good to soft
+  var gk = String(r.going || 'good').toLowerCase().split('(')[0].split(',')[0].trim();
+  var gs = gm[gk] !== undefined ? gm[gk] : (gm[gk.split('-')[0].trim()] !== undefined ? gm[gk.split('-')[0].trim()] : V3.goingScore(gk));
+  var H  = hs[h] || hs[V3.horseKey(h)] || {r:1,w:0,p:0,gw:{},dw:{},cw:{}};
+  var J  = statLookup(js, r.jockey) || {r:1,w:0};
+  var T2 = statLookup(ts, r.trainer) || {r:1,w:0};
 
   var wr   = H.w / Math.max(H.r, 1);
   var pr   = H.p / Math.max(H.r, 1);
   var jwr  = J.w / Math.max(J.r, 1);
   var twr  = T2.w / Math.max(T2.r, 1);
-  var dd   = (cd[c]||{})[r.stall] || {r:1,w:0};
+  // The record of this STALL at the course — not of the saddle-cloth number,
+  // which is what r.stall holds. No stall (jumps, or none declared): average.
+  var stl  = realStall(r, race);
+  var dd   = (stl && (cd[c]||{})[stl]) || {r:1,w:0};
   var db   = dd.r > 2 ? dd.w / dd.r : 0.05;
   var gMch = Math.min(((H.gw||{})[gs]||0) / Math.max(H.w||1,1), 1);
-  var dMch = Math.min(((H.dw||{})[dist]||0) / Math.max(H.w||1,1), 1);
+  var dMch = Math.min(winsNear(H.dw, dist, 0.5) / Math.max(H.w||1,1), 1);
   var cMch = Math.min(((H.cw||{})[c]||0) / Math.max(H.w||1,1), 1);
   var fr   = r.daysSince < 14 ? 1 : r.daysSince < 28 ? 0.8 : r.daysSince < 60 ? 0.5 : 0.2;
   var recentScore = (r.rf && r.rf.recent !== undefined) ? r.rf.recent : 0.3;
@@ -2640,6 +2702,12 @@ function rawScoreMdl(r, race, ctx) {
 
   var trnMult  = trainerMultiplier(r.trainer || t);
   var cboBonus = comboBonus(r.jockey, r.trainer || t);
+  // Track-specific draw bias (flat races with a declared stall only) and
+  // track profile (running style against the track's shape). Worked out
+  // before the explanation card below, which used to read them while they
+  // were still undefined and so always stored "NaN" for both.
+  var trackDrawMult    = getTrackDrawMult(race.course, stl, race.runners ? race.runners.filter(function(x){ return !x._nr; }).length : 0, dist);
+  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
   // Store score components for explanation card
   var runnerIdx = ctx.odds.indexOf(r.odds);
   var mktProbMdl = (runnerIdx > -1 && ctx.mktProbs) ? ctx.mktProbs[runnerIdx] : impliedShare(r.odds, ctx.odds);
@@ -2655,10 +2723,6 @@ function rawScoreMdl(r, race, ctx) {
     trackProfile: Math.round((trackProfileMult - 1.0) * 100)
   };
   r._mktProb = mktProbMdl;
-  // Apply track-specific draw bias
-  var trackDrawMult    = getTrackDrawMult(race.course, r.draw || r.stall, race.runners ? race.runners.length : 0, dist);
-  // Apply track profile (style vs track characteristics)
-  var trackProfileMult = getTrackProfileMult(race.course, r._pace, dist);
   r._trackDrawMult     = trackDrawMult;
   r._trackProfileMult  = trackProfileMult;
   var rawScore = formScore * mvMult * jkyMult * trnMult * (1 + cboBonus) * trackDrawMult * trackProfileMult;
@@ -2882,7 +2946,7 @@ function predict() {
   // Step 1: compute form scores and store market probs on each runner
   var formArr = activeRunners.map(function(r) {
     var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
-    return fs * paceAdjust(r, paceInfo);
+    return fs * paceAdjust(r, paceInfo, race);
   });
 
   // Step 2: normalise form scores to sum to 1
@@ -4383,7 +4447,14 @@ function rehydrateCardRaces(races) {
       x._pace = classifyPace(fClean);
       if (x.nr) { x._nr = true; } delete x.nr;
       if (x.op) { x._openingOdds = x.op; } delete x.op;
+      if (x.lc) { x._liveCard = true; } delete x.lc;
     });
+    // A race that was only ever a saved prediction (names and prices) must
+    // come back as one, so the full card replaces it — it used to return
+    // looking like a real card with every jockey, trainer and form blank.
+    if (r.fl || !(r.runners || []).some(function(x){ return x.jockey || x.form || x.or; })) r._fromLock = true;
+    delete r.fl;
+    if (r.pa) { r._pricedAt = r.pa; } delete r.pa;
   });
   return races;
 }
@@ -4406,12 +4477,13 @@ function persistTodaysCards(meetings) {
     var races = m.races.map(function(r){
       return { rnum: r.rnum, time: r.time, course: r.course, dist: r.dist,
         surface: r.surface, title: r.title || '', cls: r.cls || 0,
+        fl: r._fromLock ? 1 : 0, pa: r._pricedAt || 0,
         runners: (r.runners || []).map(function(x){
           return { stall: x.stall, draw: x.draw, form: x.form || '',
             name: x.name, age: x.age || 0, wst: x.wst || 0, wlbs: x.wlbs || 0,
             jockey: x.jockey || '', or: x.or || 0, odds: x.odds || 0,
             daysSince: x.daysSince, trainer: x.trainer || '',
-            nr: x._nr ? 1 : 0, op: x._openingOdds || 0 };
+            nr: x._nr ? 1 : 0, op: x._openingOdds || 0, lc: x._liveCard ? 1 : 0 };
         }) };
     });
     try {
@@ -6236,7 +6308,7 @@ function runPlacepot() {
     var paceInfo=assessPace(active);
 
     var raceGoing = getGoingForRace(race, going) || going;
-    var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,raceGoing,ctx)*paceAdjust(r,paceInfo); });
+    var rawArr = active.map(function(r){ return scoreRunnerForPP(r,race,raceGoing,ctx)*paceAdjust(r,paceInfo,race); });
     var rawTotal = rawArr.reduce(function(a,b){return a+b;},0)||1;
     var rawNorm  = rawArr.map(function(f){return f/rawTotal;});
     var ppBlended = active.map(function(r,i){
@@ -6395,7 +6467,7 @@ function buildLocalAnalysis(ppRaces, going) {
       var raw = S.model
         ? rawScoreMdl(Object.assign({}, r, {going: going}), race, ctx)
         : rawScoreDef(Object.assign({}, r, {going: going}), race, ctx);
-      return raw * paceAdjust(r, paceInfo);
+      return raw * paceAdjust(r, paceInfo, race);
     });
     var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
     var formNorm  = formArr.map(function(f){return f/formTotal;});
@@ -6687,7 +6759,7 @@ function computeConfidencePicks() {
           raw = S.model ? rawScoreMdl(Object.assign({}, r, {going: going}), race, ctx)
                         : rawScoreDef(Object.assign({}, r, {going: going}), race, ctx);
         } catch(err) { raw = 0.01; }
-        return raw * paceAdjust(r, paceInfo);
+        return raw * paceAdjust(r, paceInfo, race);
       });
       var formTotal = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
       var formNorm  = formArr.map(function(f){ return f/formTotal; });
@@ -6982,7 +7054,7 @@ function runL15(strategy) {
             console.warn('L15 score failed for ' + r.name + ':', scoreErr.message);
             raw = 0.01; // fallback so the loop continues
           }
-          return raw * paceAdjust(r, paceInfo);
+          return raw * paceAdjust(r, paceInfo, race);
         });
         var formTotal = formArr.reduce(function(a,b){return a+b;},0)||1;
         var formNorm  = formArr.map(function(f){return f/formTotal;});
@@ -7641,7 +7713,7 @@ function runMonteCarloPlacepot(ppRaces, going, nSims) {
     var formArr = active.map(function(r){
       var raw = S.model ? rawScoreMdl(Object.assign({},r,{going:going}),race,ctx)
                         : rawScoreDef(Object.assign({},r,{going:going}),race,ctx);
-      return raw * paceAdjust(r, paceInfo);
+      return raw * paceAdjust(r, paceInfo, race);
     });
     var ft = formArr.reduce(function(a,b){return a+b;},0)||1;
     var formNorm = formArr.map(function(f){return f/ft;});
@@ -8326,27 +8398,59 @@ function sweetBadge(small) {
     + ' title="Sweet Spot: Formintel\'s top pick at 2.0–3.99 in a British flat or all-weather race. Being tested in the results app from 6 Nov.">📈 SWEET SPOT</span>';
 }
 // Today's qualifying races, from the saved predictions (each race's latest:
-// the one made about 5 minutes before the off, once that has happened)
+// the one made about 5 minutes before the off, once that has happened), with
+// how many races were looked at — so an empty list can say why it's empty.
 function sweetSpotToday() {
-  var locks = (typeof plockAll === 'function') ? plockAll() : {}, out = [];
-  if (typeof fiSweetSpot !== 'function') return out;
-  Object.keys(locks).forEach(function(k) {
+  var info = { races: 0, eligible: 0, list: [] };
+  if (typeof fiSweetSpot !== 'function' || typeof fiSweetRace !== 'function') return info;
+  var locks = (typeof plockAll === 'function') ? plockAll() : {}, keys = Object.keys(locks);
+  // Today's winners, from ONE read of the log (this used to re-read the whole
+  // log for every race, every time a prediction was saved)
+  var winners = {};
+  if (keys.length) {
+    try {
+      var today = todayISO();
+      getPredLog().forEach(function(e) { if (e && e.date === today && e.actual && e.actual.length) winners[e.raceKey] = e.actual[0]; });
+    } catch(e) {}
+  }
+  keys.forEach(function(k) {
     var L = locks[k];
     if (!L || !L.preds || !L.preds.length || !L.course || !L.time) return;
+    info.races++;
+    var race = { course: L.course, title: L.title || '', going: L.going || '', dist: L.dist || '' };
+    if (!fiSweetRace(race)) return;
+    info.eligible++;
     var top = L.preds[0];
-    if (!fiSweetSpot({ course: L.course, title: L.title || '', going: L.going || '', dist: L.dist || '' }, top.odds || 0)) return;
-    var lg = (typeof getPredictionLog === 'function') ? getPredictionLog(k) : null;
-    var res = (lg && lg.actual && lg.actual.length) ? (lg.actual[0] === top.name ? 'won' : 'lost') : '';
-    out.push({ time: L.time, course: L.course, name: top.name, odds: top.odds || 0, score: top.score, res: res });
+    if (!fiSweetSpot(race, top.odds || 0)) return;
+    var res = winners[k] ? (winners[k] === top.name ? 'won' : 'lost') : '';
+    info.list.push({ time: L.time, course: L.course, name: top.name, odds: top.odds || 0, score: top.score, res: res });
   });
-  out.sort(function(a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
-  return out;
+  info.list.sort(function(a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+  return info;
 }
+// Always shown. It used to hide itself whenever nothing qualified, so on a day
+// with no British flat racing — most Sundays in winter — the whole feature
+// looked as if it had been removed.
 function renderSweetSpotCard() {
   var card = document.getElementById('sweetCard'), box = document.getElementById('sweetList');
   if (!card || !box) return;
-  var list = sweetSpotToday();
-  if (!list.length) { card.style.display = 'none'; return; }
+  if (typeof fiSweetSpot !== 'function') { card.style.display = 'none'; return; }
+  var info = sweetSpotToday(), list = info.list;
+  card.style.display = 'block';
+  if (!list.length) {
+    var mth = new Date().getMonth(), winter = mth >= 10 || mth <= 2, why;
+    if (!info.races) {
+      why = '<strong style="color:var(--tx)">Nothing yet today.</strong> Qualifiers are listed here once today\'s prices are in — about a minute after you open the app on a race day.';
+    } else if (!info.eligible) {
+      why = '<strong style="color:var(--tx)">None today.</strong> All ' + info.races + ' of today\'s races are over jumps or in Ireland, and the Sweet Spot only covers British flat and all-weather races.'
+          + (winter ? ' Through the winter that means the all-weather meetings (Chelmsford, Kempton, Lingfield, Newcastle, Southwell, Wolverhampton), so some days have none.' : '');
+    } else {
+      why = '<strong style="color:var(--tx)">None right now.</strong> Today has ' + info.eligible + ' British flat or all-weather race' + (info.eligible === 1 ? '' : 's')
+          + ', but no top pick is priced between 2.0 and 3.99. Prices move, and each race is priced again 5 minutes before the off — this list follows them.';
+    }
+    box.innerHTML = '<div style="font-size:.74rem;color:var(--mt);line-height:1.5;padding:10px 0 2px;border-top:1px solid var(--bd)">' + why + '</div>';
+    return;
+  }
   var won = 0, lost = 0, pnl = 0;
   var h = list.map(function(x) {
     if (x.res === 'won') { won++; pnl += x.odds - 1; } else if (x.res === 'lost') { lost++; pnl -= 1; }
@@ -8363,13 +8467,14 @@ function renderSweetSpotCard() {
   }).join('');
   var done = won + lost;
   h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding-top:8px;border-top:1px solid var(--bd)">'
-    + list.length + ' qualifying today' + (done ? ' · ' + won + ' won, ' + lost + ' lost · ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' pts to £1 level stakes at the logged prices' : '')
+    + list.length + ' qualifying today, from ' + info.eligible + ' British flat or all-weather race' + (info.eligible === 1 ? '' : 's')
+    + (done ? ' · ' + won + ' won, ' + lost + ' lost · ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' pts to £1 level stakes at the logged prices' : '')
     + '</div>';
   box.innerHTML = h;
-  card.style.display = 'block';
 }
 var _sweetT = 0;
 function sweetSoon() { clearTimeout(_sweetT); _sweetT = setTimeout(function(){ try { renderSweetSpotCard(); } catch(e) {} }, 400); }
+setTimeout(sweetSoon, 1200);   // on opening the app, before the first sweep has anything to add
 
 // ══ TODAY'S MEETINGS (Betfair) ════════════════════════════════════════════════
 // ── Country flag for a course (Today's Racing list) ──────────────────
@@ -8652,7 +8757,8 @@ function predictFromLiveCard(idx) {
         races.push({ rnum: 0, time: times[i], course: m.course,
           dist: distM ? distM[1] : '1m',
           surface: liveSurface(m.course, mn),
-          title: mn, cls: data.raceClass || 0, runners: runners, topTip: '', watchFor: '' });
+          title: mn, cls: data.raceClass || 0, runners: runners, topTip: '', watchFor: '',
+          _pricedAt: Date.now(), _priceSrc: 'live' });
       } else {
         failed.push(times[i]);
       }
@@ -8928,7 +9034,7 @@ function scoreRaceHeadless(race, going) {
   var noOdds = oddsEntered === 0, partial = oddsEntered > 0 && ratio < 0.5;
   var formArr = active.map(function(r){
     var fs = S.model ? rawScoreMdl(r, race, ctx) : rawScoreDef(r, race, ctx);
-    return fs * paceAdjust(r, paceInfo);
+    return fs * paceAdjust(r, paceInfo, race);
   });
   var ft = formArr.reduce(function(a,b){ return a+b; }, 0) || 1;
   var fn = formArr.map(function(f){ return f/ft; });
@@ -8957,9 +9063,27 @@ function scoreRaceHeadless(race, going) {
 // "last prediction, 5 minutes before the off".
 function plockKey(){ return 'rp_plock_' + new Date().toISOString().slice(0,10); }
 function plockAll(){ try { return JSON.parse(localStorage.getItem(plockKey())||'{}'); } catch(e){ return {}; } }
+// When a saved prediction's prices were taken (older ones only have the time
+// they were saved), and whether that was a last look before the off.
+var FINAL_LOCK_MS = 10 * 60000;
+function lockPricedAt(L) { return (L && (L.pricedAt || L.savedAt)) || 0; }
+function lockIsFinal(L, offMs) {
+  var at = lockPricedAt(L);
+  return !!at && !isNaN(offMs) && at >= offMs - FINAL_LOCK_MS && at <= offMs + 60000;
+}
 function plockSave(race, scored, going) {
   if (race && race._goingUsed) going = race._goingUsed;
+  // A race put back from a saved prediction holds names and prices only, so
+  // re-scoring it can't improve on the prediction it came from.
+  if (!race || race._fromLock) return;
   try {
+    var rk0 = raceKeyFor(race), prev0 = plockAll()[rk0], nowMs = Date.now(), offMs0 = raceOffMs(race);
+    var pricedAt = race._pricedAt || nowMs;
+    // Once the race is off, only an EARLIER look at the market may replace the
+    // saved prediction (the server's pre-race racecard, read later) — never a
+    // re-run made after the off, which opening a finished race used to do.
+    if (prev0 && (!race.date || race.date === todayISO()) && !isNaN(offMs0) && nowMs > offMs0 + 60000 &&
+        !(pricedAt <= offMs0 + 60000 && pricedAt > lockPricedAt(prev0))) return;
     var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
       jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey) }; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
@@ -8990,7 +9114,8 @@ function plockSave(race, scored, going) {
       fieldSize:(race.runners||[]).filter(function(r){ return !r._nr; }).length,
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       valuePick:vPick,
-      course:race.course, time:race.time, savedAt:Date.now() };
+      surface:race.surface||'', pricedAt:pricedAt, src:race._priceSrc||'app',
+      course:race.course, time:race.time, savedAt:nowMs };
     // A full store used to fail here silently: no lock, so no result could
     // ever be logged for the race, and nothing on screen said why.
     var w = safeSetItem(plockKey(), JSON.stringify(all));
@@ -9057,6 +9182,11 @@ function logResultHeadless(race, lock, resultObj) {
                won:!!w, winnerName:w?w.name:null,
                returned:+ret.toFixed(2), profit:+(ret-outlay).toFixed(2) };
     })(), placesUnordered:true, autoLogged:true };
+  // pm: minutes before the off that the judged prediction's prices were taken
+  // (5 = the usual last look; hundreds = an early-morning price). ps: where
+  // they came from — 'live' (this phone), 'snap' (the server's saved racecard).
+  var offMsL = raceOffMs(race), atL = lock.pricedAt || 0;
+  if (atL && !isNaN(offMsL)) { entry.pm = Math.round((offMsL - atL) / 60000); entry.ps = lock.src || ''; }
   var log = getPredLog(); log.push(entry); savePredLog(log);
   return topPickWon ? 'won' : (topPickPlaced ? 'placed' : 'lost');
 }
@@ -9083,11 +9213,39 @@ function raceFromLock(course, time, lock) {
   var runners = (lock.preds || []).map(function(p){
     return { name: p.name, odds: p.odds || 0 };
   });
+  // (surface used to come back as 'turf' for every race, jumps included)
   return { rnum:0, time:time, course:course,
            dist: lock.dist || '', cls: lock.cls || 0,
-           surface: lock.surface || 'turf',
+           surface: lock.surface || liveSurface(course, lock.title || ''),
            title: lock.title || '', runners: runners,
-           topTip:'', watchFor:'', _fromLock:true };
+           topTip:'', watchFor:'', _fromLock:true,
+           _pricedAt: lockPricedAt(lock), _priceSrc: lock.src || '' };
+}
+
+// A race object from the proxy's /odds reply or one of its saved racecards.
+// `prev` (the race as we last knew it) carries each runner's opening price
+// and market move across, as refreshing the prices in place would.
+function raceFromOdds(course, time, dj, prev) {
+  var mn = dj.marketName || '';
+  var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
+  var race = { rnum:0, time:time, course:course,
+    dist: dm ? dm[1] : '1m', surface: liveSurface(course, mn),
+    title: mn, cls: dj.raceClass || 0, runners: (dj.runners || []).map(bfRunnerToAppRunner), topTip:'', watchFor:'' };
+  if (prev && prev.runners) {
+    var by = {};
+    prev.runners.forEach(function(r){ by[looseKey(V3.horseKey(r.name))] = r; });
+    race.runners.forEach(function(r){
+      var o = by[looseKey(V3.horseKey(r.name))];
+      if (!o) return;
+      if (o._nr) r._nr = true;                       // a non-runner you marked yourself stays one
+      if (o._openingOdds || o.odds > 1) r._openingOdds = o._openingOdds || o.odds;
+      if (o.odds > 1 && r.odds > 1) {
+        var pct = (r.odds - o.odds) / o.odds;
+        r._mv = pct <= -0.10 ? 'steam' : pct >= 0.10 ? 'drift' : (o._mv === 'steam' || o._mv === 'drift') ? o._mv : 'steady';
+      } else if (o._mv) r._mv = o._mv;
+    });
+  }
+  return race;
 }
 
 // Ensure a race exists in S.meetings (idempotent). Returns the stored race.
@@ -9144,7 +9302,8 @@ function autoPredictAllMeetings(force) {
             ensureRaceInMeetings(m.course, {
               rnum:0, time:t, course:m.course,
               dist:(logged && logged.dist) || '', cls:(logged && logged.cls) || 0,
-              surface:'turf', title:'', topTip:'', watchFor:'', _fromLock:true,
+              surface: liveSurface(m.course, (logged && logged.title) || ''), title:(logged && logged.title) || '',
+              topTip:'', watchFor:'', _fromLock:true,
               runners:((logged && logged.predictions) || []).map(function(p){
                 return { name:p.name, odds:p.odds || 0 };
               })
@@ -9184,12 +9343,8 @@ function autoPredictAllMeetings(force) {
         var w = work[i++];
         return fetchOddsRaw(w.course, w.time).then(function(dj){
           if (dj && dj.runners && dj.runners.length) {
-            var runners = dj.runners.map(bfRunnerToAppRunner);
-            var mn = dj.marketName || '';
-            var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
-            var race = { rnum:0, time:w.time, course:w.course,
-              dist: dm ? dm[1] : '1m', surface: liveSurface(w.course, mn),
-              title: mn, cls: dj.raceClass || 0, runners: runners, topTip:'', watchFor:'' };
+            var race = raceFromOdds(w.course, w.time, dj);
+            race._pricedAt = Date.now(); race._priceSrc = 'live';
             var stored = ensureRaceInMeetings(w.course, race);
             try {
               var sc = scoreRaceHeadless(stored, goingByCourse[w.course] || '');
@@ -9227,40 +9382,60 @@ function autoPredictAllMeetings(force) {
 // The proxy snapshots every card shortly before the off and keeps it, so we
 // pull those here and score them with the model exactly as if we'd been open.
 // This is what makes the day complete regardless of when you open the app.
+// Settles within `ms` whatever the network does: results logging now waits
+// on the racecards, so a request left hanging (the phone locked mid-fetch)
+// must not hold it up for good.
+function withTimeout(p, ms) {
+  return new Promise(function(res, rej){
+    var t = setTimeout(function(){ rej(new Error('timeout')); }, ms);
+    p.then(function(v){ clearTimeout(t); res(v); }, function(e){ clearTimeout(t); rej(e); });
+  });
+}
+// One request at a time: the sweep and the results check both ask for this.
+var _catchUpP = null, _lastCatchUpOk = 0, _catchUpFails = 0, _lastCatchUpTry = 0;
 function catchUpFromCards() {
+  if (_catchUpP) return _catchUpP;
+  _lastCatchUpTry = Date.now();
+  var mine = catchUpFromCardsNow().then(function(n){ if (_catchUpP === mine) _catchUpP = null; return n; },
+                                        function(){ if (_catchUpP === mine) _catchUpP = null; return 0; });
+  _catchUpP = mine;
+  return mine;
+}
+function catchUpFromCardsNow() {
   var base = getProxyUrl();
   if (!base) return Promise.resolve(0);
-  var today = new Date().toISOString().slice(0,10);
-  return fetch(base + '/cards?date=' + today)
-    .then(function(r){ return r.ok ? r.json() : null; })
+  var today = new Date().toISOString().slice(0,10), asked = Date.now();
+  return withTimeout(fetch(base + '/cards?date=' + today).then(function(r){ return r.ok ? r.json() : null; }), 25000)
     .then(function(d){
-      var cards = (d && d.cards) || [];
+      if (!d) { _catchUpFails++; return 0; }
+      _lastCatchUpOk = asked; _catchUpFails = 0;
+      var cards = d.cards || [];
       if (!cards.length) return 0;
       var locks = plockAll();
       var scoredNow = 0;
       cards.forEach(function(c){
         if (!c || !c.runners || !c.runners.length || !c.course || !c.time) return;
         var rk = raceKeyFor({ course: c.course, time: c.time });
-        var runners = c.runners.map(bfRunnerToAppRunner);
-        var mn = c.marketName || '';
-        var dm = mn.replace(/\s+/g,'').match(/(\d+m\d*f?|\d+f)/i);
-        var race = { rnum:0, time:c.time, course:c.course,
-          dist: dm ? dm[1] : '1m', surface: liveSurface(c.course, mn),
-          title: mn, cls: c.raceClass || 0, runners: runners, topTip:'', watchFor:'' };
+        var race = raceFromOdds(c.course, c.time, c);
+        race._pricedAt = c.snappedAt || 0; race._priceSrc = 'snap';
         // Always put it in S.meetings so it shows in the race list and
         // syncResults can log its result.
         var stored = ensureRaceInMeetings(c.course, race);
         if (c.going) noteCourseGoing(c.course, c.going);
         if (getPredictionLog(rk)) return;
+        var offMs = raceOffMs(race);
         if (locks[rk]) {
-          // Locked earlier on thinner prices. If the server caught this card
-          // closer to the off (it snaps each race in its last 25 minutes),
-          // re-score with those prices — what the T-5 lock does when the app
-          // is open. Early-morning prices ran a 116% median book; near the
-          // off it's close to 100%, so the favourite is read far better.
-          var L0 = locks[rk], offMs = raceOffMs(race);
-          var fresher = c.snappedAt && L0.savedAt && c.snappedAt > L0.savedAt + 10 * 60000 &&
-                        (isNaN(offMs) || c.snappedAt <= offMs + 60000);
+          // Predicted earlier on thinner prices. The server saves each card in
+          // its last 25 minutes (about every 7), so if it holds a later look
+          // than ours, re-score with those prices — what the 5-minute
+          // prediction does when the app is open. Early-morning prices ran a
+          // 116% median book; near the off it's close to 100%, so the
+          // favourite is read far better. A prediction already made in the
+          // last 10 minutes before the off is left alone: it's the one that
+          // was on screen.
+          var L0 = locks[rk];
+          var fresher = c.snappedAt && (isNaN(offMs) || c.snappedAt <= offMs + 60000) &&
+                        !lockIsFinal(L0, offMs) && c.snappedAt > lockPricedAt(L0) + 3 * 60000;
           if (!fresher) return;
           try {
             var sc2 = scoreRaceHeadless(race);
@@ -9275,7 +9450,7 @@ function catchUpFromCards() {
       });
       return scoredNow;
     })
-    .catch(function(){ return 0; });
+    .catch(function(){ _catchUpFails++; return 0; });
 }
 
 // ── Nap of the Day — one per racecourse, chosen headlessly ───────────────────
@@ -9431,7 +9606,17 @@ function restoreLockedRaces() {
 }
 
 // One pass: catch up on missed races first, then sweep today's open markets.
+// (one at a time: waking the phone can fire the 20-minute timer and the
+// resume handler together; a sweep stuck for 3 minutes no longer counts)
+var _sweepP = null, _sweepAt = 0;
 function fullSweep(force) {
+  if (_sweepP && Date.now() - _sweepAt < 3 * 60000) return _sweepP;
+  _sweepAt = Date.now();
+  var mine = fullSweepNow(force).then(function(n){ if (_sweepP === mine) _sweepP = null; return n; });
+  _sweepP = mine;
+  return mine;
+}
+function fullSweepNow(force) {
   try { restoreLockedRaces(); } catch(e){}
   return catchUpFromCards().then(function(caught){
     return autoPredictAllMeetings(force).then(function(built){
@@ -9467,6 +9652,19 @@ setTimeout(function(){ try { fullSweep(false); } catch(e){} }, 8000);
 // And re-sweep every 20 minutes so late-opening markets and newly settled
 // results are picked up even if the app is left sitting open.
 setInterval(function(){ _autoAllDone = false; try { fullSweep(false); } catch(e){} }, 20*60*1000);
+// Coming back to the app (phone woken, tab switched back). Timers don't run
+// while it's in the background, so don't wait for the next 20-minute sweep:
+// redraw what depends on the day and catch up now.
+var _hiddenAt = 0, _lastResumeSweep = 0;
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) { _hiddenAt = Date.now(); return; }
+  sweetSoon();
+  var now = Date.now();
+  if (!_hiddenAt || now - _hiddenAt < 2 * 60000 || now - _lastResumeSweep < 2 * 60000) return;
+  _lastResumeSweep = now;
+  _autoAllDone = false;
+  try { fullSweep(false); } catch(e) {}
+});
 
 // Race off-time today, in ms (device is UK-local like the racing)
 function raceOffMs(race) {
@@ -9478,11 +9676,36 @@ function raceOffMs(race) {
 
 // Pull today's settled results from the proxy and log any unlogged race.
 var _lastResultsFetch = 0;
+// Finished, unlogged races whose saved prediction is NOT a last look before
+// the off, and for which the server's saved racecards haven't been read since
+// the race went off.
+function staleDueRaces() {
+  var now = Date.now(), locks = plockAll(), out = [];
+  (S.meetings||[]).forEach(function(m){ (m.races||[]).forEach(function(race){
+    var off = raceOffMs(race);
+    if (isNaN(off) || now < off + 5*60000) return;
+    if (_lastCatchUpOk >= off + 60000) return;
+    var rk = raceKeyFor(race);
+    if (lockIsFinal(locks[rk], off) || getPredictionLog(rk)) return;
+    out.push(rk);
+  }); });
+  return out;
+}
 function syncResults(verbose) {
   var base = getProxyUrl();
   if (!base) { if (verbose) showLiveStatus('⚠ No proxy URL set.', 'warn'); return Promise.resolve(); }
   var today = new Date().toISOString().slice(0,10);
-  return fetch(base + '/results?date=' + today)
+  // A result is judged against the LAST prediction before the off. When the
+  // phone was asleep for a race, that is the server's saved racecard, so read
+  // those first. This used to be left to the 20-minute sweep, and on waking
+  // the phone the results (a small reply) arrived before the racecards (a big
+  // one): every race run while the phone slept was logged against its
+  // early-morning prices, and the catch-up then skipped it as already logged.
+  // (after three failures in a row it is tried at most every 2 minutes, and
+  // results are logged as they stand in the meantime)
+  var pre = (staleDueRaces().length && (_catchUpFails < 3 || Date.now() - _lastCatchUpTry > 2 * 60000))
+          ? catchUpFromCards() : Promise.resolve(0);
+  return pre.then(function(){ return fetch(base + '/results?date=' + today); })
     .then(function(r){ return r.json(); })
     .then(function(d){
       var res = (d && d.results) || [];
@@ -9507,6 +9730,10 @@ function syncResults(verbose) {
         });
         if (!hit || !hit.winner) { pending++; return; }
         var lock = plockAll()[rk];
+        // Still on early prices and the racecards couldn't be read just now:
+        // leave it for the next pass (a minute away) rather than judge the
+        // wrong prediction. After three failed tries it is logged as it stands.
+        if (!lockIsFinal(lock, off) && _lastCatchUpOk < off + 60000 && _catchUpFails < 3) { pending++; return; }
         if (!lock) {  // race never predicted — lock now from stored odds
           try { var sc = scoreRaceHeadless(race); if (sc) { plockSave(race, sc, ''); lock = plockAll()[rk]; } } catch(e){}
         }
@@ -9567,8 +9794,10 @@ function checkTodaysResults() {
     .then(function(r){ return r.json(); })
     .then(function(d){ serverRes = (d && d.results) || []; })
     .catch(function(e){ L.push('⚠ Could not reach the server: ' + e.message); })
+    .then(function(){ return catchUpFromCards(); })   // races this phone slept through, and last-look prices
     .then(function(){ return syncResults(false); })
     .then(function(){
+      locks = plockAll();
       var logged = loggedToday();
       var byKey = {};
       logged.forEach(function(e){ byKey[(e.course || '').toLowerCase().replace(/[^a-z]/g, '') + '|' + e.time] = e; });
@@ -9597,6 +9826,50 @@ function checkTodaysResults() {
     .catch(function(e){ L.push('⚠ Check failed: ' + e.message); show(L); });
 }
 
+// The final prediction: fresh prices and going about 5 minutes before the off.
+// The race is rebuilt from Betfair's current list rather than re-priced in
+// place, so a runner withdrawn during the day drops out instead of keeping
+// its morning price, and a race that was put back from a saved prediction
+// (names and prices only, after a reload) gets its jockeys, form and weights
+// back — that case used to fail silently and leave the morning prediction.
+// Cards loaded from a PDF keep their own runner details and are re-priced.
+function finalLock(race, off) {
+  var liveCard = race._fromLock || ((race.runners || []).length > 0 &&
+                 race.runners.every(function(r){ return r._liveCard || r._addedFromBetfair; }));
+  var fresh = liveCard
+    ? fetchOddsRaw(race.course, race.time).then(function(dj){
+        if (!(dj && dj.runners && dj.runners.length >= 2)) return null;
+        var nr = raceFromOdds(race.course, race.time, dj, race);
+        if (!nr.runners.some(function(r){ return r.odds > 1; })) return null;
+        nr._pricedAt = Date.now(); nr._priceSrc = 'live'; nr._t5done = true; nr._snapInit = true;
+        if (race._fromLock) return ensureRaceInMeetings(race.course, nr);
+        if (S.sel === race) {
+          // On screen right now: refresh its price boxes in place, as before,
+          // and judge the rebuilt card.
+          try { applyLiveOdds(race, dj); } catch(e) {}
+          nr.rnum = race.rnum; if (race.cls && !nr.cls) nr.cls = race.cls;
+          return nr;
+        }
+        // Not on screen: keep the object the lists hold, with the fresh runners
+        race.runners = nr.runners; race.title = nr.title || race.title; race.dist = nr.dist || race.dist;
+        race.surface = nr.surface; if (nr.cls) race.cls = nr.cls;
+        race._pricedAt = nr._pricedAt; race._priceSrc = 'live';
+        return race;
+      })
+    : fetchOddsForRace(race).then(function(res){ return (res && res.ok && res.matched) ? race : null; });
+  return Promise.all([fresh, refreshCourseGoing(race.course).catch(function(){})]).then(function(a){
+    var live = a[0];
+    if (!live) {
+      // No fresh prices: keep the earlier prediction as it is (the server's
+      // saved racecard can still replace it) and try again on the next beat.
+      race._t5tries = (race._t5tries || 0) + 1;
+      if (race._t5tries < 4 && Date.now() < off) race._t5done = false;
+      return;
+    }
+    try { var sc = scoreRaceHeadless(live); if (sc) plockSave(live, sc, ''); } catch(e){}
+  }).catch(function(){});
+}
+
 // The heartbeat: refresh odds + lock predictions at T-5, sync results after.
 function autoPipelineTick() {
   try {
@@ -9608,9 +9881,7 @@ function autoPipelineTick() {
       // Final prediction lock: fresh odds ~5 min before the off
       if (now > off - 6*60000 && now < off && !race._t5done) {
         race._t5done = true;
-        Promise.all([fetchOddsForRace(race), refreshCourseGoing(race.course).catch(function(){})]).then(function(){
-          try { var sc = scoreRaceHeadless(race); if (sc) plockSave(race, sc, ''); } catch(e){}
-        });
+        finalLock(race, off);
       }
       // Baseline lock as soon as odds exist, so no race is ever unjudgeable
       if (!race._snapInit && now < off && (race.runners||[]).some(function(r){ return r.odds > 0; })) {
@@ -9854,6 +10125,7 @@ function applyLiveOdds(race, data) {
   });
   if (added.length && S.sel === race && typeof renderRunners === 'function') renderRunners();
 
+  if (matched > 0) { race._pricedAt = Date.now(); race._priceSrc = 'live'; }
   var stillUnmatched = race.runners.filter(function(r){ return !r._nr && !(r.odds > 0) && !r._addedFromBetfair; }).map(function(r){ return r.name; });
   return {matched: matched, unmatched: stillUnmatched, fixed: fixed, added: added};
 }
