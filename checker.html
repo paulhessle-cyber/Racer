@@ -139,6 +139,14 @@
   /* P&L curve */
   .pnl-curve{width:100%;height:120px;margin-top:12px;position:relative}
   .pnl-svg{width:100%;height:100%}
+  .pnl-axis{display:flex;justify-content:space-between;margin-top:6px;font-family:var(--mono);font-size:.58rem;color:var(--mt)}
+  /* Time range tabs on the P&L chart */
+  .rng{display:flex;gap:2px;padding:3px;border:1px solid var(--bd);border-radius:10px;background:var(--sf2)}
+  .rng-btn{flex:1 1 0;min-width:0;padding:7px 4px;border:none;border-radius:8px;background:transparent;color:var(--mt);
+           font:600 .7rem var(--sans);white-space:nowrap;cursor:pointer;transition:background .15s,color .15s}
+  .rng-btn.active{background:var(--g);color:var(--g-ink)}
+  .rng-btn:focus-visible{outline:2px solid var(--g);outline-offset:1px}
+  .rng-empty{padding:28px 4px 12px;text-align:center;font-size:.74rem;color:var(--mt)}
 
   /* Threshold finder */
   .threshold-rows{display:flex;flex-direction:column;gap:6px;margin-top:4px}
@@ -226,7 +234,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v10.0 · 10 Nov 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v10.1 · 11 Nov 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -414,11 +422,8 @@ function renderOverview(sorted,total,wins,places,losses,avgRank,maxStreak) {
   h += br('Losses', losses, total, 'loss');
   h += '</div>';
 
-  // P&L curve (flat £1 stake)
-  h += '<div class="chart-wrap">';
-  h += '<div class="chart-title">Running P&L — Flat £1 Win Stake</div>';
-  h += buildPnlCurve(sorted, function(e){ return e.topPickWon; }, function(e){ return e.topPickOdds||0; });
-  h += '</div>';
+  // P&L curve (flat £1 stake), with All time / 6 months / 1 month / 1 week
+  h += renderPnlCard(sorted);
 
   h += renderMonthlyTable(sorted);
   h += renderPriceTiming(sorted);
@@ -652,6 +657,72 @@ function buildPoints(chronological, wonFn, oddsFn, skipNoOdds) {
   return { points: points, bets: bets, pnl: pnl };
 }
 
+// ── Running P&L: All time / 6 months / 1 month / 1 week ─────────────────────
+// Each range starts from £0 on its first race, so it shows how the picks have
+// done over that stretch alone. The choice is remembered on this device.
+var PNL_RANGE_KEY = 'fi_pnl_range';
+var PNL_RANGES = [
+  { id: 'all', label: 'All time' },
+  { id: '6m',  label: '6 months', months: 6, span: '6 months' },
+  { id: '1m',  label: '1 month',  months: 1, span: 'month' },
+  { id: '1w',  label: '1 week',   days: 7,   span: 'week' }
+];
+var _pnlRows = [];
+function pnlRange() {
+  var v = 'all';
+  try { v = localStorage.getItem(PNL_RANGE_KEY) || 'all'; } catch(e) {}
+  return PNL_RANGES.some(function(r){ return r.id === v; }) ? v : 'all';
+}
+function ukTodayISO() {
+  try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }); } catch(e) { return new Date().toISOString().slice(0, 10); }
+}
+// First day of the range, '' for all time. "1 week" is today and the six days
+// before it; "1 month" on 11 Nov starts on 12 Oct; "6 months" on 12 May.
+function pnlRangeStart(id, today) {
+  var r = PNL_RANGES.filter(function(x){ return x.id === id; })[0];
+  if (!r || (!r.months && !r.days)) return '';
+  var d = new Date(today + 'T12:00:00Z');
+  if (isNaN(d.getTime())) return '';
+  if (r.days) {
+    d.setUTCDate(d.getUTCDate() - (r.days - 1));
+  } else {
+    var day = d.getUTCDate();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - r.months);
+    var inMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, inMonth) + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+function renderPnlCard(sorted) {
+  _pnlRows = sorted || [];
+  return '<div class="chart-wrap" id="pnlCard">' + pnlCardInner() + '</div>';
+}
+function pnlCardInner() {
+  var id = pnlRange(), from = pnlRangeStart(id, ukTodayISO());
+  var rows = from ? _pnlRows.filter(function(e){ return (e.date || '') >= from; }) : _pnlRows;
+  var h = '<div class="chart-title" style="margin-bottom:10px">Running P&L — Flat £1 Win Stake</div>';
+  h += '<div class="rng" role="tablist" aria-label="Time range">';
+  PNL_RANGES.forEach(function(r){
+    var on = r.id === id;
+    h += '<button type="button" role="tab" aria-selected="' + on + '" class="rng-btn' + (on ? ' active' : '')
+       + '" onclick="setPnlRange(\'' + r.id + '\')">' + r.label + '</button>';
+  });
+  h += '</div>';
+  if (!rows.length) {
+    var what = PNL_RANGES.filter(function(x){ return x.id === id; })[0].span;
+    h += '<div class="rng-empty">No races logged in the last ' + esc(what) + ' (since ' + esc(niceDay(from)) + ').</div>';
+    return h;
+  }
+  h += buildPnlCurve(rows, function(e){ return e.topPickWon; }, function(e){ return e.topPickOdds||0; });
+  return h;
+}
+function setPnlRange(id) {
+  try { localStorage.setItem(PNL_RANGE_KEY, id); } catch(e) {}
+  var el = document.getElementById('pnlCard');
+  if (el) el.innerHTML = pnlCardInner();
+}
+
 function buildPnlCurve(sorted, wonFn, oddsFn) {
   var chronological = sorted.slice().reverse();
 
@@ -688,30 +759,40 @@ function buildPnlCurve(sorted, wonFn, oddsFn) {
 
   var svg = '<svg class="pnl-svg" viewBox="0 0 100 100" preserveAspectRatio="none">'
     + '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY
-    + '" stroke="rgba(var(--ov-rgb),.15)" stroke-width=".5"/>'
+    + '" stroke="rgba(var(--ov-rgb),.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>'
     + '<polyline points="' + toSvgPts(model.points)
-    + '" fill="none" stroke="' + mCol + '" stroke-width="1.4"/>';
+    + '" fill="none" stroke="' + mCol + '" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
 
   if (fav && fav.points.length > 1) {
     svg += '<polyline points="' + toSvgPts(fav.points)
-      + '" fill="none" stroke="' + fCol + '" stroke-width="1.2" stroke-dasharray="3,2"/>';
+      + '" fill="none" stroke="' + fCol + '" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
   }
   svg += '</svg>';
 
+  // First and last race day under the chart
+  var first = chronological.length ? chronological[0].date : '', last = chronological.length ? chronological[chronological.length - 1].date : '';
+  var axis = (first && last)
+    ? '<div class="pnl-axis"><span>' + esc(niceDay(first)) + '</span><span>' + (last !== first ? esc(niceDay(last)) : '') + '</span></div>'
+    : '';
+
   // Legend + summary
+  var mWon = 0; chronological.forEach(function(e){ if (wonFn(e)) mWon++; });
+  var fN = 0, fWon = 0; chronological.forEach(function(e){ if (e.favOdds > 1) { fN++; if (e.favWon) fWon++; } });
   var label = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-family:var(--mono);font-size:.62rem">';
   label += '<span style="color:' + mCol + '">— Model pick &nbsp; ' + fmt(model.pnl)
-    + ' P&L &nbsp; ROI ' + (model.bets ? Math.round(model.pnl / model.bets * 100) : 0) + '%</span>';
+    + ' P&L &nbsp; ROI ' + (model.bets ? Math.round(model.pnl / model.bets * 100) : 0) + '%'
+    + ' &nbsp; won ' + (model.bets ? Math.round(mWon / model.bets * 100) : 0) + '%</span>';
   if (fav && fav.points.length > 1) {
     label += '<span style="color:' + fCol + '">- - Favourite &nbsp; ' + fmt(fav.pnl)
-      + ' P&L &nbsp; ROI ' + (fav.bets ? Math.round(fav.pnl / fav.bets * 100) : 0) + '%</span>';
+      + ' P&L &nbsp; ROI ' + (fav.bets ? Math.round(fav.pnl / fav.bets * 100) : 0) + '%'
+      + ' &nbsp; won ' + (fN ? Math.round(fWon / fN * 100) : 0) + '%</span>';
   } else if (!hasFavData) {
     label += '<span style="color:var(--mt)">Favourite line needs new results (odds must be entered before predicting)</span>';
   }
-  label += '<span style="color:var(--mt)">'+sorted.length+' races · £1 flat stake</span>';
+  label += '<span style="color:var(--mt)">'+sorted.length+' race'+(sorted.length === 1 ? '' : 's')+' · £1 flat stake</span>';
   label += '</div>';
 
-  return '<div class="pnl-curve">' + svg + '</div>' + label;
+  return '<div class="pnl-curve">' + svg + '</div>' + axis + label;
 }
 
 // ── Backtesting tab ─────────────────────────────────────────
