@@ -178,6 +178,37 @@
   .sw-tip{position:absolute;pointer-events:none;background:var(--sf);border:1px solid var(--bd2);border-radius:8px;padding:6px 8px;font-size:.66rem;
     line-height:1.4;color:var(--text);box-shadow:var(--shadow);display:none;white-space:nowrap;z-index:2}
   .sw-tip b{font-size:.78rem}
+  /* Late Money tab */
+  .lm-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+  .lm-bar label{flex:1 1 140px;min-width:0;display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:.56rem;
+    color:var(--mt);text-transform:uppercase;letter-spacing:.5px}
+  .lm-bar select{width:100%;min-width:0;background:var(--inp);border:1px solid var(--bd2);border-radius:10px;color:var(--text);
+    font:500 16px var(--sans);padding:8px 8px;outline:none;text-transform:none;letter-spacing:0}
+  .lm-bar select:focus{border-color:var(--green)}
+  .lm-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .lm-chip{font-family:var(--mono);font-size:.58rem;color:var(--mt);background:var(--sf2);border:1px solid var(--bd);border-radius:999px;padding:3px 9px;line-height:1.5}
+  .lm-chip.warn{color:var(--gold);border-color:rgba(var(--gold-rgb),.4);background:rgba(var(--gold-rgb),.08)}
+  .lm-card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+  .lm-h{font-size:.84rem;font-weight:700;color:var(--text);margin-bottom:3px}
+  .lm-s{font-size:.68rem;color:var(--mt);line-height:1.45;margin-bottom:8px}
+  .lm-tw{overflow-x:auto}
+  .lm-tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.62rem}
+  .lm-tbl th{font-weight:400;color:var(--mt);text-align:right;padding:5px 3px;vertical-align:bottom}
+  .lm-tbl td{text-align:right;padding:7px 3px;border-top:1px solid var(--bd);color:var(--mt);white-space:nowrap}
+  .lm-tbl th:first-child,.lm-tbl td:first-child{text-align:left;white-space:normal}
+  .lm-tbl td.k{color:var(--text);font-weight:600}
+  .lm-tbl td.v{color:var(--text);font-weight:700}
+  .lm-tbl tr.hi td{background:rgba(var(--g-rgb),.07)}
+  .lm-tbl .good{color:var(--g);font-weight:700} .lm-tbl .bad{color:var(--re);font-weight:700}
+  .lm-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:8px 0;border-top:1px solid var(--bd)}
+  .lm-row .nm{font-size:.8rem;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+  .lm-row .mt{font-family:var(--mono);font-size:.58rem;color:var(--mt);margin-top:2px}
+  .lm-row .pr{text-align:right;font-family:var(--mono);font-size:.7rem;color:var(--text);white-space:nowrap}
+  .lm-row .pr span{display:block;font-size:.6rem;margin-top:2px}
+  .lm-code{font-family:var(--mono);font-size:.6rem;line-height:1.6;background:var(--inp);border:1px solid var(--bd2);border-radius:10px;padding:10px;
+    white-space:pre-wrap;word-break:break-all;color:var(--text);margin:8px 0;-webkit-user-select:all;user-select:all}
+  .lm-btn{border:1px solid var(--bd2);background:var(--sf2);color:var(--text);border-radius:10px;padding:7px 12px;font:600 .72rem var(--sans);cursor:pointer}
+  .lm-foot{font-family:var(--mono);font-size:.56rem;color:var(--mt);line-height:1.6;margin-top:4px}
   /* Search: a horse's, jockey's or trainer's last 10 races */
   .srch-bar{display:flex;gap:8px;margin-bottom:12px;align-items:stretch}
   .srch-bar select,.srch-bar input{background:var(--inp);border:1px solid var(--bd2);border-radius:10px;color:var(--text);
@@ -234,7 +265,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v10.1 · 11 Nov 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v11.0 · 11 Nov 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -249,6 +280,7 @@
   <button class="tab-btn" onclick="showTab('races')">Race Log</button>
   <button class="tab-btn" onclick="showTab('search')">🔍 Search</button>
   <button class="tab-btn" onclick="showTab('sweet')">📈 Sweet Spot</button>
+  <button class="tab-btn" onclick="showTab('late')">⚡ Late Money</button>
   <button class="tab-btn" onclick="showTab('bets')">💰 Bets</button>
   <button class="tab-btn" onclick="showTab('insights')">🔬 Insights</button>
   <button class="tab-btn" onclick="showTab('bf')">👀 BF Watch</button>
@@ -325,7 +357,7 @@ function loadFile(input) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(function(b,i){
-    b.classList.toggle('active', ['overview','backtest','races','search','sweet','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
+    b.classList.toggle('active', ['overview','backtest','races','search','sweet','late','bets','insights','bf','value','placepot','dutch','nap','conf','jockeys','weather'][i]===tab);
   });
   document.querySelectorAll('.tab-content').forEach(function(c){
     c.classList.remove('active');
@@ -346,6 +378,7 @@ function showTab(tab) {
   if (tab === 'weather') renderWeatherTab();
   if (tab === 'search') renderSearchTab();
   if (tab === 'sweet') renderSweetTab();
+  if (tab === 'late') renderLateTab();
 }
 
 function resetData(){ loadedLog=null; currentFilter='all'; document.getElementById('tab-bar').style.display='none'; ['sync-btn','syncid-btn'].forEach(function(i){var b=document.getElementById(i); if(b) b.style.display='none';}); renderImport(); }
@@ -386,6 +419,7 @@ function renderAll() {
     '<div class="tab-content" id="tab-races" id="tab-races"></div>' +
     '<div class="tab-content" id="tab-search"></div>' +
     '<div class="tab-content" id="tab-sweet"></div>' +
+    '<div class="tab-content" id="tab-late"></div>' +
     '<div class="tab-content" id="tab-bets"></div>' +
     '<div class="tab-content" id="tab-insights"></div>' +
     '<div class="tab-content" id="tab-bf"></div>' +
@@ -3502,6 +3536,277 @@ function confGap(e) {
 }
 
 // ══ SWEET SPOT TAB ════════════════════════════════════════════════════════════
+// ── Late Money ───────────────────────────────────────────────────────────────
+// From the proxy's late-money recorder (server/late.js): Betfair's prices for
+// every British and Irish race at 10, 5, 3 and 1 minute(s) before the actual
+// off and the last look before it, the Betfair SP when Betfair supplies it,
+// and the result. The question: when a horse priced over 5.0 five minutes
+// before the off is backed in, does backing it pay at a price you could have
+// taken? "Backed in" = its chance, as its price shows it (each price's share
+// of the race's book), went up between the two looks.
+var LATE_KEY = 'fi_late_opts', LATE_COMM = 0.05;
+var LATE = { data: null, at: 0, loading: false, err: '' };
+// Capped at 50 unless "Any over 5.0" is picked: above that the markets are
+// thin (a 1000 is often just no bid), and one 200-1 winner would swamp the rest.
+var LATE_BANDS = [
+  { id: 'b550',  label: '5.0 to 50',    say: 'priced 5.0 to 50',  lo: 5,  hi: 50 },
+  { id: 'gt5',   label: 'Any over 5.0', say: 'priced over 5.0',   lo: 5,  hi: Infinity },
+  { id: 'b350',  label: '3.0 to 50',    say: 'priced 3.0 to 50',  lo: 3,  hi: 50 },
+  { id: 'b850',  label: '8.0 to 50',    say: 'priced 8.0 to 50',  lo: 8,  hi: 50 },
+  { id: 'b521',  label: '5.0 to 21',    say: 'priced 5.0 to 21',  lo: 5,  hi: 21 },
+  { id: 'b1250', label: '12.0 to 50',   say: 'priced 12.0 to 50', lo: 12, hi: 50 }
+];
+var LATE_MOVES = [
+  { id: 25, label: 'Chance up 25%+' },
+  { id: 15, label: 'Chance up 15%+' },
+  { id: 50, label: 'Chance up 50%+' }
+];
+var LATE_TYPES = [
+  { id: 'all', label: 'All races' }, { id: 'flat', label: 'Flat & all-weather' }, { id: 'jumps', label: 'Jumps' },
+  { id: 'gb', label: 'British' }, { id: 'ire', label: 'Irish' }
+];
+function lateOpts() {
+  var o = {};
+  try { o = JSON.parse(localStorage.getItem(LATE_KEY) || '{}') || {}; } catch(e) {}
+  var ok = function(list, v, d) { return list.some(function(x){ return String(x.id) === String(v); }) ? v : d; };
+  return { band: ok(LATE_BANDS, o.band, 'b550'), move: +ok(LATE_MOVES, o.move, 25), type: ok(LATE_TYPES, o.type, 'all') };
+}
+function setLateOpt(k, v) {
+  var o = lateOpts(); o[k] = v;
+  try { localStorage.setItem(LATE_KEY, JSON.stringify(o)); } catch(e) {}
+  renderLateBody();
+}
+function renderLateTab() {
+  var el = document.getElementById('tab-late');
+  if (!el) return;
+  if (LATE.data && Date.now() - LATE.at < 5 * 60000) { renderLateBody(); return; }
+  if (!LATE.data) el.innerHTML = '<div class="pad"><div class="srch-hint">Loading the late-money record from the server…</div></div>';
+  loadLate();
+}
+function loadLate() {
+  if (LATE.loading) return;
+  LATE.loading = true;
+  fetch(getProxyBase() + '/late?days=180').then(function(r) {
+    if (r.status === 404) return { _notInstalled: true };
+    if (r.status === 429) return { _err: 'The server says slow down — try again in a minute.' };
+    return r.json();
+  }).then(function(d) {
+    LATE.loading = false;
+    if (d && d._notInstalled) { LATE.err = 'notInstalled'; LATE.data = null; }
+    else if (!d || d._err || d.error || !d.races) { LATE.err = (d && (d._err || d.error)) || 'The server sent back nothing usable.'; }
+    else { LATE.data = d; LATE.at = Date.now(); LATE.err = ''; }
+    if (currentTab === 'late') renderLateBody();
+  }).catch(function() {
+    LATE.loading = false;
+    LATE.err = 'Couldn\'t reach the server. Check the connection and tap Refresh.';
+    if (currentTab === 'late') renderLateBody();
+  });
+}
+function lateRefresh() { LATE.at = 0; LATE.err = ''; renderLateTab(); }
+
+// Each price's share of the race's book (so a 100% or 104% book reads alike)
+function lateChances(prices) {
+  var s = 0;
+  prices.forEach(function(p){ if (p > 1) s += 1 / p; });
+  return prices.map(function(p){ return p > 1 && s > 0 ? (1 / p) / s : null; });
+}
+// One row per horse in a settled race that has the 5-minute look.
+function lateHorses(D) {
+  var out = [];
+  (D.races || []).forEach(function(R) {
+    if (!R || R.ph !== 'done' || !R.r) return;
+    var act = R.r.filter(function(x){ return x.w !== -1 && x.p; });
+    var dh = act.filter(function(x){ return x.w === 1; }).length;
+    if (!dh || act.length < 2) return;
+    var has = function(i){ return act.every(function(x){ return x.p[i] > 1; }); };
+    if (!has(1)) return;
+    var col = function(i){ return act.map(function(x){ return x.p[i]; }); };
+    var c5 = lateChances(col(1)), c1 = has(3) ? lateChances(col(3)) : null, c0 = has(4) ? lateChances(col(4)) : null;
+    var allSp = act.every(function(x){ return x.sp > 1; });
+    var cs = allSp ? lateChances(act.map(function(x){ return x.sp; })) : null;
+    var jumps = typeof fiRaceType === 'function' && fiRaceType({ course: R.c, title: R.n || '' }) === 'jumps';
+    var ctry = typeof fiCourseCountry === 'function' ? fiCourseCountry(R.c) : '';
+    act.forEach(function(x, i) {
+      out.push({ d: R.d, t: R.t, c: R.c, h: x.h, jumps: jumps, ire: ctry === 'ire' || ctry === 'ni',
+        p5: x.p[1], p1: c1 ? x.p[3] : null, off: allSp ? x.sp : (c0 ? x.p[4] : null), bsp: allSp,
+        c5: c5[i], c1: c1 ? c1[i] : null, cOff: cs ? cs[i] : (c0 ? c0[i] : null), won: x.w === 1, dh: dh });
+    });
+  });
+  return out;
+}
+// £1 to win at `price`, after commission; a dead heat pays on half the stake
+function lateProfit(h, price) {
+  if (!(price > 1)) return null;
+  if (!h.won) return -1;
+  var p = price / h.dh - 1;
+  return p > 0 ? p * (1 - LATE_COMM) : p;
+}
+function lateAgg(rows, priceKey, saidKey) {
+  var n = 0, w = 0, pnl = 0, said = 0, saidOff = 0, list = [];
+  rows.forEach(function(h) {
+    var pr = lateProfit(h, h[priceKey]);
+    if (pr == null) return;
+    n++; if (h.won) w++; pnl += pr; list.push(pr);
+    said += h[saidKey] || 0; saidOff += h.cOff || 0;
+  });
+  var mean = n ? pnl / n : 0, ss = 0;
+  list.forEach(function(x){ ss += (x - mean) * (x - mean); });
+  var se = n > 1 ? Math.sqrt(ss / (n - 1) / n) : 0;
+  return { n: n, w: w, win: n ? 100 * w / n : 0, said: n ? 100 * said / n : 0, saidOff: n ? 100 * saidOff / n : 0,
+           roi: 100 * mean, lo: 100 * (mean - 1.96 * se), hi: 100 * (mean + 1.96 * se) };
+}
+function lateNotInstalled() {
+  return '<div class="pad">'
+    + '<div class="sw-verdict"><b>The late-money recorder isn\'t on the server yet.</b> It\'s a one-off install on the droplet, like the search. '
+    + 'Once it\'s running it records Betfair\'s prices in the last minutes before every British and Irish race, and this tab fills in.</div>'
+    + '<div class="lm-s" style="margin:12px 2px 0">On the droplet, in the proxy\'s folder:</div>'
+    + '<div class="lm-code">cd /root/formintel-proxy\ncurl -fsSLO https://raw.githubusercontent.com/paulhessle-cyber/Racer/main/server/late.js\n'
+    + 'curl -fsSLO https://raw.githubusercontent.com/paulhessle-cyber/Racer/main/server/install-late.js\nnode install-late.js</div>'
+    + '<div class="lm-s" style="margin:0 2px 12px">Then restart the proxy with the command it prints. Come back after a day\'s racing.</div>'
+    + '<button class="lm-btn" onclick="lateRefresh()">↻ Check again</button></div>';
+}
+function lateSel(key, list, val, label) {
+  return '<label>' + label + '<select onchange="setLateOpt(\'' + key + '\', this.value)">'
+    + list.map(function(x){ return '<option value="' + x.id + '"' + (String(x.id) === String(val) ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('')
+    + '</select></label>';
+}
+function latePct(x) { return x.toFixed(1) + '%'; }
+// Prices as Betfair shows them: 5.7, 14.5, 110
+function lateP(p) { return p >= 100 ? String(Math.round(p)) : String(+p.toFixed(2)); }
+var LATE_FLAG = { eng: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', sco: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', wal: '🏴󠁧󠁢󠁷󠁬󠁳󠁿', ire: '🇮🇪', ni: '🇬🇧' };
+function lateFlag(course) {
+  var f = LATE_FLAG[typeof fiCourseCountry === 'function' ? fiCourseCountry(course) : 'eng'];
+  return f ? f + ' ' : '';
+}
+function lateRoiCell(a) {
+  if (!a.n) return '<td>—</td>';
+  return '<td class="' + (a.roi >= 0 ? 'good' : 'bad') + '">' + sweetSign(a.roi) + '%</td>';
+}
+function renderLateBody() {
+  var el = document.getElementById('tab-late');
+  if (!el) return;
+  if (LATE.err === 'notInstalled') { el.innerHTML = lateNotInstalled(); return; }
+  if (!LATE.data) {
+    el.innerHTML = '<div class="pad">' + (LATE.err ? '<div class="srch-note">⚠ ' + esc(LATE.err) + '</div><button class="lm-btn" onclick="lateRefresh()">↻ Refresh</button>'
+                                                    : '<div class="srch-hint">Loading the late-money record from the server…</div>') + '</div>';
+    return;
+  }
+  var D = LATE.data, st = D.status || {}, o = lateOpts();
+  var band = LATE_BANDS.filter(function(b){ return b.id === o.band; })[0];
+  var up = 1 + o.move / 100, down = 1 / up;
+  var horses = lateHorses(D);
+  var pick = horses.filter(function(h) {
+    if (!(h.p5 > band.lo && h.p5 <= band.hi)) return false;
+    if (o.type === 'flat') return !h.jumps;
+    if (o.type === 'jumps') return h.jumps;
+    if (o.type === 'gb') return !h.ire;
+    if (o.type === 'ire') return h.ire;
+    return true;
+  });
+  var raceKeys = {};
+  horses.forEach(function(h){ raceKeys[h.d + h.t + h.c] = 1; });
+  var nRaces = Object.keys(raceKeys).length;
+
+  var h = '<div class="pad">';
+  h += '<div class="wx-intro">Betfair\'s prices in the last minutes before every British and Irish race, recorded by the server. '
+     + 'A horse is <b>backed in</b> when its chance, as its price shows it, goes up: money coming for it. '
+     + 'The first table is the real test: the move seen by <b>1 minute before the off</b>, backed at that minute\'s price, which you could have taken. '
+     + 'Returns are to £1 win stakes after 5% Betfair commission. Horses over 50 are left out unless you pick "Any over 5.0".</div>';
+
+  // where the record stands
+  var chips = [];
+  if (st.firstDay) chips.push('Recording since ' + esc(niceDay(st.firstDay)));
+  chips.push(nRaces + ' settled race' + (nRaces === 1 ? '' : 's'));
+  if (st.today && st.today.recorded) chips.push('Today: ' + st.today.recorded + ' recorded');
+  if (st.delayedData === true) chips.push('Prices ' + (st.delaySeconds != null ? 'about ' + st.delaySeconds + 's' : 'up to 3 min') + ' behind (delayed key)');
+  if (st.bsp === true) chips.push('Betfair SP: yes'); else if (st.bsp === false) chips.push('Betfair SP: not sent — off price is the last look');
+  h += '<div class="lm-chips">' + chips.map(function(c){ return '<span class="lm-chip">' + c + '</span>'; }).join('');
+  if (st.lastError && st.lastErrorAt && Date.now() - Date.parse(st.lastErrorAt) < 30 * 60000) {
+    h += '<span class="lm-chip warn">⚠ Last Betfair call failed ' + esc(new Date(st.lastErrorAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) + '</span>';
+  }
+  h += '</div>';
+
+  h += '<div class="lm-bar">' + lateSel('band', LATE_BANDS, o.band, 'Price 5 min before') + lateSel('move', LATE_MOVES, o.move, 'Backed in') + lateSel('type', LATE_TYPES, o.type, 'Races') + '</div>';
+
+  if (!horses.length) {
+    h += '<div class="sw-verdict"><b>Recording.</b> Nothing settled yet — races appear here a few minutes after they finish. '
+       + 'Give it a few weeks: about 150 backed-in horses are needed before the numbers mean much.</div>';
+    h += '<button class="lm-btn" onclick="lateRefresh()">↻ Refresh</button></div>';
+    el.innerHTML = h; return;
+  }
+
+  // 1. Seen in time: 5 minutes -> 1 minute before, backed at the 1-minute price
+  var seen = pick.filter(function(x){ return x.c1 != null && x.p1 > 1; });
+  var g1 = { up: [], mid: [], dn: [] };
+  seen.forEach(function(x){ var r = x.c1 / x.c5; (r >= up ? g1.up : r <= down ? g1.dn : g1.mid).push(x); });
+  var A = { up: lateAgg(g1.up, 'p1', 'c1'), mid: lateAgg(g1.mid, 'p1', 'c1'), dn: lateAgg(g1.dn, 'p1', 'c1'), all: lateAgg(seen, 'p1', 'c1') };
+  var moveWord = LATE_MOVES.filter(function(m){ return m.id === o.move; })[0].label.replace('Chance up ', '');
+  function row1(label, a, hi) {
+    return '<tr' + (hi ? ' class="hi"' : '') + '><td class="k">' + label + '</td><td>' + a.n + '</td><td class="v">' + (a.n ? latePct(a.win) : '—') + '</td>'
+      + '<td>' + (a.n ? latePct(a.said) : '—') + '</td>' + lateRoiCell(a) + '</tr>';
+  }
+  h += '<div class="lm-card"><div class="lm-h">Seen in time — backed at the 1-minute price</div>'
+     + '<div class="lm-s">Horses ' + esc(band.say) + ' five minutes before the off, grouped by what the price did between 5 minutes and 1 minute before.</div>'
+     + '<div class="lm-tw"><table class="lm-tbl"><tr><th>Between 5 and 1 min</th><th>Horses</th><th>Won</th><th>1-min price said</th><th>ROI</th></tr>'
+     + row1('Backed in (chance up ' + esc(moveWord) + ')', A.up, true) + row1('Little change', A.mid) + row1('Drifted', A.dn) + row1('All', A.all)
+     + '</table></div></div>';
+
+  // verdict on the backed-in row
+  var a = A.up, v;
+  if (!a.n) v = 'No horse in this group has been backed in that much yet.';
+  else if (a.w < 30) v = '<b>Too early to judge.</b> ' + a.n + ' backed-in horse' + (a.n === 1 ? '' : 's') + ', ' + a.w + ' winner' + (a.w === 1 ? '' : 's') + ' so far: '
+      + 'with this few, anything from ' + sweetSign(a.lo, 0) + '% to ' + sweetSign(a.hi, 0) + '% is plausible. It needs about 30 winners before the figure settles.';
+  else if (a.lo > 0) v = '✅ <b>Paying:</b> ' + sweetSign(a.roi) + '% on ' + a.n + ' bets, and even the low end of the likely range (' + sweetSign(a.lo, 0) + '%) is a profit.';
+  else if (a.hi < 0) v = '❌ <b>Not paying:</b> ' + sweetSign(a.roi) + '% on ' + a.n + ' bets, and the whole likely range (' + sweetSign(a.lo, 0) + '% to ' + sweetSign(a.hi, 0) + '%) is a loss.';
+  else v = '<b>Undecided:</b> ' + sweetSign(a.roi) + '% on ' + a.n + ' bets; the likely range (' + sweetSign(a.lo, 0) + '% to ' + sweetSign(a.hi, 0) + '%) still spans profit and loss.';
+  if (a.n && A.all.n) v += ' <span class="muted">Every horse in this price band, backed at the same minute: ' + sweetSign(A.all.roi) + '%.</span>';
+  h += '<div class="sw-verdict">' + v + '</div>';
+
+  // 2. The whole last 5 minutes, to the off
+  var full = pick.filter(function(x){ return x.cOff != null && x.off > 1; });
+  var g2 = { up: [], mid: [], dn: [] };
+  full.forEach(function(x){ var r = x.cOff / x.c5; (r >= up ? g2.up : r <= down ? g2.dn : g2.mid).push(x); });
+  var B = { up: lateAgg(g2.up, 'off', 'c5'), mid: lateAgg(g2.mid, 'off', 'c5'), dn: lateAgg(g2.dn, 'off', 'c5'), all: lateAgg(full, 'off', 'c5') };
+  var at5 = lateAgg(g2.up, 'p5', 'c5');
+  var bspAll = full.length && full.every(function(x){ return x.bsp; });
+  function row2(label, b, hi) {
+    return '<tr' + (hi ? ' class="hi"' : '') + '><td class="k">' + label + '</td><td>' + b.n + '</td><td class="v">' + (b.n ? latePct(b.win) : '—') + '</td>'
+      + '<td>' + (b.n ? latePct(b.said) : '—') + '</td><td>' + (b.n ? latePct(b.saidOff) : '—') + '</td>' + lateRoiCell(b) + '</tr>';
+  }
+  h += '<div class="lm-card"><div class="lm-h">The whole last 5 minutes — to the off</div>'
+     + '<div class="lm-s">The same horses grouped by the full move, from 5 minutes before to the off. Shows whether the late money was right; the bet is at '
+     + (bspAll ? 'Betfair SP' : 'the last price before the off') + ', after the money has already moved it.</div>'
+     + '<div class="lm-tw"><table class="lm-tbl"><tr><th>5 min → the off</th><th>Horses</th><th>Won</th><th>5-min price said</th><th>Off price said</th><th>ROI</th></tr>'
+     + row2('Backed in', B.up, true) + row2('Little change', B.mid) + row2('Drifted', B.dn) + row2('All', B.all)
+     + '</table></div>'
+     + (at5.n ? '<div class="lm-foot">At their 5-minute price the backed-in horses would have returned ' + sweetSign(at5.roi) + '% — but that price is gone by the time the money shows.</div>' : '')
+     + '</div>';
+
+  // 3. The latest backed-in horses (seen by 1 minute before)
+  var recent = g1.up.slice().sort(function(x, y){ return (y.d + y.t).localeCompare(x.d + x.t); }).slice(0, 15);
+  if (recent.length) {
+    h += '<div class="lm-card"><div class="lm-h">Latest backed-in horses</div><div class="lm-s">Price 5 minutes before → 1 minute before, then the off.</div>';
+    recent.forEach(function(x) {
+      var res = x.won ? '<span style="color:var(--g);font-weight:700">✓ Won' + (x.dh > 1 ? ' (dead heat)' : '') + '</span>' : '<span class="muted">✗ Lost</span>';
+      h += '<div class="lm-row"><div><div class="nm">' + esc(x.h) + '</div><div class="mt">' + esc(srchDate(x.d)) + ' · ' + esc(x.t) + ' ' + lateFlag(x.c) + esc(x.c) + '</div></div>'
+         + '<div class="pr">' + lateP(x.p5) + ' → ' + lateP(x.p1) + (x.off ? '<span class="muted">off ' + lateP(x.off) + (x.bsp ? ' (BSP)' : '') + '</span>' : '') + '<span>' + res + '</span></div></div>';
+    });
+    h += '</div>';
+  }
+
+  // money on the race in its last 5 minutes (per horse needs a live key)
+  var moneys = (D.races || []).filter(function(R){ return R.mt && R.mt[1] != null && R.mt[4] != null; }).map(function(R){ return R.mt[4] - R.mt[1]; }).sort(function(x, y){ return x - y; });
+  var medMoney = moneys.length ? moneys[Math.floor(moneys.length / 2)] : null;
+  h += '<div class="lm-foot">'
+     + (st.delayedData === true ? 'With a delayed app key Betfair sends prices 1–180 seconds late, so "1 minute before" can be a little earlier in reality. ' : '')
+     + (st.moneyPerHorse === true ? 'Money matched per horse is recorded too. ' : 'Money matched on each horse needs a live app key; with a delayed one only the race total comes through')
+     + (st.moneyPerHorse !== true && medMoney != null ? ' (typically £' + Math.round(medMoney).toLocaleString('en-GB') + ' matched on a race in its last 5 minutes). ' : (st.moneyPerHorse !== true ? '. ' : ''))
+     + 'A race that went off while the server wasn\'t watching (a restart, say) is left out of the tables it lacks the looks for. '
+     + '<a href="#" onclick="lateRefresh();return false" style="color:var(--g)">Refresh</a></div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
 // The rule (in courses.js): Formintel's top pick at decimal odds 2.0-3.99 in a
 // British flat or all-weather race. It was found on 5 Nov by testing about 180
 // rules on the 30 Sep - 5 Nov races, so those races are where it was found and
