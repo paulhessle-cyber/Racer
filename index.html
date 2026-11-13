@@ -152,6 +152,37 @@ input,textarea{font-family:var(--sans)}
 
 /* ── Lucky 15 ───────────────────────────────────────────── */
 .l15-meeting{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+/* Today's Plus List (Lucky 15 tab) */
+.pl-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius);padding:14px;margin:8px 0 12px;box-shadow:var(--shadow)}
+.pl-intro{font-size:.72rem;color:var(--mt);line-height:1.5;margin-bottom:4px}
+.pl-grp{font-family:var(--mono);font-size:.56rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px}
+.pl-chips{display:flex;flex-wrap:wrap;gap:6px}
+.pl-chip{border:1px solid var(--bd);background:var(--sf2);color:var(--tx);border-radius:999px;padding:7px 11px;font:600 .72rem var(--sans);cursor:pointer;line-height:1.2;-webkit-tap-highlight-color:transparent}
+.pl-chip.on{background:rgba(var(--g-rgb),.18);border-color:rgba(var(--g-rgb),.65);color:var(--g)}
+.pl-chip .n{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-left:5px;font-weight:400}
+.pl-chip.on .n{color:var(--g)}
+.pl-chip.none{opacity:.45}
+.pl-ctl{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pl-ctl>div{flex:1 1 140px;min-width:0}
+.pl-ctl>div.wide{flex-basis:100%}
+.pl-lbl{font-family:var(--mono);font-size:.54rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.pl-seg{display:flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.pl-seg button{flex:1;min-width:0;padding:8px 6px;background:transparent;border:none;color:var(--mt);font:600 .68rem var(--sans);cursor:pointer;white-space:nowrap}
+.pl-seg button+button{border-left:1px solid var(--bd)}
+.pl-seg button.on{background:rgba(var(--g-rgb),.18);color:var(--g)}
+.pl-sum{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin:14px 0 2px;line-height:1.6}
+.pl-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:11px 0;border-top:1px solid var(--bd);cursor:pointer}
+.pl-row.done{opacity:.62}
+.pl-nm{font-size:.86rem;font-weight:700;color:var(--tx);overflow-wrap:anywhere}
+.pl-meta{font-size:.64rem;color:var(--mt);margin-top:2px;line-height:1.5}
+.pl-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.pl-tag{font-size:.6rem;padding:2px 6px;border-radius:4px;border:1px solid var(--bd);color:var(--mt);white-space:nowrap}
+.pl-tag.hit{background:rgba(var(--g-rgb),.14);color:var(--g);border-color:rgba(var(--g-rgb),.4);font-weight:700}
+.pl-r{text-align:right;white-space:nowrap}
+.pl-odds{font-family:var(--mono);font-size:.95rem;font-weight:700;color:var(--tx)}
+.pl-sc{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px}
+.pl-res{font-size:.62rem;font-weight:700;margin-top:3px}
+.pl-more{width:100%;margin-top:8px;padding:9px;border:1px solid var(--bd);border-radius:10px;background:var(--sf2);color:var(--tx);font:600 .72rem var(--sans);cursor:pointer}
 .l15-meeting-name{font-size:1.1rem;color:var(--g);letter-spacing:1px}
 .l15-meeting-info{font-size:.65rem;color:var(--mt);margin-top:2px}
 .l15-clear{background:transparent;border:1px solid var(--re);color:var(--re);border-radius:4px;padding:3px 8px;font-size:.6rem;cursor:pointer}
@@ -342,7 +373,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v10.5 · 10 Nov 2026</div>
+      <div class="ver">v11.0 · 13 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -651,6 +682,12 @@ input,textarea{font-family:var(--sans)}
       onclick="runConfidencePredictor()">🎯 Confidence Predictor</button>
 
     <div id="conf-results"></div>
+
+    <button class="btn" id="plus-btn" style="width:100%;margin:8px 0 0;padding:10px 12px;background:rgba(var(--g-rgb),.1);
+      border:1px solid rgba(var(--g-rgb),.35);color:var(--g);font-weight:600"
+      onclick="togglePlusList()">➕ Today's Plus List</button>
+    <div id="plus-results"></div>
+
     <div id="l15-results"></div>
   </div>
 </div>
@@ -6933,6 +6970,309 @@ function switchToMeeting(course) {
   // looks broken — you stay on whichever tab you tapped from.
   try { go('races'); } catch(e) {}
   try { window.scrollTo(0, 0); } catch(e) {}
+}
+
+// ── Today's Plus List ──────────────────────────────────────────────────────
+// Every runner in today's meetings that has the extras you pick: the "+x%"
+// items in a horse's score breakdown (Jockey +, Trainer +, Combo +, Track +,
+// Draw +, Form) and the badges and records the race screen works out (course,
+// distance and going winners, class drop, steamer, value and so on). The
+// same tests as the race screen, run on every race of the day. Pick several
+// to find horses with all of them, or any of them.
+var PLUS_KEY = 'fi_plus_opts';
+var PLUS_ITEMS = [
+  { id: 'jockey',  g: 'b', label: 'Jockey +' },
+  { id: 'trainer', g: 'b', label: 'Trainer +' },
+  { id: 'combo',   g: 'b', label: 'Combo +' },
+  { id: 'track',   g: 'b', label: 'Track +' },
+  { id: 'draw',    g: 'b', label: 'Draw +' },
+  { id: 'form',    g: 'b', label: 'Form +' },
+  { id: 'course',  g: 'r', label: 'Course winner' },
+  { id: 'dist',    g: 'r', label: 'Distance winner' },
+  { id: 'going',   g: 'r', label: 'Going winner' },
+  { id: 'lto',     g: 'r', label: 'Won last time' },
+  { id: 'drop',    g: 'r', label: 'Class drop' },
+  { id: 'bf',      g: 'r', label: 'Beaten favourite' },
+  { id: 'gelded',  g: 'r', label: 'Recently gelded' },
+  { id: 'travel',  g: 'r', label: 'Long trip' },
+  { id: 'steam',   g: 't', label: 'Steamer' },
+  { id: 'front',   g: 't', label: 'Front-runner' },
+  { id: 'top',     g: 't', label: 'Top pick' },
+  { id: 'value',   g: 't', label: 'Value' },
+  { id: 'mpick',   g: 't', label: 'Model\'s pick' },
+  { id: 'sweet',   g: 't', label: 'Sweet Spot' }
+];
+var PLUS_GROUPS = { b: 'Score boosts', r: 'Record', t: 'Today' };
+var PLUS_BOOST = { jockey: 1, trainer: 1, combo: 1, track: 1, draw: 1 }, PLUS_COUNT = { course: 1, dist: 1, going: 1 };
+var _plusOpen = false, _plusShowAll = false, _plusLoading = false, _plusTried = {};
+
+function plusOpts() {
+  var o = {};
+  try { o = JSON.parse(localStorage.getItem(PLUS_KEY) || '{}') || {}; } catch(e) {}
+  var ids = PLUS_ITEMS.map(function(x){ return x.id; });
+  var on = (Array.isArray(o.on) ? o.on : ['jockey']).filter(function(id){ return ids.indexOf(id) > -1; });
+  return { on: on, mode: o.mode === 'any' ? 'any' : 'all', sort: o.sort === 'time' || o.sort === 'boost' ? o.sort : 'rated', past: !!o.past };
+}
+function plusSave(o) { try { localStorage.setItem(PLUS_KEY, JSON.stringify(o)); } catch(e) {} }
+function plusToggle(id) {
+  var o = plusOpts(), i = o.on.indexOf(id);
+  if (i > -1) o.on.splice(i, 1); else o.on.push(id);
+  plusSave(o); _plusShowAll = false; renderPlusList();
+}
+function plusSet(k, v) { var o = plusOpts(); o[k] = v; plusSave(o); _plusShowAll = false; renderPlusList(); }
+function togglePlusList() {
+  _plusOpen = !_plusOpen; _plusShowAll = false;
+  renderPlusList();
+  var el = document.getElementById('plus-results');
+  if (_plusOpen && el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
+}
+
+// Every runner today, with what it has. Races that so far have only names and
+// prices (put back from a saved prediction) are returned separately.
+function plusRunners() {
+  var out = [], stubs = [], now = Date.now(), keepModel = S.model, locks = {};
+  try { locks = plockAll(); } catch(e) {}
+  var today = todayISO();
+  (S.meetings || []).forEach(function(m) {
+    (m.races || []).forEach(function(race) {
+      if (!race || (race.date && race.date !== today)) return;
+      var active = (race.runners || []).filter(function(r){ return !r._nr && r.name; });
+      if (active.length < 2) return;
+      var off = raceOffMs(race), done = !isNaN(off) && now > off + 60000;
+      if (race._fromLock || !active.some(function(r){ return r.jockey || r.trainer || r.form; })) { stubs.push({ race: race, done: done }); return; }
+      var mdl = getModelForRace(race);
+      if (mdl) S.model = mdl;
+      var going = getGoingForRace(race, '') || defaultGoingFor(race);
+      var ctx = buildFieldCtx(active);
+      try { assessPace(active); } catch(e) {}
+      var rk = raceKeyFor(race), L = locks[rk], preds = {};
+      if (L && L.preds) L.preds.forEach(function(p){ if (p && p.name) preds[p.name] = p; });
+      var vName = L && L.valuePick ? L.valuePick.name : '', mName = L && L.modelPick ? L.modelPick.name : '';
+      var c = V3.courseKey(race.course), dist = parseDist(race.dist);
+      var gm = (S.model && S.model.goingMap) || {};
+      var gk = String(going || '').toLowerCase().split('(')[0].split(',')[0].trim();
+      var gs = gm[gk] !== undefined ? gm[gk] : V3.goingScore(gk);
+      var lg = null; try { lg = getPredictionLog(rk); } catch(e) {}
+      var winner = lg && lg.actual && lg.actual.length ? lg.actual[0] : '';
+      var tc = (S.model && S.model.trainerCourses) || null;
+      active.forEach(function(r) {
+        var sc = {};
+        if (S.model) { try { var cp = Object.assign({}, r, { going: going }); rawScoreMdl(cp, race, ctx); sc = cp._scoreComponents || {}; } catch(e) {} }
+        var H = (S.model && S.model.horseStats) ? (S.model.horseStats[V3.horseKey(r.name)] || null) : null;
+        var p = preds[r.name] || null, has = {}, x;
+        x = { race: race, r: r, rk: rk, done: done, has: has, info: {},
+              rank: p ? p.rank : 0, score: p ? p.score : null, field: active.length,
+              odds: r.odds > 1 ? r.odds : (p && p.odds > 1 ? p.odds : 0),
+              res: winner ? (winner === r.name ? 'won' : 'lost') : '' };
+        // score boosts, as shown under each horse on the race screen
+        if (sc.jockey > 0) has.jockey = sc.jockey;
+        if (sc.trainer > 0) has.trainer = sc.trainer;
+        if (sc.combo > 0) has.combo = sc.combo;
+        if (sc.trackProfile >= 3) has.track = sc.trackProfile;
+        if (sc.trackDraw >= 3) has.draw = sc.trackDraw;
+        if (sc.form > 30) has.form = true;
+        // record
+        if (H) {
+          var cw = (H.cw || {})[c] || 0, dw = winsNear(H.dw, dist, 0.5), gw = (H.gw || {})[gs] || 0;
+          if (cw > 0) has.course = cw;
+          if (dw > 0) has.dist = dw;
+          if (gw > 0) { has.going = gw; x.info.going = gk; }
+          if (H.bfDate) {
+            var bd = Math.round((now - new Date(H.bfDate).getTime()) / 86400000);
+            if (bd >= 0 && bd <= 60) { has.bf = true; x.info.bf = bd; }
+          }
+          if (H.gelded && H.geldedDate) {
+            var gd = Math.round((now - new Date(H.geldedDate).getTime()) / 86400000);
+            if (gd >= 0 && gd <= 180) { has.gelded = true; x.info.gelded = gd; }
+          }
+        }
+        if (r._recentlyGelded && !has.gelded) has.gelded = true;
+        var fr = null; try { fr = formRecord(r.name); } catch(e) {}
+        var fClean = String(r.form || '').replace(/[^0-9PFpUuRr]/g, '');
+        if (fr && fr.runs && fr.runs.length) { if (fr.runs[0].pos === 1) has.lto = true; }
+        else if (fClean) { if (fClean.charAt(fClean.length - 1) === '1') has.lto = true; }
+        else if (H && H.lp && H.lp[0] === 1) has.lto = true;
+        var cc = null; try { cc = classChange(r, race); } catch(e) {}
+        if (cc && cc.diff > 0) { has.drop = cc.diff; x.info.drop = cc; }
+        if (tc) {
+          var tn = [H && H.tr, r.trainer, String(r.trainer || '').toLowerCase().replace(/\s+/g, ' ').trim()].filter(function(n){ return n && tc[n]; })[0];
+          if (tn) { try { var trav = checkLongTravel(tn, race.course); if (trav) { has.travel = true; x.info.travel = trav.miles; } } catch(e) {} }
+        }
+        // today
+        if (r._mv === 'steam') { has.steam = true; x.info.steam = r._openingOdds || 0; }
+        if (r._pace === 'front') has.front = true;
+        if (p && p.rank === 1) {
+          has.top = true;
+          try { if (isSweetSpot(race, { odds: x.odds })) has.sweet = true; } catch(e) {}
+        }
+        if (vName && vName === r.name) has.value = true;
+        if (mName && mName === r.name) has.mpick = true;
+        out.push(x);
+      });
+    });
+  });
+  S.model = keepModel;
+  return { list: out, stubs: stubs };
+}
+
+function plusTagText(id, x) {
+  var v = x.has[id], i = x.info;
+  switch (id) {
+    case 'jockey': return 'Jockey +' + v + '%';
+    case 'trainer': return 'Trainer +' + v + '%';
+    case 'combo': return 'Combo +' + v + '%';
+    case 'track': return 'Track +' + v + '%';
+    case 'draw': return 'Draw +' + v + '%';
+    case 'form': return 'Form +';
+    case 'course': return 'Course winner' + (v > 1 ? ' ×' + v : '');
+    case 'dist': return 'Distance winner' + (v > 1 ? ' ×' + v : '');
+    case 'going': return 'Won on ' + (i.going || 'this going') + (v > 1 ? ' ×' + v : '');
+    case 'lto': return 'Won last time';
+    case 'drop': return 'Class drop C' + i.drop.from + '→C' + i.drop.to;
+    case 'bf': return 'Beaten fav ' + i.bf + 'd ago';
+    case 'gelded': return i.gelded != null ? 'Gelded ' + i.gelded + 'd ago' : 'Recently gelded';
+    case 'travel': return 'Long trip ' + i.travel + ' mi';
+    case 'steam': return 'Steamer' + (i.steam > 1 && x.odds > 1 ? ' ' + (+i.steam.toFixed(2)) + '→' + (+x.odds.toFixed(2)) : '');
+    case 'front': return 'Front-runner';
+    case 'top': return 'Top pick';
+    case 'value': return 'Value';
+    case 'mpick': return 'Model\'s pick';
+    case 'sweet': return 'Sweet Spot';
+  }
+  return id;
+}
+
+// Fill in races that so far have only names and prices, then redraw.
+function plusLoadStubs(stubs) {
+  var todo = stubs.filter(function(s){ var k = raceKeyFor(s.race); if (_plusTried[k]) return false; _plusTried[k] = 1; return true; }).slice(0, 20);
+  if (!todo.length || !getProxyUrl()) return null;
+  return new Promise(function(resolve) {
+    var i = 0, running = 0, finished = 0;
+    function next() {
+      while (running < 3 && i < todo.length) {
+        (function(race) {
+          running++;
+          fetchOddsRaw(race.course, race.time).then(function(dj) {
+            if (!(dj && dj.runners && dj.runners.length >= 2)) return;
+            var nr = raceFromOdds(race.course, race.time, dj, race);
+            nr._pricedAt = Date.now(); nr._priceSrc = 'live';
+            ensureRaceInMeetings(race.course, nr);
+          }).catch(function(){}).then(function() {
+            running--; finished++;
+            if (finished === todo.length) resolve(); else next();
+          });
+        })(todo[i++].race);
+      }
+    }
+    next();
+  });
+}
+
+function plusOpenRace(course, time) {
+  try {
+    switchToMeeting(course);
+    var idx = -1;
+    (S.currentRaces || []).forEach(function(r, i){ if (idx < 0 && r.time === time) idx = i; });
+    if (idx > -1) selRace(idx);
+  } catch(e) {}
+}
+
+function renderPlusList() {
+  var el = document.getElementById('plus-results');
+  if (!el) return;
+  var btn = document.getElementById('plus-btn');
+  if (btn) btn.textContent = _plusOpen ? '✕ Close Plus List' : '➕ Today\'s Plus List';
+  if (!_plusOpen) { el.innerHTML = ''; return; }
+  var o = plusOpts(), data = plusRunners(), sel = o.on;
+  var base = data.list.filter(function(x){ return o.past || !x.done; });
+  var counts = {};
+  base.forEach(function(x){ Object.keys(x.has).forEach(function(k){ counts[k] = (counts[k] || 0) + 1; }); });
+  var hits = !sel.length ? [] : base.filter(function(x) {
+    var n = 0;
+    sel.forEach(function(id){ if (x.has[id] !== undefined) n++; });
+    x._n = n;
+    return o.mode === 'all' ? n === sel.length : n > 0;
+  });
+  var key = function(x) {
+    var b = 0, c = 0;
+    sel.forEach(function(id){ var v = x.has[id]; if (v === undefined) return; if (PLUS_BOOST[id]) b += v; else if (PLUS_COUNT[id]) c += v; });
+    return [o.mode === 'any' ? x._n : 0, b, c, x.score || 0];
+  };
+  if (o.sort === 'time') {
+    hits.sort(function(a, b){ return a.race.time < b.race.time ? -1 : a.race.time > b.race.time ? 1 : (b.score || 0) - (a.score || 0); });
+  } else if (o.sort === 'boost') {
+    // the biggest of what you picked first: most items matched, then the
+    // size of the boosts, then course/trip/going wins, then the rating
+    hits.sort(function(a, b){ var ka = key(a), kb = key(b); for (var i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] - ka[i]; return 0; });
+  } else {
+    hits.sort(function(a, b){ return ((b.score || 0) - (a.score || 0)) || (key(b)[1] - key(a)[1]); });
+  }
+
+  var h = '<div class="pl-card">';
+  h += '<div class="ct" style="margin-bottom:8px">➕ Today\'s Plus List</div>';
+  h += '<div class="pl-intro">Every runner in today\'s meetings with the extras you pick. These are the same items shown under each horse on the race screen. '
+     + 'Pick one, or several to find horses with all of them. Tap a horse to open its race.</div>';
+  ['b', 'r', 't'].forEach(function(g) {
+    h += '<div class="pl-grp">' + PLUS_GROUPS[g] + '</div><div class="pl-chips">';
+    PLUS_ITEMS.filter(function(it){ return it.g === g; }).forEach(function(it) {
+      var on = sel.indexOf(it.id) > -1, n = counts[it.id] || 0;
+      h += '<button type="button" class="pl-chip' + (on ? ' on' : '') + (!n && !on ? ' none' : '') + '" aria-pressed="' + on + '" onclick="plusToggle(\'' + it.id + '\')">'
+         + esc(it.label) + '<span class="n">' + n + '</span></button>';
+    });
+    h += '</div>';
+  });
+  var seg = function(k, v, label, cur) { return '<button type="button" class="' + (cur === v ? 'on' : '') + '" onclick="plusSet(\'' + k + '\',' + (typeof v === 'string' ? '\'' + v + '\'' : v) + ')">' + label + '</button>'; };
+  h += '<div class="pl-ctl">';
+  h += '<div class="wide"><div class="pl-lbl">Order</div><div class="pl-seg">' + seg('sort', 'rated', 'Top rated', o.sort) + seg('sort', 'boost', 'Biggest +', o.sort) + seg('sort', 'time', 'By time', o.sort) + '</div></div>';
+  if (sel.length > 1) h += '<div><div class="pl-lbl">Horses with</div><div class="pl-seg">' + seg('mode', 'all', 'All of them', o.mode) + seg('mode', 'any', 'Any of them', o.mode) + '</div></div>';
+  h += '<div><div class="pl-lbl">Races</div><div class="pl-seg">' + seg('past', false, 'Still to run', o.past) + seg('past', true, 'All today', o.past) + '</div></div>';
+  h += '</div>';
+
+  // races with only names and prices so far
+  var waiting = data.stubs.filter(function(s){ return o.past || !s.done; });
+  if (waiting.length) {
+    if (!_plusLoading) {
+      var pr = plusLoadStubs(waiting);
+      if (pr) { _plusLoading = true; pr.then(function(){ _plusLoading = false; if (_plusOpen) renderPlusList(); }); }
+    }
+    h += '<div class="pl-sum">' + (_plusLoading ? '⏳ Loading the racecards for ' + waiting.length + ' race' + (waiting.length === 1 ? '' : 's') + '…'
+         : waiting.length + ' race' + (waiting.length === 1 ? ' has' : 's have') + ' only names and prices so far, so ' + (waiting.length === 1 ? 'it isn\'t' : 'they aren\'t') + ' included.') + '</div>';
+  }
+
+  if (!data.list.length && !data.stubs.length) {
+    h += '<div class="pl-sum">No racecards for today yet. They load from Today\'s Racing.</div></div>';
+    el.innerHTML = h; return;
+  }
+  if (!sel.length) { h += '<div class="pl-sum">Pick one or more items above.</div></div>'; el.innerHTML = h; return; }
+
+  var names = sel.map(function(id){ return PLUS_ITEMS.filter(function(it){ return it.id === id; })[0].label; });
+  var nRaces = {};
+  hits.forEach(function(x){ nRaces[x.rk] = 1; });
+  h += '<div class="pl-sum">' + hits.length + ' runner' + (hits.length === 1 ? '' : 's') + ' in ' + Object.keys(nRaces).length + ' race' + (Object.keys(nRaces).length === 1 ? '' : 's')
+     + ' with ' + esc(names.length > 1 ? names.slice(0, -1).join(', ') + (o.mode === 'all' ? ' and ' : ' or ') + names[names.length - 1] : names[0])
+     + (o.past ? ' today' : ' still to run') + '.</div>';
+  if (!hits.length) { el.innerHTML = h + '</div>'; return; }
+
+  var shown = _plusShowAll ? hits : hits.slice(0, 40);
+  shown.forEach(function(x) {
+    var r = x.r, race = x.race;
+    var tags = sel.filter(function(id){ return x.has[id] !== undefined; }).map(function(id){ return '<span class="pl-tag hit">' + esc(plusTagText(id, x)) + '</span>'; });
+    PLUS_ITEMS.forEach(function(it){ if (sel.indexOf(it.id) === -1 && x.has[it.id] !== undefined) tags.push('<span class="pl-tag">' + esc(plusTagText(it.id, x)) + '</span>'); });
+    var ord = x.rank ? x.rank + (x.rank === 1 ? 'st' : x.rank === 2 ? 'nd' : x.rank === 3 ? 'rd' : 'th') + ' of ' + x.field : '';
+    var jt = [String(r.jockey || '').replace(/\s*\(\d+\)/, ''), r.trainer || ''].filter(Boolean).map(esc).join(' · ');
+    var res = x.res === 'won' ? '<div class="pl-res" style="color:var(--g)">✓ Won</div>' : x.res === 'lost' ? '<div class="pl-res" style="color:var(--mt)">✗ Lost</div>' : (x.done ? '<div class="pl-res" style="color:var(--mt)">Run</div>' : '');
+    h += '<div class="pl-row' + (x.done ? ' done' : '') + '" data-c="' + esc(race.course) + '" data-t="' + esc(race.time) + '" onclick="plusOpenRace(this.dataset.c, this.dataset.t)">'
+       + '<div><div class="pl-nm">' + esc(r.name) + '</div>'
+       + '<div class="pl-meta">' + esc(race.time) + ' ' + courseFlagHTML(race.course) + esc(race.course) + (ord ? ' · ' + ord : '') + '</div>'
+       + (jt ? '<div class="pl-meta">' + jt + '</div>' : '')
+       + '<div class="pl-tags">' + tags.slice(0, 9).join('') + '</div></div>'
+       + '<div class="pl-r"><div class="pl-odds">' + (x.odds > 1 ? esc(fmtOdds(x.odds) || String(x.odds)) : '—') + '</div>'
+       + (x.score != null ? '<div class="pl-sc">' + x.score + '%</div>' : '') + res + '</div></div>';
+  });
+  if (!_plusShowAll && hits.length > shown.length) h += '<button type="button" class="pl-more" onclick="_plusShowAll=true;renderPlusList()">Show all ' + hits.length + '</button>';
+  h += '<div class="pl-sum">Price now; the % is Formintel\'s rating from the race\'s latest prediction. Combo + is a jockey–trainer pairing the score gives a bonus to.</div>';
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 function clearMeeting(course) {
