@@ -373,7 +373,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v11.0 · 13 Nov 2026</div>
+      <div class="ver">v11.1 · 21 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -6777,7 +6777,8 @@ function computeConfidencePicks() {
             course: meeting.course,
             time: race.time,
             dist: race.dist || lk.dist || '',
-            runners: lk.fieldSize || active.length
+            runners: lk.fieldSize || active.length,
+            rk: raceKeyFor(race)
           });
         }
         return;   // lock is authoritative — don't rescore
@@ -6830,7 +6831,8 @@ function computeConfidencePicks() {
         course:  meeting.course,
         time:    race.time,
         dist:    race.dist || '',
-        runners: active.length
+        runners: active.length,
+        rk:      raceKeyFor(race)
       });
     });
   });
@@ -6838,6 +6840,46 @@ function computeConfidencePicks() {
   // Order by the horse's own confidence, highest first
   out.sort(function(a,b){ return b.pct - a.pct; });
   return out.slice(0, CONF_MAX);
+}
+
+// The order: most confident first (as it always was) or by race time. The
+// same horses either way; the choice is remembered on this device.
+var CONF_ORDER_KEY = 'fi_conf_order', _confShown = false;
+function confOrder() {
+  try { return localStorage.getItem(CONF_ORDER_KEY) === 'time' ? 'time' : 'conf'; } catch(e) { return 'conf'; }
+}
+function setConfOrder(v) {
+  try { localStorage.setItem(CONF_ORDER_KEY, v); } catch(e) {}
+  runConfidencePredictor();
+}
+function confMins(t) { var m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : 9999; }
+
+// Every horse this list has shown today, kept on this device for the day.
+// A later prediction (fresher prices nearer the off) can cut a horse's lead
+// below the line and drop it from the list; it then shows under "Dropped off
+// today" with its result, rather than vanishing along with it.
+function confSeenUpdate(picks) {
+  var key = 'fi_conf_seen_' + todayISO(), seen = {};
+  try { seen = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch(e) {}
+  var changed = false;
+  picks.forEach(function(p) {
+    if (!p.rk) return;
+    var k = p.rk + '|' + p.name;
+    if (!seen[k]) {
+      seen[k] = { rk: p.rk, name: p.name, course: p.course, time: p.time, pct: Math.round(p.pct), gap: Math.round(p.gap), odds: p.odds || 0 };
+      changed = true;
+    }
+  });
+  if (changed) {
+    try {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var lk = localStorage.key(i);
+        if (lk && lk.indexOf('fi_conf_seen_') === 0 && lk !== key) localStorage.removeItem(lk);   // only today's is kept
+      }
+      localStorage.setItem(key, JSON.stringify(seen));
+    } catch(e) {}
+  }
+  return seen;
 }
 
 function runConfidencePredictor() {
@@ -6848,40 +6890,96 @@ function runConfidencePredictor() {
     el.innerHTML = '<div class="al alw" style="margin-top:10px">Load some meetings first — the Confidence Predictor scans every race you have loaded.</div>';
     return;
   }
+  _confShown = true;   // from now on it redraws itself as results come in
 
   var picks = computeConfidencePicks();
+  var order = confOrder();
+  if (order === 'time') picks.sort(function(a, b){ return (confMins(a.time) - confMins(b.time)) || (b.pct - a.pct); });
+  var seen = confSeenUpdate(picks), listed = {};
+  picks.forEach(function(p){ listed[p.rk + '|' + p.name] = 1; });
+  var dropped = Object.keys(seen).filter(function(k){ return !listed[k]; }).map(function(k){ return seen[k]; });
+  dropped.sort(order === 'time' ? function(a, b){ return confMins(a.time) - confMins(b.time); } : function(a, b){ return b.pct - a.pct; });
+  var locksNow = {};
+  try { locksNow = plockAll(); } catch(e) {}
   var totalRaces = meetings.reduce(function(n,m){ return n + ((m.races||[]).length); }, 0);
+
+  // Today's winners so far, from the results log (as the Sweet Spot card does)
+  var winners = {};
+  try {
+    var today = todayISO();
+    getPredLog().forEach(function(e){ if (e && e.date === today && e.actual && e.actual.length) winners[e.raceKey] = e.actual[0]; });
+  } catch(e) {}
 
   var h = '<div class="card" style="margin-top:10px;padding:14px 16px">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
      + '<div class="ct" style="margin-bottom:0;padding-bottom:0;border-bottom:none">🎯 Confidence Predictor</div>'
      + '<div class="mpill ok">' + picks.length + ' qualified</div></div>';
-  h += '<div style="font-size:.68rem;color:var(--mt);margin-bottom:12px;line-height:1.5">'
+  h += '<div style="font-size:.68rem;color:var(--mt);margin-bottom:10px;line-height:1.5">'
      + 'Horses rated more than ' + CONF_GAP_MIN + " points clear of the next in their race. Scanned "
      + totalRaces + ' race' + (totalRaces!==1?'s':'') + ' across ' + meetings.length + ' meeting'
      + (meetings.length!==1?'s':'') + '.</div>';
+  var segBtn = function(v, label) {
+    return '<button type="button" class="' + (order === v ? 'on' : '') + '" aria-pressed="' + (order === v) + '" onclick="setConfOrder(\'' + v + '\')">' + label + '</button>';
+  };
+  h += '<div class="pl-seg" style="margin-bottom:8px">' + segBtn('conf', 'Most confident first') + segBtn('time', 'By race time') + '</div>';
+
+  var now = Date.now();
+  var statusOf = function(rk, name, time) {
+    var w = rk ? winners[rk] : '', off = raceOffMs({ time: time });
+    if (w) return w === name ? '<span style="color:var(--g);font-weight:700">✓ Won</span>' : '<span style="color:var(--re);font-weight:600">✗ Lost</span>';
+    return '<span style="color:var(--mt)">' + (!isNaN(off) && now > off ? 'Awaiting result' : 'To run') + '</span>';
+  };
+  var droppedHtml = '';
+  if (dropped.length) {
+    droppedHtml += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">'
+      + '<div style="font-family:var(--mono);font-size:.56rem;color:var(--mt);text-transform:uppercase;letter-spacing:1px">Dropped off today</div>'
+      + '<div style="font-size:.62rem;color:var(--mt);margin:3px 0 4px;line-height:1.5">Listed earlier, but the latest prediction, on fresher prices, no longer puts them more than '
+      + CONF_GAP_MIN + ' points clear. Not in the total above.</div>';
+    dropped.forEach(function(d) {
+      var L = locksNow[d.rk], nowTxt = '';
+      if (L && L.preds && L.preds.length >= 2) {
+        nowTxt = L.preds[0].name === d.name ? 'now ' + Math.round(L.preds[0].score || 0) + '%, +' + Math.round((L.preds[0].score || 0) - (L.preds[1].score || 0)) + ' pts'
+               : 'no longer the top pick';
+      }
+      droppedHtml += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--bd)">'
+        + '<div style="font-family:var(--mono);font-size:.68rem;color:var(--mt);min-width:40px">' + esc(d.time) + '</div>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:.78rem;font-weight:600;color:var(--tx)">' + esc(d.name)
+        + (d.odds > 1 ? ' <span style="color:var(--mt);font-weight:400;font-size:.68rem">@' + d.odds.toFixed(1) + '</span>' : '') + '</div>'
+        + '<div style="font-size:.6rem;color:var(--mt);margin-top:1px">' + esc(d.course) + ' · was ' + d.pct + '%, +' + d.gap + ' pts' + (nowTxt ? ' · ' + nowTxt : '') + '</div></div>'
+        + '<div style="text-align:right;font-size:.64rem;white-space:nowrap">' + statusOf(d.rk, d.name, d.time) + '</div></div>';
+    });
+    droppedHtml += '</div>';
+  }
 
   if (!picks.length) {
     h += '<div class="al alw" style="margin:0">No horse today is more than ' + CONF_GAP_MIN
        + ' points clear of its nearest rival. Nothing qualifies — the list is deliberately left empty '
-       + 'rather than padded with weaker selections.</div></div>';
+       + 'rather than padded with weaker selections.</div>' + droppedHtml + '</div>';
     el.innerHTML = h;
     return;
   }
 
+  var won = 0, lost = 0, pnl = 0;
   picks.forEach(function(p, i) {
     var strong = p.gap >= 30;
     var col = strong ? 'var(--g)' : 'var(--bl)';
+    var w = p.rk ? winners[p.rk] : '';
+    var res = w ? (w === p.name ? 'won' : 'lost') : '';
+    if (res === 'won') { won++; if (p.odds > 1) pnl += p.odds - 1; } else if (res === 'lost') { lost++; pnl -= 1; }
+    var st = statusOf(p.rk, p.name, p.time);
     h += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;'
        + (i ? 'border-top:1px solid var(--bd);' : '') + '">';
-    h += '<div style="font-family:var(--mono);font-size:1.05rem;font-weight:700;color:' + col + ';min-width:22px">' + (i+1) + '</div>';
+    // most confident first: its place in the list; by time: the race time
+    h += order === 'time'
+       ? '<div style="font-family:var(--mono);font-size:.74rem;font-weight:700;color:' + col + ';min-width:40px">' + esc(p.time) + '</div>'
+       : '<div style="font-family:var(--mono);font-size:1.05rem;font-weight:700;color:' + col + ';min-width:22px">' + (i+1) + '</div>';
     h += '<div style="flex:1;min-width:0">';
-    h += '<div style="font-size:.86rem;font-weight:700;color:var(--tx)">' + p.name
+    h += '<div style="font-size:.86rem;font-weight:700;color:var(--tx)">' + esc(p.name)
        + (p.odds > 1 ? ' <span style="color:var(--mt);font-weight:400;font-size:.72rem">@' + p.odds.toFixed(1) + '</span>' : '')
        + (strong ? ' <span class="mk" style="background:rgba(var(--g-rgb),.15);color:var(--g);border:1px solid rgba(var(--g-rgb),.4)">STRONG</span>' : '')
        + '</div>';
-    h += '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">' + p.time + ' ' + esc(p.course)
-       + (p.dist ? ' · ' + p.dist : '') + ' · ' + p.runners + ' runners'
+    h += '<div style="font-size:.62rem;color:var(--mt);margin-top:2px">' + (order === 'time' ? '' : esc(p.time) + ' ') + esc(p.course)
+       + (p.dist ? ' · ' + esc(p.dist) : '') + ' · ' + p.runners + ' runners'
        + (p.jockey ? ' · ' + esc(p.jockey) : '') + '</div>';
     h += '<div style="font-size:.6rem;color:var(--mt);margin-top:3px">next best: ' + esc(p.nextName)
        + ' ' + p.nextPct.toFixed(0) + '%</div>';
@@ -6889,10 +6987,18 @@ function runConfidencePredictor() {
     h += '<div style="text-align:right;min-width:62px">'
        + '<div style="font-family:var(--mono);font-size:1.05rem;font-weight:700;color:' + col + '">' + p.pct.toFixed(0) + '%</div>'
        + '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt)">+' + p.gap.toFixed(0) + ' pts</div>'
+       + '<div style="font-size:.64rem;margin-top:3px;white-space:nowrap">' + st + '</div>'
        + '</div>';
     h += '</div>';
   });
 
+  var done = won + lost;
+  if (done) {
+    h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);padding-top:8px;border-top:1px solid var(--bd)">'
+       + won + ' won, ' + lost + ' lost · ' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' pts to £1 level stakes at the logged prices'
+       + (picks.length > done ? ' · ' + (picks.length - done) + ' still to come' : '') + '</div>';
+  }
+  h += droppedHtml;
   h += '<div style="font-size:.6rem;color:var(--mt);margin-top:10px;line-height:1.5;border-top:1px solid var(--bd);padding-top:8px">'
      + 'A wide gap means the model separates this horse clearly from its rivals — it does not mean the price is generous. '
      + 'Check the odds before backing.</div>';
@@ -8796,7 +8902,7 @@ function renderSweetSpotCard() {
     if (x.res === 'won') { won++; pnl += x.odds - 1; } else if (x.res === 'lost') { lost++; pnl -= 1; }
     var st = x.res === 'won' ? '<span style="color:var(--g);font-weight:700">✓ Won</span>'
            : x.res === 'lost' ? '<span style="color:var(--re)">✗ Lost</span>'
-           : '<span style="color:var(--mt)">To run</span>';
+           : '<span style="color:var(--mt)">' + (Date.now() > raceOffMs({ time: x.time }) ? 'Awaiting result' : 'To run') + '</span>';
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)">'
       + '<div style="font-family:var(--mono);font-size:.72rem;color:var(--mt);width:40px;flex-shrink:0">' + esc(x.time) + '</div>'
       + '<div style="flex:1;min-width:0"><div style="font-size:.82rem;font-weight:700;color:var(--tx);overflow-wrap:anywhere">' + esc(x.name) + '</div>'
@@ -8813,7 +8919,13 @@ function renderSweetSpotCard() {
   box.innerHTML = h;
 }
 var _sweetT = 0;
-function sweetSoon() { clearTimeout(_sweetT); _sweetT = setTimeout(function(){ try { renderSweetSpotCard(); } catch(e) {} }, 400); }
+function sweetSoon() {
+  clearTimeout(_sweetT);
+  _sweetT = setTimeout(function(){
+    try { renderSweetSpotCard(); } catch(e) {}
+    if (_confShown) { try { runConfidencePredictor(); } catch(e) {} }   // once opened, it keeps up with results too
+  }, 400);
+}
 setTimeout(sweetSoon, 1200);   // on opening the app, before the first sweep has anything to add
 
 // ══ TODAY'S MEETINGS (Betfair) ════════════════════════════════════════════════
@@ -9528,6 +9640,7 @@ function logResultHeadless(race, lock, resultObj) {
   var offMsL = raceOffMs(race), atL = lock.pricedAt || 0;
   if (atL && !isNaN(offMsL)) { entry.pm = Math.round((offMsL - atL) / 60000); entry.ps = lock.src || ''; }
   var log = getPredLog(); log.push(entry); savePredLog(log);
+  try { sweetSoon(); } catch(e) {}   // Sweet Spot and Confidence Predictor show the result straight away
   return topPickWon ? 'won' : (topPickPlaced ? 'placed' : 'lost');
 }
 
