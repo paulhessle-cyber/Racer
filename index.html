@@ -373,7 +373,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v11.2 · 21 Nov 2026</div>
+      <div class="ver">v11.3 · 24 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -811,7 +811,7 @@ input,textarea{font-family:var(--sans)}
       <div class="h-card-row">
         <div class="h-card"><div class="h-card-ttl">📊 Market anchor</div><p>True implied probability (overround removed) anchors every prediction. 40% weight — the dominant signal.</p></div>
         <div class="h-card"><div class="h-card-ttl">📈 Recent form</div><p>Last 3 runs weighted by recency: most recent 50%, second 30%, third 20%.</p></div>
-        <div class="h-card"><div class="h-card-ttl">🧑 Jockey + Trainer</div><p>35+ elite jockeys and trainers carry multipliers. 15 specific jockey-trainer pairings get combo bonuses.</p></div>
+        <div class="h-card"><div class="h-card-ttl">🧑 Jockey + Trainer</div><p>Jockey + and Trainer + come from each rider's and yard's own strike rate for that type of race (turf, all-weather or jumps) in the model, so they change whenever you retrain. Only those clearly above the average, from 100+ rides or runners, get one: +3% for about a quarter above it, up to +12% for twice it. A rider's write-up shows the same numbers. 13 jockey–trainer pairings get a Combo + bonus (a fixed list — the models don't record pairings).</p></div>
         <div class="h-card"><div class="h-card-ttl">🏃 Pace & draw</div><p>Front-runner vs closer detection. Draw position interacts with field size and pace scenario.</p></div>
       </div>
       <div class="h-callout h-warn"><span class="ci">⚠️</span><div><strong>This is a tool, not a guarantee.</strong> Racing is unpredictable. Gamble responsibly.</div></div>
@@ -1824,29 +1824,52 @@ function buildFieldCtx(runners) {
 }
 
 
-// ── Trainer tier multipliers ─────────────────────────────
-// Based on UK/Irish flat win rates and course specialisms
-// Applied in addition to jockey tier for combo boost
-var TRAINER_TIERS = {
-  // Elite (1.10+)
-  'john gosden':1.12,'william haggas':1.12,'charlie appleby':1.11,
-  'aidan obrien':1.12,'joseph obrien':1.09,'andrew balding':1.09,
-  'roger varian':1.10,'ralph beckett':1.09,'simon crisford':1.09,
-  'charlie hills':1.08,'richard hannon':1.08,'hugo palmer':1.08,
-  'clive cox':1.08,'david simcock':1.08,'james fanshawe':1.07,
-  'mark johnston':1.08,'kevin ryan':1.07,'tim easterby':1.07,
-  'michael bell':1.07,'roger charlton':1.08,'eve johnson houghton':1.07,
-  'ed walker':1.08,'james tate':1.08,'michael stoute':1.10,
-  // Irish elite
-  'dermot weld':1.10,'jessica harrington':1.09,'willie mullins':1.08,
-  'gordon elliott':1.08,'gavin cromwell':1.07,
-  // Good (1.04-1.06)
-  'tom dascombe':1.05,'ian williams':1.05,'paul midgley':1.05,
-  'tony carroll':1.05,'david o meara':1.06,'mick channon':1.05,
-  'alan king':1.05,'john quinn':1.05,'richard fahey':1.06,
-};
+// ── Jockey + and Trainer + ───────────────────────────────
+// From each rider's and yard's own record for this type of race: the race's
+// model (turf, all-weather or jumps), so they follow the results and change
+// whenever the models are retrained. They used to come from a hand-written
+// list, which gave Jason Watson +6% while Marco Ghiani, with more all-weather
+// rides and a better strike rate, got nothing.
+//  - The strike rate is pulled towards the average by PLUS_PRIOR rides at the
+//    average, so a good spell on a few rides counts for little.
+//  - At least PLUS_MIN_RUNS rides (runners, for a trainer).
+//  - Points = how far above the average that leaves them, x PLUS_SCALE: twice
+//    the average is +12, a quarter above it +3. Under PLUS_FLOOR counts as
+//    nothing, and PLUS_CAP is the most. Nobody is marked down for being below.
+var PLUS_PRIOR = 150, PLUS_MIN_RUNS = 100, PLUS_SCALE = 12, PLUS_FLOOR = 3, PLUS_CAP = 12;
+var _plusAvg = (typeof WeakMap === 'function') ? new WeakMap() : null;
+// The average strike rate over a whole table: every ride in the model
+function statsAverage(stats) {
+  var hit = _plusAvg ? _plusAvg.get(stats) : undefined;
+  if (hit !== undefined) return hit;
+  var R = 0, W = 0;
+  for (var k in stats) { var s = stats[k]; if (s && s.r > 0) { R += s.r; W += s.w || 0; } }
+  var avg = R ? W / R : 0;
+  if (_plusAvg) _plusAvg.set(stats, avg);
+  return avg;
+}
+// A jockey's or trainer's record in one table and the plus it earns, or null
+// when the name isn't there: { r, w, sr, avg, lift, pts }, lift being the
+// points before the minimum, floor and cap.
+function recordPlus(stats, name) {
+  if (!stats || !name) return null;
+  var s = statLookup(stats, name);
+  if (!s || !(s.r > 0)) return null;
+  var avg = statsAverage(stats);
+  if (!(avg > 0)) return null;
+  var w = s.w || 0;
+  var lift = ((w + PLUS_PRIOR * avg) / (s.r + PLUS_PRIOR) / avg - 1) * PLUS_SCALE;
+  var pts = Math.min(PLUS_CAP, Math.round(lift));
+  if (s.r < PLUS_MIN_RUNS || pts < PLUS_FLOOR) pts = 0;
+  return { r: s.r, w: w, sr: w / s.r, avg: avg, lift: lift, pts: pts };
+}
+// mdl = the race's model; S.model (the one being scored) when not given
+function jockeyRecord(name, mdl)  { var m = mdl || S.model; return m ? recordPlus(m.jockeyStats, name) : null; }
+function trainerRecord(name, mdl) { var m = mdl || S.model; return m ? recordPlus(m.trainerStats, name) : null; }
+function trainerMultiplier(trainerName, mdl) { var p = trainerRecord(trainerName, mdl); return 1 + (p ? p.pts : 0) / 100; }
 
-// Jockey-trainer combo bonuses — some pairings outperform individual rates
+// Jockey-trainer combo bonuses — some pairings outperform individual rates.
+// Still a hand-written list: the models keep no record of pairings.
 var COMBO_BONUSES = {
   'william buick|charlie appleby': 0.08,
   'ryan moore|aidan obrien':       0.08,
@@ -1881,19 +1904,6 @@ function samePerson(a, b) {
   var ap = a.split(' '), bp = b.split(' ');
   if (ap.length < 2 || bp.length < 2) return false;
   return ap[ap.length - 1] === bp[bp.length - 1] && ap[0].charAt(0) === bp[0].charAt(0);
-}
-
-// The surname alone used to be enough, so Michael Appleby was rated as Charlie
-// Appleby, every Williams as Ian Williams and every Mullins as Willie — while
-// A. P. O'Brien and David O'Meara never matched at all (the apostrophe).
-function trainerMultiplier(trainerName) {
-  if (!trainerName) return 1.0;
-  var t = personNorm(trainerName);
-  if (TRAINER_TIERS[t]) return TRAINER_TIERS[t];
-  for (var k in TRAINER_TIERS) {
-    if (samePerson(t, k)) return TRAINER_TIERS[k];
-  }
-  return 1.0;
 }
 
 function comboBonus(jockeyName, trainerName) {
@@ -1936,49 +1946,38 @@ function winsNear(map, x, tol) {
   return n;
 }
 
-// ── Jockey tier multipliers ────────────────────────────────
-// Based on UK/Irish flat win rates. Tier 1 = elite (18%+ WR),
-// Tier 2 = very good (14-18%), Tier 3 = good (10-14%)
-// A late booking by a top jockey is already reflected in market odds,
-// but we give a small structural boost to account for execution quality.
-var JOCKEY_TIERS = {
-  // Tier 1 — elite (multiplier 1.12)
-  'ryan moore':1.12,'william buick':1.12,'frankie dettori':1.12,
-  'james doyle':1.11,'oisin murphy':1.11,'tom marquand':1.10,
-  'colin keane':1.11,'shane foley':1.10,'christophe soumillon':1.11,
-  'hollie doyle':1.09,'pat cosgrave':1.09,'andrea atzeni':1.09,
-  'adam kirby':1.09,'rossa ryan':1.09,'callum shepherd':1.08,
-  // Tier 2 — very good (multiplier 1.06)
-  'paul hanagan':1.07,'danny tudhope':1.07,'david probert':1.07,
-  'jason watson':1.06,'robert havlin':1.06,'hector crouch':1.06,
-  'sean levey':1.06,'jack mitchell':1.06,'neil callan':1.06,
-  'richard kingscote':1.06,'luke morris':1.06,'silvestre de sousa':1.07,
-  'p j mcdonald':1.06,'tom eaves':1.05,'martin harley':1.05,
-  // Irish elite
-  'seamie heffernan':1.10,'wayne lordan':1.09,'billy lee':1.08,
-  'chris hayes':1.08,'declan mcdowell':1.06,
-  'w j lee':1.08,   // Billy Lee as Irish cards write him
-};
-
-// Full name first, then surname — but the surname must be the elite jockey's
-// SURNAME and the first initial must agree when there is one. The old
-// "indexOf(lastName)" matched anywhere in the name, so every Ryan got Ryan
-// Moore's +12, every Doyle James Doyle's +11, and "B. Hayes" got Chris Hayes's +8.
-function jockeyMultiplier(jockeyName) {
-  if (!jockeyName) return 1.0;
-  var j = jockeyName.toLowerCase().replace(/\s*\(\d+\)/g, '').replace(/[.]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (JOCKEY_TIERS[j]) return JOCKEY_TIERS[j];
-  var parts = j.split(' ');
-  if (parts.length < 2) return 1.0;                 // surname alone is too ambiguous
-  var last = parts[parts.length - 1], init = parts[0].charAt(0);
-  for (var k in JOCKEY_TIERS) {
-    var kp = k.split(' ');
-    if (kp[kp.length - 1] === last && kp[0].charAt(0) === init) return JOCKEY_TIERS[k];
-  }
-  return 1.0;
-}
+// ── Jockey + ───────────────────────────────────────────────
+// The jockey's own record in the race's model (see "Jockey + and Trainer +"
+// above). The name is matched as the form score matches it (statLookup), so
+// the bonus, the strike rate in the score and the write-up are the same rider.
+function jockeyMultiplier(jockeyName, mdl) { var p = jockeyRecord(jockeyName, mdl); return 1 + (p ? p.pts : 0) / 100; }
 // Jockey points as shown in the app ("Jockey +12%")
-function jockeyPoints(jockeyName) { return Math.round((jockeyMultiplier(jockeyName) - 1) * 100); }
+function jockeyPoints(jockeyName, mdl) { var p = jockeyRecord(jockeyName, mdl); return p ? p.pts : 0; }
+
+// "all-weather", "turf" or "jumps": the kind of race a model's records are from
+function modelSurfaceLabel(m) {
+  if (!m) return '';
+  var s = String(m.surface || (m === S.modelAW ? 'aw' : m === S.modelJumps ? 'jumps' : m === S.modelTurf ? 'turf' : '')).toLowerCase();
+  return s === 'aw' ? 'all-weather' : s === 'jumps' ? 'jumps' : s === 'turf' ? 'turf' : '';
+}
+function thousands(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// The write-up's line on a jockey's or trainer's record, in the same numbers
+// as the Jockey + or Trainer + it earns, so the two always agree.
+// p = jockeyRecord() / trainerRecord(); what = 'Jockey' or 'Trainer'.
+function recordNoteText(p, what, m) {
+  var surf = modelSurfaceLabel(m), unit = what === 'Jockey' ? 'ride' : 'runner';
+  var runs = function(n) { return thousands(n) + (surf ? ' ' + surf : '') + ' ' + unit + (n === 1 ? '' : 's'); };
+  if (!p) return (m ? 'no ' + (surf ? surf + ' ' : '') + 'record in the model' : 'no model loaded to judge by') + ', so no ' + what + ' +.';
+  var srTxt = Math.round(p.sr * 100) + '% strike rate from ' + runs(p.r);
+  if (p.r < PLUS_MIN_RUNS) {
+    return (p.r >= 20 ? srTxt : 'only ' + runs(p.r) + ' in the model') + ' — too few to judge (a ' + what + ' + needs ' + PLUS_MIN_RUNS + '+).';
+  }
+  var avgTxt = Math.round(p.avg * 100) + '% average';
+  if (p.pts > 0) return srTxt + ', ' + (p.pts >= 8 ? 'well' : 'clearly') + ' above the ' + avgTxt + ' · <b>' + what + ' +' + p.pts + '%</b>.';
+  if (p.lift >= 1) return srTxt + ', a little above the ' + avgTxt + ' — not enough for a ' + what + ' +.';
+  if (p.lift > -1) return srTxt + ', about the ' + avgTxt + '.';
+  return srTxt + ', below the ' + avgTxt + '.';
+}
 
 
 // ══════════════════════════════════════════════════════════════
@@ -2735,9 +2734,9 @@ function rawScoreMdl(r, race, ctx) {
                + distBonus;
 
   var mvMult  = r._mv === 'steam' ? 1.10 : r._mv === 'drift' ? 0.90 : 1.0;
-  var jkyMult = jockeyMultiplier(r.jockey);
+  var jkyMult = jockeyMultiplier(r.jockey, m);
 
-  var trnMult  = trainerMultiplier(r.trainer || t);
+  var trnMult  = trainerMultiplier(r.trainer || t, m);
   var cboBonus = comboBonus(r.jockey, r.trainer || t);
   // Track-specific draw bias (flat races with a declared stall only) and
   // track profile (running style against the track's shape). Worked out
@@ -2800,6 +2799,7 @@ function rawScoreDef(r, race, ctx) {
   var orCredibility = r.odds <= 12 ? 1.0 : r.odds <= 25 ? 0.5 : 0.2;
   var orsAdj = orsRaw * orCredibility;
 
+  // (no model here, so no rider's record and no Jockey +: this is 0)
   var jkyBonus = (jockeyMultiplier(r.jockey) - 1.0) * 3;
   var isTip    = race.topTip && race.topTip.toUpperCase().indexOf(r.name.substring(0,6).toUpperCase()) === 0;
 
@@ -3578,18 +3578,11 @@ function buildHorseNote(r, race, scored) {
   }
 
   // --- Jockey ---------------------------------------------------------------
+  // Its record in this race's model: the same numbers as its Jockey +
+  var noteMdl = (race && getModelForRace(race)) || S.model;
   var jn = (r.jockey || '').replace(/\s*\(\d+\)/,'').trim();
   if (jn) {
-    var jkey = jn.toLowerCase();
-    var js = (S.model && S.model.jockeyStats) ? S.model.jockeyStats[jkey] : null;
-    if (js && js.r >= 20) {
-      var sr = js.w / js.r * 100;
-      var verdict = sr >= 18 ? 'in strong form' : sr >= 13 ? 'around average' : 'below average';
-      L.push('🏇 <b>' + esc(jn) + '</b> — ' + sr.toFixed(0) + '% strike rate from ' +
-             js.r + ' rides, ' + verdict + '.');
-    } else {
-      L.push('🏇 <b>' + esc(jn) + '</b> — not enough rides in the model to judge form.');
-    }
+    L.push('🏇 <b>' + esc(jn) + '</b> — ' + recordNoteText(jockeyRecord(r.jockey, noteMdl), 'Jockey', noteMdl));
   }
 
   // --- Weight and claim ------------------------------------------------------
@@ -3609,9 +3602,7 @@ function buildHorseNote(r, race, scored) {
   // --- Trainer --------------------------------------------------------------
   var tn = (r.trainer || '').trim();
   if (tn) {
-    var tm = trainerMultiplier(tn);
-    var tv = tm >= 1.08 ? 'elite yard' : tm >= 1.03 ? 'strong yard' : tm <= 0.95 ? 'lower-tier yard' : 'mid-tier yard';
-    L.push('🎩 <b>' + esc(tn) + '</b> — ' + tv + '.');
+    L.push('🎩 <b>' + esc(tn) + '</b> — ' + recordNoteText(trainerRecord(tn, noteMdl), 'Trainer', noteMdl));
   }
 
   // --- Market vs model ------------------------------------------------------
@@ -4398,7 +4389,7 @@ function showResults(scored, val, race, paceInfo) {
   S._logRaceKey  = raceKey;
   S._logPredictions = scored.map(function(r,i){
     return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0,
-             jk: (r.jockey || '').replace(/\s*\(\d+\)/g, '').trim(), jp: jockeyPoints(r.jockey) };
+             jk: (r.jockey || '').replace(/\s*\(\d+\)/g, '').trim(), jp: jockeyPoints(r.jockey, getModelForRace(race) || S.model) };
   });
   var _mp = modelPickOf(scored);
   S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
@@ -9574,7 +9565,7 @@ function plockSave(race, scored, going) {
     if (prev0 && (!race.date || race.date === todayISO()) && !isNaN(offMs0) && nowMs > offMs0 + 60000 &&
         !(pricedAt <= offMs0 + 60000 && pricedAt > lockPricedAt(prev0))) return;
     var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
-      jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey) }; });
+      jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey, getModelForRace(race) || S.model) }; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&

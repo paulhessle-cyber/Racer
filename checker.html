@@ -265,7 +265,7 @@
   <div style="min-width:0">
     <h1>Formintel <b>Results</b></h1>
     <div class="hdr-sub" id="subtitle">No data loaded</div>
-    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v11.0 · 11 Nov 2026</div>
+    <div style="font-family:var(--mono);font-size:.55rem;color:var(--mt);margin-top:2px">checker v11.1 · 24 Nov 2026</div>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
     <button id="sync-btn" class="hdr-btn" onclick="pushToServer(true)" title="Save to Server" style="display:none">⬆️ Sync</button>
@@ -2752,9 +2752,11 @@ function renderValueTab() {
 
 
 // ══ JOCKEYS TAB ═════════════════════════════════════════════════════════════
-// Runners ridden by the app's elite jockeys (the "Jockey +X%" bonus), and how
-// they got on: won / lost, overall and when priced under 3.0. Uses the jockey
-// points the predictor logs per runner (jp), recorded from app v9.1 (17 Oct 2026).
+// Runners whose jockey had a "Jockey +X%" bonus, and how they got on: won /
+// lost, overall and when priced under 3.0. Uses the jockey points the predictor
+// logs per runner (jp), recorded from app v9.1 (17 Oct 2026). From app v11.3
+// (24 Nov 2026) the points come from each jockey's record for that type of race
+// in the model (+3 to +12); before that, from a hand-written list.
 // ══════════════════════════════════════════════════════════════════════════
 // SEARCH — a horse's, jockey's or trainer's last 10 races
 // From the server's /search, which reads the full results the droplet scrapes
@@ -2969,7 +2971,7 @@ function renderLogSearch(by, q, why) {
   return h + '<div class="srch-foot">From your logged races only: first three home, unordered places; "unpl" = not in the first three.</div>';
 }
 
-var _jkMin = 10;   // "over 9 points"
+var _jkMin = 10;   // "over 9 points"; 3 = any Jockey +
 function setJockeyMin(v) { _jkMin = v; renderJockeyTab(); }
 
 function renderJockeyTab() {
@@ -3008,12 +3010,13 @@ function renderJockeyTab() {
 
   var h = '<div style="padding:16px">';
   h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
-  [[10, '+10 and up'], [8, '+8 and up'], [6, '+6 and up']].forEach(function(o) {
+  [[10, '+10 and up'], [8, '+8 and up'], [6, '+6 and up'], [3, 'Any Jockey +']].forEach(function(o) {
     var on = _jkMin === o[0];
     h += '<button onclick="setJockeyMin(' + o[0] + ')" style="padding:6px 10px;border-radius:6px;border:1px solid ' + (on ? 'var(--g)' : 'var(--bd)') + ';background:' + (on ? 'rgba(var(--g-rgb),.12)' : 'transparent') + ';color:' + (on ? 'var(--g)' : 'var(--mt)') + ';font-family:var(--mono);font-size:.62rem;cursor:pointer">' + o[1] + '</button>';
   });
   h += '</div>';
-  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Runners whose jockey gets a bonus of +' + _jkMin + ' or more in the app (+12 Moore, Buick, Dettori · +11 J Doyle, O Murphy, C Keane, Soumillon · +10 Marquand, S Foley, Heffernan). '
+  h += '<div style="font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-bottom:12px">Runners whose jockey got a bonus of +' + _jkMin + ' or more in the app. '
+    + 'From app v11.3 (24 Nov 2026) it comes from the jockey\'s own strike rate for that type of race in the model — +3 for about a quarter above the average, up to +12 for twice it — and earlier races used the old hand-written list (+12 Moore, Buick, Dettori · +11 J Doyle, O Murphy …). '
     + tracked + ' race' + (tracked === 1 ? '' : 's') + ' tracked — jockey points are recorded from app v9.1 (17 Oct 2026).</div>';
 
   if (!tracked) {
