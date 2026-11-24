@@ -183,6 +183,18 @@ input,textarea{font-family:var(--sans)}
 .pl-sc{font-family:var(--mono);font-size:.6rem;color:var(--mt);margin-top:2px}
 .pl-res{font-size:.62rem;font-weight:700;margin-top:3px}
 .pl-more{width:100%;margin-top:8px;padding:9px;border:1px solid var(--bd);border-radius:10px;background:var(--sf2);color:var(--tx);font:600 .72rem var(--sans);cursor:pointer}
+.pb-btn{width:100%;margin-top:10px;padding:10px 12px;border:1px solid rgba(var(--gold-rgb),.55);border-radius:10px;background:rgba(var(--gold-rgb),.1);color:var(--gold-tx);font:700 .76rem var(--sans);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pb-btn.on{background:var(--sf2);border-color:var(--bd);color:var(--mt)}
+.pb-box{border:1px solid rgba(var(--gold-rgb),.45);border-radius:10px;padding:12px 12px 8px;margin-top:8px;background:rgba(var(--gold-rgb),.05)}
+.pb-ttl{font-weight:800;font-size:.84rem;color:var(--tx);margin-bottom:4px}
+.pb-row{padding:10px 0;border-top:1px solid var(--bd);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pb-row:active{opacity:.6}
+.pb-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pb-nums{font-family:var(--mono);font-size:.62rem;color:var(--mt);text-align:right;white-space:nowrap;line-height:1.45}
+.pb-nums b{font-size:.84rem;color:var(--tx)}
+.pb-nums b.pos{color:var(--g)}
+.pb-nums b.neg{color:var(--re)}
+.pb-meta{font-size:.62rem;color:var(--mt);margin-top:5px;line-height:1.5}
 .l15-meeting-name{font-size:1.1rem;color:var(--g);letter-spacing:1px}
 .l15-meeting-info{font-size:.65rem;color:var(--mt);margin-top:2px}
 .l15-clear{background:transparent;border:1px solid var(--re);color:var(--re);border-radius:4px;padding:3px 8px;font-size:.6rem;cursor:pointer}
@@ -373,7 +385,7 @@ input,textarea{font-family:var(--sans)}
 </svg></span>
     <div>
       <h1>Form<b>intel</b></h1>
-      <div class="ver">v11.3 · 24 Nov 2026</div>
+      <div class="ver">v12.0 · 24 Nov 2026</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -4387,10 +4399,14 @@ function showResults(scored, val, race, paceInfo) {
 
   // Store race key and predictions for saving
   S._logRaceKey  = raceKey;
+  var _pxs = plusCodesFor(race, scored, race._goingUsed || getGoingForRace(race, '') || defaultGoingFor(race));
   S._logPredictions = scored.map(function(r,i){
-    return { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0,
+    var o = { name: r.name, rank: i+1, score: Math.round(r.score*100), raw: rawPct(r), v3: v3Pct(r), odds: r.odds||0,
              jk: (r.jockey || '').replace(/\s*\(\d+\)/g, '').trim(), jp: jockeyPoints(r.jockey, getModelForRace(race) || S.model) };
+    if (_pxs[r.name]) o.px = _pxs[r.name];   // its Plus items, for Best combinations
+    return o;
   });
+  S._logPxv = true;
   var _mp = modelPickOf(scored);
   S._logModelPick = _mp ? { name:_mp.name, odds:_mp.odds||0 } : null;
   S._logValuePick = (function(){
@@ -7104,14 +7120,23 @@ var PLUS_ITEMS = [
 ];
 var PLUS_GROUPS = { b: 'Score boosts', r: 'Record', t: 'Today' };
 var PLUS_BOOST = { jockey: 1, trainer: 1, combo: 1, track: 1, draw: 1 }, PLUS_COUNT = { course: 1, dist: 1, going: 1 };
-var _plusOpen = false, _plusShowAll = false, _plusLoading = false, _plusTried = {};
+// One letter per item, kept with each runner in the race's saved prediction
+// (px) so Best combinations can look back at what winners had. Top pick,
+// Model's pick, Value and Sweet Spot aren't kept: they come from the saved
+// prediction itself, so they go back to the first logged results.
+var PLUS_CODE = { jockey: 'j', trainer: 't', combo: 'c', track: 'k', draw: 'd', form: 'f', course: 'C', dist: 'D', going: 'G',
+                  lto: 'L', drop: 'X', bf: 'B', gelded: 'g', travel: 'T', steam: 'S', front: 'F' };
+var _plusOpen = false, _plusShowAll = false, _plusLoading = false, _plusTried = {}, _plusBestOpen = false, _plusBestAll = false;
 
 function plusOpts() {
   var o = {};
   try { o = JSON.parse(localStorage.getItem(PLUS_KEY) || '{}') || {}; } catch(e) {}
   var ids = PLUS_ITEMS.map(function(x){ return x.id; });
   var on = (Array.isArray(o.on) ? o.on : ['jockey']).filter(function(id){ return ids.indexOf(id) > -1; });
-  return { on: on, mode: o.mode === 'any' ? 'any' : 'all', sort: o.sort === 'time' || o.sort === 'boost' ? o.sort : 'rated', past: !!o.past };
+  return { on: on, mode: o.mode === 'any' ? 'any' : 'all', sort: o.sort === 'time' || o.sort === 'boost' ? o.sort : 'rated', past: !!o.past,
+           // Best combinations: rank by win % or profit, how many items, fewest runners
+           bsort: o.bsort === 'profit' ? 'profit' : 'win', bsize: [1, 2, 3].indexOf(o.bsize) > -1 ? o.bsize : 0,
+           bmin: PLUS_BEST_MIN.indexOf(o.bmin) > -1 ? o.bmin : PLUS_BEST_MIN[0] };
 }
 function plusSave(o) { try { localStorage.setItem(PLUS_KEY, JSON.stringify(o)); } catch(e) {} }
 function plusToggle(id) {
@@ -7125,6 +7150,80 @@ function togglePlusList() {
   renderPlusList();
   var el = document.getElementById('plus-results');
   if (_plusOpen && el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
+}
+
+// What a race's runners share when working out their Plus items.
+// S.model must be the race's model.
+function plusRaceCtx(race, going) {
+  var gm = (S.model && S.model.goingMap) || {};
+  var gk = String(going || '').toLowerCase().split('(')[0].split(',')[0].trim();
+  return { c: V3.courseKey(race.course), dist: parseDist(race.dist), gk: gk,
+           gs: gm[gk] !== undefined ? gm[gk] : V3.goingScore(gk),
+           tc: (S.model && S.model.trainerCourses) || null, now: Date.now() };
+}
+// The Plus items one runner has, apart from the ones that come from the
+// race's saved prediction (Top pick, Value, Model's pick, Sweet Spot). sc is
+// its score components, as under the horse on the race screen. Fills has
+// (item -> value) and info (details for the tags). The same test for today's
+// list and for the record kept with each prediction.
+function plusHas(r, race, sc, P, has, info) {
+  // score boosts, as shown under each horse on the race screen
+  if (sc.jockey > 0) has.jockey = sc.jockey;
+  if (sc.trainer > 0) has.trainer = sc.trainer;
+  if (sc.combo > 0) has.combo = sc.combo;
+  if (sc.trackProfile >= 3) has.track = sc.trackProfile;
+  if (sc.trackDraw >= 3) has.draw = sc.trackDraw;
+  if (sc.form > 30) has.form = true;
+  // record
+  var H = (S.model && S.model.horseStats) ? (S.model.horseStats[V3.horseKey(r.name)] || null) : null;
+  if (H) {
+    var cw = (H.cw || {})[P.c] || 0, dw = winsNear(H.dw, P.dist, 0.5), gw = (H.gw || {})[P.gs] || 0;
+    if (cw > 0) has.course = cw;
+    if (dw > 0) has.dist = dw;
+    if (gw > 0) { has.going = gw; info.going = P.gk; }
+    if (H.bfDate) {
+      var bd = Math.round((P.now - new Date(H.bfDate).getTime()) / 86400000);
+      if (bd >= 0 && bd <= 60) { has.bf = true; info.bf = bd; }
+    }
+    if (H.gelded && H.geldedDate) {
+      var gd = Math.round((P.now - new Date(H.geldedDate).getTime()) / 86400000);
+      if (gd >= 0 && gd <= 180) { has.gelded = true; info.gelded = gd; }
+    }
+  }
+  if (r._recentlyGelded && !has.gelded) has.gelded = true;
+  var fr = null; try { fr = formRecord(r.name); } catch(e) {}
+  var fClean = String(r.form || '').replace(/[^0-9PFpUuRr]/g, '');
+  if (fr && fr.runs && fr.runs.length) { if (fr.runs[0].pos === 1) has.lto = true; }
+  else if (fClean) { if (fClean.charAt(fClean.length - 1) === '1') has.lto = true; }
+  else if (H && H.lp && H.lp[0] === 1) has.lto = true;
+  var cc = null; try { cc = classChange(r, race); } catch(e) {}
+  if (cc && cc.diff > 0) { has.drop = cc.diff; info.drop = cc; }
+  if (P.tc) {
+    var tn = [H && H.tr, r.trainer, String(r.trainer || '').toLowerCase().replace(/\s+/g, ' ').trim()].filter(function(n){ return n && P.tc[n]; })[0];
+    if (tn) { try { var trav = checkLongTravel(tn, race.course); if (trav) { has.travel = true; info.travel = trav.miles; } } catch(e) {} }
+  }
+  // today
+  if (r._mv === 'steam') { has.steam = true; info.steam = r._openingOdds || 0; }
+  if (r._pace === 'front') has.front = true;
+}
+// { horse name: 'jCL' } — each scored runner's Plus items as PLUS_CODE
+// letters, for the race's saved prediction. scored = the prediction's runners
+// (they carry their score components).
+function plusCodesFor(race, scored, going) {
+  var out = {}, keep = S.model, mdl = getModelForRace(race);
+  if (mdl) S.model = mdl;
+  try {
+    var P = plusRaceCtx(race, going || getGoingForRace(race, '') || defaultGoingFor(race));
+    (scored || []).forEach(function(r) {
+      if (!r || r._nr || !r.name) return;
+      var has = {}, s = '';
+      plusHas(r, race, r._scoreComponents || {}, P, has, {});
+      PLUS_ITEMS.forEach(function(it){ if (has[it.id] !== undefined && PLUS_CODE[it.id]) s += PLUS_CODE[it.id]; });
+      if (s) out[r.name] = s;
+    });
+  } catch(e) {}
+  S.model = keep;
+  return out;
 }
 
 // Every runner today, with what it has. Races that so far have only names and
@@ -7148,59 +7247,19 @@ function plusRunners() {
       var rk = raceKeyFor(race), L = locks[rk], preds = {};
       if (L && L.preds) L.preds.forEach(function(p){ if (p && p.name) preds[p.name] = p; });
       var vName = L && L.valuePick ? L.valuePick.name : '', mName = L && L.modelPick ? L.modelPick.name : '';
-      var c = V3.courseKey(race.course), dist = parseDist(race.dist);
-      var gm = (S.model && S.model.goingMap) || {};
-      var gk = String(going || '').toLowerCase().split('(')[0].split(',')[0].trim();
-      var gs = gm[gk] !== undefined ? gm[gk] : V3.goingScore(gk);
+      var P = plusRaceCtx(race, going);
       var lg = null; try { lg = getPredictionLog(rk); } catch(e) {}
       var winner = lg && lg.actual && lg.actual.length ? lg.actual[0] : '';
-      var tc = (S.model && S.model.trainerCourses) || null;
       active.forEach(function(r) {
         var sc = {};
         if (S.model) { try { var cp = Object.assign({}, r, { going: going }); rawScoreMdl(cp, race, ctx); sc = cp._scoreComponents || {}; } catch(e) {} }
-        var H = (S.model && S.model.horseStats) ? (S.model.horseStats[V3.horseKey(r.name)] || null) : null;
         var p = preds[r.name] || null, has = {}, x;
         x = { race: race, r: r, rk: rk, done: done, has: has, info: {},
               rank: p ? p.rank : 0, score: p ? p.score : null, field: active.length,
               odds: r.odds > 1 ? r.odds : (p && p.odds > 1 ? p.odds : 0),
               res: winner ? (winner === r.name ? 'won' : 'lost') : '' };
-        // score boosts, as shown under each horse on the race screen
-        if (sc.jockey > 0) has.jockey = sc.jockey;
-        if (sc.trainer > 0) has.trainer = sc.trainer;
-        if (sc.combo > 0) has.combo = sc.combo;
-        if (sc.trackProfile >= 3) has.track = sc.trackProfile;
-        if (sc.trackDraw >= 3) has.draw = sc.trackDraw;
-        if (sc.form > 30) has.form = true;
-        // record
-        if (H) {
-          var cw = (H.cw || {})[c] || 0, dw = winsNear(H.dw, dist, 0.5), gw = (H.gw || {})[gs] || 0;
-          if (cw > 0) has.course = cw;
-          if (dw > 0) has.dist = dw;
-          if (gw > 0) { has.going = gw; x.info.going = gk; }
-          if (H.bfDate) {
-            var bd = Math.round((now - new Date(H.bfDate).getTime()) / 86400000);
-            if (bd >= 0 && bd <= 60) { has.bf = true; x.info.bf = bd; }
-          }
-          if (H.gelded && H.geldedDate) {
-            var gd = Math.round((now - new Date(H.geldedDate).getTime()) / 86400000);
-            if (gd >= 0 && gd <= 180) { has.gelded = true; x.info.gelded = gd; }
-          }
-        }
-        if (r._recentlyGelded && !has.gelded) has.gelded = true;
-        var fr = null; try { fr = formRecord(r.name); } catch(e) {}
-        var fClean = String(r.form || '').replace(/[^0-9PFpUuRr]/g, '');
-        if (fr && fr.runs && fr.runs.length) { if (fr.runs[0].pos === 1) has.lto = true; }
-        else if (fClean) { if (fClean.charAt(fClean.length - 1) === '1') has.lto = true; }
-        else if (H && H.lp && H.lp[0] === 1) has.lto = true;
-        var cc = null; try { cc = classChange(r, race); } catch(e) {}
-        if (cc && cc.diff > 0) { has.drop = cc.diff; x.info.drop = cc; }
-        if (tc) {
-          var tn = [H && H.tr, r.trainer, String(r.trainer || '').toLowerCase().replace(/\s+/g, ' ').trim()].filter(function(n){ return n && tc[n]; })[0];
-          if (tn) { try { var trav = checkLongTravel(tn, race.course); if (trav) { has.travel = true; x.info.travel = trav.miles; } } catch(e) {} }
-        }
-        // today
-        if (r._mv === 'steam') { has.steam = true; x.info.steam = r._openingOdds || 0; }
-        if (r._pace === 'front') has.front = true;
+        plusHas(r, race, sc, P, has, x.info);
+        // today, from the race's saved prediction
         if (p && p.rank === 1) {
           has.top = true;
           try { if (isSweetSpot(race, { odds: x.odds })) has.sweet = true; } catch(e) {}
@@ -7269,6 +7328,213 @@ function plusLoadStubs(stubs) {
 }
 
 function plusOpenRace(course, time, el) { openRacePrediction(course, time, el); }
+
+// ── Best combinations ──────────────────────────────────────────────────────
+// Which Plus items, and pairs and trios of them, found winners in the races
+// you've logged: how many runners had them, how many won, and the profit to
+// £1 level stakes at the price saved with the prediction. Top pick, Model's
+// pick, Value and Sweet Spot come from the saved prediction, so they go back
+// to the first logged results; Jockey + is worked out from the logged jockey
+// (logged from 17 Oct); the other items are kept with each prediction (px)
+// from v12.0, 24 Nov 2026.
+var PLUS_BEST_MIN = [30, 60, 100];   // the fewest runners, to choose from
+var PLUS_BEST_WINS = 5;              // and at least this many winners
+var _plogGen = 0;                    // goes up whenever the log is saved
+var _plusHist = null, _plusBest = null;
+
+function plusBitOf(id) { for (var i = 0; i < PLUS_ITEMS.length; i++) if (PLUS_ITEMS[i].id === id) return 1 << i; return 0; }
+function plusBitCount(k) { var n = 0; while (k) { k &= k - 1; n++; } return n; }
+function plusIdsOf(k) { return PLUS_ITEMS.filter(function(it, i){ return k & (1 << i); }).map(function(it){ return it.id; }); }
+function plusDayNum(iso) { var t = Date.parse(String(iso || '') + 'T12:00:00Z'); return isNaN(t) ? NaN : Math.floor(t / 86400000); }
+function plusDayText(n) {
+  var d = new Date(n * 86400000);
+  return d.getUTCDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+}
+function plusSeg(k, v, label, cur) {
+  return '<button type="button" class="' + (cur === v ? 'on' : '') + '" onclick="plusSet(\'' + k + '\',' + (typeof v === 'string' ? '\'' + v + '\'' : v) + ')">' + label + '</button>';
+}
+
+// Every logged runner with a result and a price: { m: its items (bits, in
+// PLUS_ITEMS order), w: 1 if it won, o: the price, d: the day }. known: for
+// each set of items a race could have had (older races don't have them all),
+// the days with such races.
+function plusHistory() {
+  var sig = _plogGen + ':' + (S.modelAW ? 1 : 0) + (S.modelTurf ? 1 : 0) + (S.modelJumps ? 1 : 0);
+  if (_plusHist && _plusHist.sig === sig) return _plusHist;
+  var byCode = {};
+  PLUS_ITEMS.forEach(function(it, i){ if (PLUS_CODE[it.id]) byCode[PLUS_CODE[it.id]] = 1 << i; });
+  var bTop = plusBitOf('top'), bM = plusBitOf('mpick'), bV = plusBitOf('value'), bSw = plusBitOf('sweet'), bJ = plusBitOf('jockey');
+  var ALL = (1 << PLUS_ITEMS.length) - 1, BASE = bTop | bM | bV | bSw;
+  var rows = [], known = {}, races = 0, first = NaN, last = NaN, kept = NaN;
+  var log = []; try { log = getPredLog(); } catch(e) {}
+  log.forEach(function(e) {
+    if (!e || !e.actual || !e.actual[0] || !e.predictions || !e.predictions.length) return;
+    var day = plusDayNum(e.date);
+    if (isNaN(day)) return;
+    var winner = e.actual[0], race = { course: e.course || '', title: e.title || '', going: e.going || '', dist: e.dist || '' };
+    var kn = BASE, jm = null;
+    if (e.pxv) { kn = ALL; if (isNaN(kept) || day < kept) kept = day; }
+    else if (e.predictions.some(function(p){ return p && p.jk; })) {
+      var ty = fiRaceType(race);
+      jm = ty === 'aw' ? S.modelAW : ty === 'jumps' ? S.modelJumps : S.modelTurf;
+      if (jm) kn |= bJ;
+    }
+    var n0 = rows.length;
+    e.predictions.forEach(function(p, i) {
+      if (!p || !p.name || !(p.odds > 1)) return;
+      var m = 0;
+      if ((p.rank || i + 1) === 1) { m |= bTop; if (fiSweetSpot(race, p.odds)) m |= bSw; }
+      if (e.modelPickName && p.name === e.modelPickName) m |= bM;
+      if (e.valuePick && p.name === e.valuePick) m |= bV;
+      if (e.pxv) { var s = String(p.px || ''); for (var c = 0; c < s.length; c++) m |= byCode[s.charAt(c)] || 0; }
+      else if (jm && p.jk && jockeyPoints(p.jk, jm) > 0) m |= bJ;
+      rows.push({ m: m, w: p.name === winner ? 1 : 0, o: +p.odds, d: day });
+    });
+    if (rows.length === n0) return;
+    races++;
+    (known[kn] = known[kn] || {})[day] = 1;
+    if (isNaN(first) || day < first) first = day;
+    if (isNaN(last) || day > last) last = day;
+  });
+  _plusHist = { sig: sig, rows: rows, known: known, races: races, first: first, last: last, kept: kept };
+  _plusBest = null;
+  return _plusHist;
+}
+
+// Every item, pair and trio of items with PLUS_BEST_MIN[0]+ runners: runners
+// (n), winners (w), returns to £1 (ret, and ret2 = the sum of their squares),
+// prices (os), and the same for the earlier (a) and later (b) halves of the
+// days it covers.
+function plusComboStats() {
+  var Hh = plusHistory();
+  if (_plusBest) return _plusBest;
+  var map = new Map(), all = { n: 0, w: 0, ret: 0 };
+  var each = function(m, fn) {
+    var bits = [];
+    for (var i = 0; i < PLUS_ITEMS.length; i++) if (m & (1 << i)) bits.push(1 << i);
+    for (var a = 0; a < bits.length; a++) {
+      fn(bits[a]);
+      for (var b = a + 1; b < bits.length; b++) {
+        fn(bits[a] | bits[b]);
+        for (var c = b + 1; c < bits.length; c++) fn(bits[a] | bits[b] | bits[c]);
+      }
+    }
+  };
+  Hh.rows.forEach(function(r) {
+    all.n++; if (r.w) { all.w++; all.ret += r.o; }
+    if (!r.m) return;
+    each(r.m, function(k) {
+      var s = map.get(k);
+      if (!s) map.set(k, s = { k: k, n: 0, w: 0, ret: 0, ret2: 0, os: 0, d1: r.d, d2: r.d });
+      s.n++; s.os += r.o;
+      if (r.w) { s.w++; s.ret += r.o; s.ret2 += r.o * r.o; }
+      if (r.d < s.d1) s.d1 = r.d;
+      if (r.d > s.d2) s.d2 = r.d;
+    });
+  });
+  var keep = new Map();
+  map.forEach(function(s, k) {
+    if (s.n < PLUS_BEST_MIN[0]) return;
+    s.mid = (s.d1 + s.d2) / 2; s.a = { n: 0, w: 0, ret: 0 }; s.b = { n: 0, w: 0, ret: 0 };
+    keep.set(k, s);
+  });
+  Hh.rows.forEach(function(r) {
+    if (!r.m) return;
+    each(r.m, function(k) {
+      var s = keep.get(k);
+      if (!s) return;
+      var h = r.d <= s.mid ? s.a : s.b;
+      h.n++; if (r.w) { h.w++; h.ret += r.o; }
+    });
+  });
+  // A pair or trio whose runners are exactly those of one item fewer adds
+  // nothing ("Top pick + Sweet Spot" is just "Sweet Spot")
+  keep.forEach(function(s, k) {
+    for (var i = 0; i < PLUS_ITEMS.length && !s.same; i++) {
+      var bit = 1 << i;
+      if (!(k & bit) || k === bit) continue;
+      var sub = keep.get(k & ~bit);
+      if (sub && sub.n === s.n) s.same = true;
+    }
+  });
+  _plusBest = { list: Array.from(keep.values()), all: all };
+  return _plusBest;
+}
+
+// How many days had races that could show all of these items
+function plusDaysFor(k) {
+  var Hh = plusHistory(), days = {};
+  Object.keys(Hh.known).forEach(function(kn){ if ((+kn & k) === k) Object.assign(days, Hh.known[kn]); });
+  return Object.keys(days).length;
+}
+
+function plusBestToggle() { _plusBestOpen = !_plusBestOpen; _plusBestAll = false; renderPlusList(); }
+// Tap a combination: pick those items on the list (horses with all of them)
+function plusUseCombo(k) {
+  var o = plusOpts();
+  o.on = plusIdsOf(k); o.mode = 'all';
+  plusSave(o); _plusBestOpen = false; _plusShowAll = false; renderPlusList();
+  var el = document.getElementById('plus-results');
+  if (el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {} }
+}
+
+function plusBestHTML(o) {
+  var Hh = plusHistory(), B = plusComboStats(), prof = o.bsort === 'profit';
+  var wr = function(x){ return x.n ? x.w / x.n : 0; }, roi = function(x){ return x.n ? (x.ret - x.n) / x.n : 0; };
+  // Ranked allowing for luck: by the low end of what each could really be
+  // (two standard errors down), so one with few runners, or long-priced
+  // winners, needs a bigger edge to rank high. On made-up results where only
+  // two items really helped, this put them on top; ranking by the plain
+  // figures put lucky small samples there.
+  var Z = 2;
+  var winLow = function(x) {
+    var n = x.n, q = x.w / n, z2 = Z * Z;
+    return (q + z2 / (2 * n) - Z * Math.sqrt(q * (1 - q) / n + z2 / (4 * n * n))) / (1 + z2 / n);   // Wilson
+  };
+  var roiLow = function(x) { var m = x.ret / x.n; return m - 1 - Z * Math.sqrt(Math.max(0, x.ret2 / x.n - m * m) / x.n); };
+  var pct = function(v){ return Math.round(v * 100) + '%'; };
+  var sgn = function(v){ var p = Math.round(v * 100); return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p) + '%'; };
+  var label = function(id){ return PLUS_ITEMS.filter(function(it){ return it.id === id; })[0].label; };
+  var h = '<div class="pb-box"><div class="pb-ttl">🏆 Best combinations</div>';
+  if (!Hh.races) {
+    return h + '<div class="pl-intro">No results logged yet. Once your races have results, this shows which items, and which pairs and trios of them, found the winners.</div></div>';
+  }
+  h += '<div class="pl-intro">How horses with each item, and each pair and trio of items, did in the ' + thousands(Hh.races) + ' races you\'ve logged ('
+     + plusDayText(Hh.first) + (Hh.last !== Hh.first ? ' – ' + plusDayText(Hh.last) : '') + '). Tap one to show today\'s horses with it.</div>';
+  h += '<div class="pl-ctl">'
+     + '<div><div class="pl-lbl">Best by</div><div class="pl-seg">' + plusSeg('bsort', 'win', 'Win %', o.bsort) + plusSeg('bsort', 'profit', 'Profit', o.bsort) + '</div></div>'
+     + '<div><div class="pl-lbl">Items</div><div class="pl-seg">' + plusSeg('bsize', 0, 'Any', o.bsize) + plusSeg('bsize', 1, '1', o.bsize) + plusSeg('bsize', 2, '2', o.bsize) + plusSeg('bsize', 3, '3', o.bsize) + '</div></div>'
+     + '<div class="wide"><div class="pl-lbl">At least</div><div class="pl-seg">' + PLUS_BEST_MIN.map(function(v){ return plusSeg('bmin', v, v + ' runners', o.bmin); }).join('') + '</div></div>'
+     + '</div>';
+  var list = B.list.filter(function(s){ return !s.same && s.n >= o.bmin && s.w >= PLUS_BEST_WINS && (!o.bsize || plusBitCount(s.k) === o.bsize); });
+  list.sort(function(a, b){ return prof ? (roiLow(b) - roiLow(a)) || (b.n - a.n) : (winLow(b) - winLow(a)) || (roiLow(b) - roiLow(a)); });
+  h += '<div class="pl-sum">For comparison, every runner: ' + pct(wr(B.all)) + ' won, ' + sgn(roi(B.all)) + ' profit (' + thousands(B.all.n) + ' runners).</div>';
+  if (!list.length) h += '<div class="pl-sum">Nothing has ' + o.bmin + '+ runners and ' + PLUS_BEST_WINS + '+ winners with these settings yet.</div>';
+  var shown = _plusBestAll ? list : list.slice(0, 12);
+  shown.forEach(function(s) {
+    var days = plusDaysFor(s.k), per = days ? s.n / days : 0;
+    var often = per >= 1 ? 'about ' + Math.round(per) + ' a day' : per * 7 >= 1 ? 'about ' + Math.round(per * 7) + ' a week' : 'fewer than 1 a week';
+    var half = function(x){ return x.n ? (prof ? sgn(roi(x)) : pct(wr(x))) : '—'; };
+    h += '<div class="pb-row" onclick="plusUseCombo(' + s.k + ')">'
+       + '<div class="pb-top"><div class="pl-tags" style="margin-top:0">' + plusIdsOf(s.k).map(function(id){ return '<span class="pl-tag hit">' + esc(label(id)) + '</span>'; }).join('') + '</div>'
+       + '<div class="pb-nums"><b>' + pct(wr(s)) + '</b> won<br><b class="' + (roi(s) >= 0 ? 'pos' : 'neg') + '">' + sgn(roi(s)) + '</b> profit</div></div>'
+       + '<div class="pb-meta">' + thousands(s.n) + ' runners, ' + thousands(s.w) + ' won · average price ' + (s.os / s.n).toFixed(1) + ' · ' + often + '<br>'
+       + 'Allowing for luck, at least ' + (prof ? sgn(roiLow(s)) : pct(Math.max(0, winLow(s)))) + ' · earlier ' + half(s.a) + ' → recent ' + half(s.b) + '</div></div>';
+  });
+  if (!_plusBestAll && list.length > shown.length) h += '<button type="button" class="pl-more" onclick="_plusBestAll=true;renderPlusList()">Show all ' + list.length + '</button>';
+  // items without enough runners yet
+  var few = PLUS_ITEMS.filter(function(it) {
+    var s = B.list.filter(function(x){ return x.k === plusBitOf(it.id); })[0];
+    return !s || s.n < o.bmin || s.w < PLUS_BEST_WINS;
+  }).map(function(it){ return it.label; });
+  if (few.length) h += '<div class="pl-sum">Not enough runners yet: ' + esc(few.join(', ')) + '.</div>';
+  h += '<div class="pl-sum">Win % and profit to £1 on each, at the price saved with the prediction (before commission). '
+     + 'Top pick, Model\'s pick, Value and Sweet Spot go back to your first results and Jockey + to 17 Oct; the other items are saved with each prediction '
+     + (isNaN(Hh.kept) ? 'from now on' : 'since ' + plusDayText(Hh.kept)) + ', so they fill in as results come in. '
+     + '"Allowing for luck" is what the win % or profit is very likely to be at least, given how many runners there were. The list is ranked by it, '
+     + 'so a few lucky winners can\'t put a combination on top. Earlier → recent splits each one\'s days in half: one that did well in both is more likely to last.</div>';
+  return h + '</div>';
+}
 
 // Tap a horse on the Sweet Spot card, the Confidence Predictor or the Plus
 // List: open its race on the Predict tab and run the prediction, as tapping
@@ -7344,6 +7610,12 @@ function renderPlusList() {
   h += '<div class="ct" style="margin-bottom:8px">➕ Today\'s Plus List</div>';
   h += '<div class="pl-intro">Every runner in today\'s meetings with the extras you pick. These are the same items shown under each horse on the race screen. '
      + 'Pick one, or several to find horses with all of them. Tap a horse to open its race.</div>';
+  h += '<button type="button" class="pb-btn' + (_plusBestOpen ? ' on' : '') + '" onclick="plusBestToggle()">'
+     + (_plusBestOpen ? '✕ Hide best combinations' : '🏆 Best combinations from your results') + '</button>';
+  if (_plusBestOpen) {
+    try { h += plusBestHTML(o); }
+    catch(e) { h += '<div class="pl-sum">Couldn\'t work out the best combinations (' + esc(e && e.message || 'error') + ').</div>'; }
+  }
   ['b', 'r', 't'].forEach(function(g) {
     h += '<div class="pl-grp">' + PLUS_GROUPS[g] + '</div><div class="pl-chips">';
     PLUS_ITEMS.filter(function(it){ return it.g === g; }).forEach(function(it) {
@@ -8378,6 +8650,7 @@ function getPredLog() {
 }
 
 function savePredLog(log) {
+  _plogGen++;   // Best combinations works its figures out again
   if (FIPlog.write(log)) return true;
   var err = FIPlog.lastError();
   if (FIPlog.isQuota(err)) {
@@ -8590,6 +8863,7 @@ function saveRaceResult(raceKey) {
     valuePickEdge:  S._logValuePick ? S._logValuePick.edge : 0,
     valuePickWon:   !!(S._logValuePick && actual[0] === S._logValuePick.name),
     valuePickPlaced:!!(S._logValuePick && actual.slice(0, placesAvail).indexOf(S._logValuePick.name) > -1 && actual[0] !== S._logValuePick.name),
+    pxv:           S._logPxv ? 1 : 0,   // the predictions carry each runner's Plus items (px)
     bfHorses:      (S._logRace && S._logRace.runners || []).filter(function(r){
                      return !r._nr && r._bfAlert;
                    }).map(function(r){
@@ -9564,8 +9838,12 @@ function plockSave(race, scored, going) {
     // re-run made after the off, which opening a finished race used to do.
     if (prev0 && (!race.date || race.date === todayISO()) && !isNaN(offMs0) && nowMs > offMs0 + 60000 &&
         !(pricedAt <= offMs0 + 60000 && pricedAt > lockPricedAt(prev0))) return;
-    var preds = scored.map(function(r,i){ return { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
-      jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey, getModelForRace(race) || S.model) }; });
+    // px: the runner's Plus items, for Best combinations (pxv on the lock says they were kept)
+    var pxs = plusCodesFor(race, scored, going);
+    var preds = scored.map(function(r,i){ var o = { name:r.name, rank:i+1, score:Math.round(r.score*100), raw:rawPct(r), v3:v3Pct(r), odds:r.odds||0,
+      jk:(r.jockey||'').replace(/\s*\(\d+\)/g,'').trim(), jp:jockeyPoints(r.jockey, getModelForRace(race) || S.model) };
+      if (pxs[r.name]) o.px = pxs[r.name];
+      return o; });
     var withOdds = (race.runners||[]).filter(function(r){ return !r._nr && r.odds > 1; });
     var fav = withOdds.length ? withOdds.reduce(function(a,b){ return a.odds < b.odds ? a : b; }) : null;
     var nap = (S._napLocked && S._napLocked.race && S._napLocked.race.time === race.time &&
@@ -9595,7 +9873,7 @@ function plockSave(race, scored, going) {
       favName:fav?fav.name:'', favOdds:fav?fav.odds:0, napName:nap, bf:bf, dutchSels:dSels,
       valuePick:vPick,
       surface:race.surface||'', pricedAt:pricedAt, src:race._priceSrc||'app',
-      course:race.course, time:race.time, savedAt:nowMs };
+      course:race.course, time:race.time, savedAt:nowMs, pxv:1 };
     // A full store used to fail here silently: no lock, so no result could
     // ever be logged for the race, and nothing on screen said why.
     var w = safeSetItem(plockKey(), JSON.stringify(all));
@@ -9665,6 +9943,7 @@ function logResultHeadless(race, lock, resultObj) {
   // pm: minutes before the off that the judged prediction's prices were taken
   // (5 = the usual last look; hundreds = an early-morning price). ps: where
   // they came from — 'live' (this phone), 'snap' (the server's saved racecard).
+  if (lock.pxv) entry.pxv = 1;   // the predictions carry each runner's Plus items (px)
   var offMsL = raceOffMs(race), atL = lock.pricedAt || 0;
   if (atL && !isNaN(offMsL)) { entry.pm = Math.round((offMsL - atL) / 60000); entry.ps = lock.src || ''; }
   var log = getPredLog(); log.push(entry); savePredLog(log);
